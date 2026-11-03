@@ -471,6 +471,14 @@ class APPConfig @Inject constructor(val context: Context) {
         get() = this.sharedPrefs.getString("paired_device_id", "") ?: ""
         set(value) = this.sharedPrefs.edit { putString("paired_device_id", value) }
 
+    // Odysseus fork: total time a voice turn may take from wake word until the answer starts
+    // playing. Upstream hard-codes 20 s, which an Odysseus agent turn with Athena tool calls on
+    // a local model often exceeds. Clamped to 15..180 s; set with HA's "settings" event key
+    // `pipeline_timeout` or on the device's SharedPreferences.
+    var pipelineTimeoutSeconds: Int
+        get() = this.sharedPrefs.getInt("pipeline_timeout", DEFAULT_PIPELINE_TIMEOUT).coerceIn(15, 180)
+        set(value) = this.sharedPrefs.edit { putInt("pipeline_timeout", value.coerceIn(15, 180)) }
+
     var alwaysIgnoreSSLErrors: Boolean
         get() = this.sharedPrefs.getBoolean("always_ignore_ssl_errors", false)
         set(value) = this.sharedPrefs.edit { putBoolean("always_ignore_ssl_errors", value) }
@@ -578,6 +586,7 @@ class APPConfig @Inject constructor(val context: Context) {
 
         settings["ha_port"]?.jsonPrimitive?.intOrNull?.let { homeAssistantHTTPPort = it }
         settings["ha_url"]?.jsonPrimitive?.contentOrNull?.let { homeAssistantURL = it }
+        settings["pipeline_timeout"]?.jsonPrimitive?.intOrNull?.let { pipelineTimeoutSeconds = it } // Odysseus fork
         settings["ha_dashboard"]?.jsonPrimitive?.contentOrNull?.let { homeAssistantDashboard = it }
         settings["advanced_gain"]?.jsonPrimitive?.booleanOrNull?.let { useAdvancedGain = it }
         settings["wake_word_engine"]?.jsonPrimitive?.contentOrNull?.let { wakeWordEngine = it }
@@ -727,6 +736,7 @@ class APPConfig @Inject constructor(val context: Context) {
         const val DEFAULT_RTSP_KEYFRAME_INTERVAL_SECS = 1f
         const val DEFAULT_AUDIO_OUTPUT_ID = -1
         const val DEFAULT_AUDIO_INPUT_ID = -1
+        const val DEFAULT_PIPELINE_TIMEOUT = 60 // Odysseus fork: seconds, see pipelineTimeoutSeconds
         const val GITHUB_API_URL = "https://api.github.com/repos/msp1974/ViewAssist_Companion_App/releases"
         const val GITHUB_RELEASES_URL = "https://github.com/msp1974/ViewAssist_Companion_App/releases"
     }

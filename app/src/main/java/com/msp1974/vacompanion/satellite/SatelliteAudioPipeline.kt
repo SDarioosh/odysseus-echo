@@ -149,7 +149,8 @@ abstract class SatelliteAudioPipeline(
     fun watchDogTimer() {
         scope.launch {
             try {
-                withTimeout(20.seconds) {
+                // Odysseus fork: was a fixed 20 s; agent turns need longer (APPConfig.pipelineTimeoutSeconds).
+                withTimeout(config.pipelineTimeoutSeconds.seconds) {
                     while (pipelineStage != PipelineStage.STREAMING_TTS) {
                         if (hasExceededTimeInStage()) {
                             stop(PipelineEndReason.TIMED_OUT)

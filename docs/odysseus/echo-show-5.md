@@ -165,9 +165,9 @@ HA test-instance settings for this (made through the HA API, not adb):
 |---|---|
 | `switch.<device>_do_not_disturb` | off |
 | `select.<device>_wake_word_sound` | Ding |
-| `number.<device>_wake_word_threshold` | 9.3 |
+| `number.<device>_wake_word_threshold` | 9.2 |
 
-The app turns 9.3 into a cutoff of 0.93. The live test at 0.91 had one false wake, which scored exactly 0.91.
+The app turns 9.2 into a cutoff of 0.91 (it rounds down). Owner choice: in the live test this caught all 7 wakes, with 1 false wake at 0.91.
 
 **Follow-ups and "prefer handling commands locally".** When the conversation agent asks for a follow-up (`continue_conversation`), HA sends the next turn in that chat session *only* to that agent and skips local intents. This is `prepare_recognize_intent`, `_intent_agent_only`, in `assist_pipeline/default_pipeline.py`.
 In the live test, a follow-up that Odysseus had asked for was interrupted, so a fresh "what time is it?" went to Odysseus instead of HA.

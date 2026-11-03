@@ -163,14 +163,11 @@ object OdysseusPairing {
                 }
                 OdysseusLink.baseUrl = url
                 OdysseusLink.setToken(token)
-                val result = runBlocking { OdysseusLink.fetchActions(System.currentTimeMillis() - 60_000L, 1) }
-                val msg = when (result) {
-                    is OdysseusLink.Result.Ok -> "Linked: Odysseus answered."
-                    is OdysseusLink.Result.Failed -> "Saved, but the test failed: ${result.message}"
-                }
+                VoiceTurns.resetFeed()
+                val (ok, msg) = runBlocking { OdysseusLink.testLink() }
                 Timber.i("Odysseus pairing: saved from phone (${msg})")
                 respond(out, 200, page("Saved", "<p><b>${esc(msg)}</b></p><p>You can close this page.</p>"))
-                _state.value = State.Paired(msg, result is OdysseusLink.Result.Ok)
+                _state.value = State.Paired(msg, ok)
                 val s = server; server = null; code = ""; runCatching { s?.close() }
             }
             else -> respond(out, 405, page("Error", "<p>Method not allowed.</p>"))

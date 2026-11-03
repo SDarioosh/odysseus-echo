@@ -1,14 +1,6 @@
 package com.msp1974.vacompanion.utils
 
 import android.content.Context
-import android.os.Bundle
-import androidx.core.os.bundleOf
-import com.google.firebase.Firebase
-import com.google.firebase.FirebaseApp
-import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.analytics.analytics
-import com.google.firebase.crashlytics.FirebaseCrashlytics
-import com.google.firebase.crashlytics.crashlytics
 import timber.log.Timber
 
 class Logger {
@@ -29,65 +21,16 @@ class Logger {
     }
 }
 
-class FirebaseManager private constructor(context: Context? = null) {
-    private var firebaseAnalytics: FirebaseAnalytics? = null
-    private var firebaseCrashlytics: FirebaseCrashlytics? = null
-
-    init {
-        initialiseFirebase(context)
-    }
-
-    private fun initialiseFirebase(context: Context?) {
-        if (context == null) {
-            Timber.tag(Logger.TAG).w("Firebase context unavailable. Firebase features disabled.")
-            return
-        }
-
-        try {
-            val appContext = context.applicationContext
-            if (FirebaseApp.getApps(appContext).isEmpty()) {
-                Timber.tag(Logger.TAG).w("FirebaseApp not initialized. Skipping Firebase setup.")
-                return
-            }
-
-            firebaseAnalytics = Firebase.analytics
-            firebaseCrashlytics = Firebase.crashlytics
-        } catch (e: Exception) {
-            Timber.tag(Logger.TAG)
-                .w(e, "Failed to initialize Firebase. Firebase features disabled.")
-            firebaseAnalytics = null
-            firebaseCrashlytics = null
-        }
-    }
-
+// Odysseus fork: telemetry removed. Upstream sends analytics events, crash reports and
+// settings-change breadcrumbs to Google Firebase from here. This fork keeps the same API so
+// call sites stay identical to upstream (easy rebases), but every method is a no-op and no
+// Firebase/Google library is linked into the app. Nothing leaves the device from here.
+@Suppress("UNUSED_PARAMETER")
+class FirebaseManager private constructor() {
     companion object {
-        @Volatile
-        private var instance: FirebaseManager? = null
+        private val instance = FirebaseManager()
 
-        fun getInstance(context: Context? = null): FirebaseManager {
-            instance?.let {
-                if ((it.firebaseAnalytics != null || it.firebaseCrashlytics != null) || context == null) {
-                    return it
-                }
-            }
-            return synchronized(this) {
-                val existing = instance
-                if (existing != null) {
-                    if ((existing.firebaseAnalytics != null || existing.firebaseCrashlytics != null) || context == null) {
-                        existing
-                    } else {
-                        FirebaseManager(context).also { instance = it }
-                    }
-                } else {
-                    try {
-                        FirebaseManager(context).also { instance = it }
-                    } catch (e: Exception) {
-                        Timber.tag(Logger.TAG).w(e, "FirebaseManager fallback initialization used.")
-                        FirebaseManager().also { instance = it }
-                    }
-                }
-            }
-        }
+        fun getInstance(context: Context? = null): FirebaseManager = instance
 
         const val DIAGNOSTIC_POPUP_SHOWN = "diagnostic_popup_shown"
         const val WAKE_WORD_DETECTED = "wake_word_detected"
@@ -104,27 +47,13 @@ class FirebaseManager private constructor(context: Context? = null) {
 
     }
 
-    fun Map<String, Any?>.toBundle(): Bundle = bundleOf(*this.toList().toTypedArray())
+    fun setCustomKeys(keys: Map<String, Any>) {}
 
-    fun setCustomKeys(keys: Map<String, Any>) {
-        keys.forEach {
-            firebaseCrashlytics?.setCustomKey(it.key, it.value.toString())
-        }
-    }
+    fun logEvent(event: String, params: Map<String, String>) {}
 
-    fun logEvent(event: String, params: Map<String, String>) {
-        firebaseAnalytics?.logEvent(event, params.toBundle())
-    }
+    fun setUserProperty(key: String, value: String) {}
 
-    fun setUserProperty(key: String, value: String) {
-        firebaseAnalytics?.setUserProperty(key, value)
-    }
+    fun addToCrashLog(message: String) {}
 
-    fun addToCrashLog(message: String) {
-        firebaseCrashlytics?.log(message)
-    }
-
-    fun logException(exception: Exception) {
-        firebaseCrashlytics?.recordException(exception)
-    }
+    fun logException(exception: Exception) {}
 }

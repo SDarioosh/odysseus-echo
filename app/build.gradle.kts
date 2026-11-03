@@ -8,8 +8,6 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
 }
 
 tasks.register("printVersionName") {
@@ -117,10 +115,6 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.core.splashscreen)
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.analytics)
-    implementation(libs.firebase.crashlytics.ndk)
-    implementation(libs.play.services.base)
     implementation (libs.androidx.material.icons.extended)
     implementation (libs.androidx.preference.ktx)
     implementation (libs.timber)
@@ -156,7 +150,6 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.exoplayer.hls)
-    implementation(libs.mlkit.face.detection)
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
 }

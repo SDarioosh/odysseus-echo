@@ -11,7 +11,6 @@ import android.os.Build.UNKNOWN
 import android.provider.Settings.Secure
 import androidx.preference.PreferenceManager
 import androidx.core.content.edit
-import com.google.android.gms.common.util.ClientLibraryUtils.getPackageInfo
 import com.msp1974.vacompanion.data.AvailableAlarm
 import com.msp1974.vacompanion.data.AvailableWakeSound
 import com.msp1974.vacompanion.utils.Event
@@ -64,7 +63,7 @@ class APPConfig @Inject constructor(val context: Context) {
 
     // Versions
     var integrationVersion: String = "0.0.0"
-    var minRequiredApkVersion: String = getPackageInfo(context, context.packageName)?.versionName.toString()
+    var minRequiredApkVersion: String = context.packageManager.getPackageInfo(context.packageName, 0).versionName.toString()
 
 
     // In memory only settings

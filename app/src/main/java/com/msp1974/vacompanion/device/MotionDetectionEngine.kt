@@ -4,12 +4,8 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.RectF
 import androidx.camera.core.ImageProxy
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.FaceDetection
-import com.google.mlkit.vision.face.FaceDetectorOptions
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import kotlin.math.abs
 
@@ -60,19 +56,6 @@ class MotionDetectionEngine(
 
     var detectorMode = MotionDetectionMode.PIXEL_DIFF
 
-    private var faceDetector: com.google.mlkit.vision.face.FaceDetector? = null
-
-    private fun getFaceDetector(): com.google.mlkit.vision.face.FaceDetector {
-        if (faceDetector == null) {
-            faceDetector = FaceDetection.getClient(
-                FaceDetectorOptions.Builder()
-                    .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-                    .build()
-            )
-        }
-        return faceDetector!!
-    }
-    
     private val _motionFlow = MutableSharedFlow<MotionResult>(replay = 0)
     val motionFlow = _motionFlow.asSharedFlow()
 
@@ -112,71 +95,22 @@ class MotionDetectionEngine(
         backgroundModel = null
     }
 
-    fun close() {
-        faceDetector?.close()
-        faceDetector = null
-    }
+    fun close() {}
 
     /** The camera's frames hold a picture of the transposed shape stretched into the frame (see
      *  [com.msp1974.vacompanion.device.camera.CameraOrientation.isFrameSqueezed]). */
     @Volatile var squeezedFrames = false
 
-    @SuppressLint("UnsafeOptInUsageError")
+    // Odysseus fork: face detection used Google ML Kit, which reports usage to Google. ML Kit is
+    // not linked into this fork, so FACE_DETECTION mode reports no faces; PIXEL_DIFF works.
+    @Suppress("UNUSED_PARAMETER")
     suspend fun processImageProxy(imageProxy: ImageProxy) {
         if (detectorMode == MotionDetectionMode.FACE_DETECTION) {
-            val mediaImage = imageProxy.image ?: return
-            val rotation = imageProxy.imageInfo.rotationDegrees
-            val inputImage = if (squeezedFrames) {
-                InputImage.fromBitmap(unsqueezedLuma(imageProxy), rotation)
-            } else {
-                InputImage.fromMediaImage(mediaImage, rotation)
-            }
-            
-            try {
-                val faces = getFaceDetector().process(inputImage).await()
-                
-                // ML Kit bounding boxes are in the coordinate system of the InputImage.
-                // We normalize these to the UPRIGHT coordinate system first.
-                // The boxes are in the turned image, whose width and height swap on a quarter turn;
-                // the InputImage reports the ones it was given.
-                val quarterTurn = rotation % 180 != 0
-                val imageW = (if (quarterTurn) inputImage.height else inputImage.width).toFloat()
-                val imageH = (if (quarterTurn) inputImage.width else inputImage.height).toFloat()
-
-                val boxes = faces.map { face ->
-                    val bounds = face.boundingBox
-                    val nx1 = bounds.left.toFloat() / imageW
-                    val ny1 = bounds.top.toFloat() / imageH
-                    val nx2 = bounds.right.toFloat() / imageW
-                    val ny2 = bounds.bottom.toFloat() / imageH
-                    
-                    // Convert normalized UPRIGHT coordinates back to normalized SENSOR coordinates
-                    // so that the UI can apply consistent transformation logic (rotation + mirroring).
-                    when (rotation) {
-                        90 -> RectF(ny1, 1f - nx2, ny2, 1f - nx1)
-                        180 -> RectF(1f - nx2, 1f - ny2, 1f - nx1, 1f - ny1)
-                        270 -> RectF(1f - ny2, nx1, 1f - ny1, nx2)
-                        else -> RectF(nx1, ny1, nx2, ny2)
-                    }
-                }
-                
-                val hasMotion = boxes.isNotEmpty()
-                val intensity = if (hasMotion) boxes.size.toFloat() / 5f else 0f 
-                
-                _motionFlow.emit(MotionResult(
-                    hasMotion, 
-                    boxes, 
-                    intensity.coerceIn(0f, 1f), 
-                    imageProxy.width, 
-                    imageProxy.height,
-                    rotation
-                ))
-            } catch (e: Exception) {
-                Timber.e(e, "Face detection failed")
-            }
+            Timber.w("Face detection is not available in this build")
         }
     }
 
+    @Suppress("unused")
     /**
      * The frame's brightness as a greyscale bitmap with its shape put right, for a camera whose
      * frames are squeezed. A face detector does poorly on faces stretched that far.

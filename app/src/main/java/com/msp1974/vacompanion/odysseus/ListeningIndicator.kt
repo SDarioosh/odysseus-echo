@@ -53,6 +53,7 @@ object VoiceActivity {
 
     /** Called the moment a wake word is accepted, before the pipeline starts, so feedback is instant. */
     fun onWakeWord() {
+        VoiceActions.onTurnStarted()
         _phase.value = Phase.LISTENING
     }
 

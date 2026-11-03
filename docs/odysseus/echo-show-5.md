@@ -174,3 +174,27 @@ The app turns 9.2 into a cutoff of 0.91 (it rounds down). Owner choice: in the l
 **Follow-ups and "prefer handling commands locally".** When the conversation agent asks for a follow-up (`continue_conversation`), HA sends the next turn in that chat session *only* to that agent and skips local intents. This is `prepare_recognize_intent`, `_intent_agent_only`, in `assist_pipeline/default_pipeline.py`.
 In the live test, a follow-up that Odysseus had asked for was interrupted, so a fresh "what time is it?" went to Odysseus instead of HA.
 The Odysseus voice endpoint should therefore ask for a follow-up only when its answer really is a question.
+
+## Voice actions card test (0.14.0+odysseus.6)
+
+This test runs against a stand-in for Odysseus's actions feed (`~/sbx/mock_actions.py` on the host, fictional actions); see `voice-actions.md`. The adb commands, and why:
+
+```sh
+# The stand-in on the host is reached from the device over USB.
+adb reverse tcp:17020 tcp:17020
+# Root, only to inject the two-finger "swipe up" that opens Quick Actions
+# (adb shell input has one finger). adb root restarts adbd, so the tunnels are added again.
+adb root
+~/tools/two_finger_swipe.sh 40 400 40 560 300 0      # panel coordinates; the screen is rotated 90°
+adb shell input tap 716 393                            # Quick Actions → Menu
+adb shell input tap 780 193                            # Menu → Odysseus
+# Type the base URL, press Tab, then type the stand-in token. Tab is needed: with the keyboard
+# up, taps land on the wrong field.
+adb shell input text 'http://127.0.0.1:17020/api/chat/voice/v1'; adb shell input keyevent 61
+adb shell input text '<stand-in token>'; adb shell input keyevent 4
+adb shell input tap 110 390                            # Save and test → "Linked: Odysseus answered"
+adb unroot
+adb reverse tcp:18123 tcp:18123; adb reverse tcp:17020 tcp:17020; adb forward tcp:10800 tcp:10800
+```
+
+Then a turn started from HA's wake button showed the four fictional actions after the turn ended: three added (to-do with due time, list line, event) and one completed (an Athena item, struck through).

@@ -1,5 +1,6 @@
 package com.msp1974.vacompanion.ui.layouts
 
+import androidx.compose.material.icons.filled.TaskAlt // Odysseus fork
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -38,7 +39,8 @@ enum class SettingsScreen {
     CUSTOM_FILES,
     CAMERA_STREAM,
     CONFIGURATION,
-    APP_LAUNCHER
+    APP_LAUNCHER,
+    ODYSSEUS, // Odysseus fork
 }
 
 enum class Dialog {
@@ -94,6 +96,10 @@ fun SettingsLayout(
                     add("App Launcher", "Launch other apps from a page of tiles you choose", Icons.Default.Apps) {
                         currentScreen = SettingsScreen.APP_LAUNCHER
                     }
+                    // Odysseus fork: link to Odysseus to show voice actions (odysseus/OdysseusSettingsLayout.kt)
+                    add("Odysseus", "Show what you add or complete by voice", Icons.Default.TaskAlt) {
+                        currentScreen = SettingsScreen.ODYSSEUS
+                    }
                     if (vaUiState.menuOpenedByAction && viewModel.deviceInfo.hardware.hasFrontCamera) {
                         add("View Camera Stream", "Check the camera feed for motion or face detection", Icons.Default.Videocam) {
                             currentScreen = SettingsScreen.CAMERA_STREAM
@@ -127,6 +133,9 @@ fun SettingsLayout(
                         onBack = { currentScreen = SettingsScreen.MAIN }
                     )
                 }
+                SettingsScreen.ODYSSEUS -> com.msp1974.vacompanion.odysseus.OdysseusSettingsLayout(
+                    onBack = { currentScreen = SettingsScreen.MAIN }
+                ) // Odysseus fork
                 SettingsScreen.APP_LAUNCHER -> {
                     AppLauncherLayout(
                         viewModel = viewModel,

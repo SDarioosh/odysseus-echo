@@ -33,6 +33,9 @@ Each change is one commit, and every code change is marked `Odysseus fork` in a 
 | No in-app updates | they would install the official, Firebase-enabled APK | `utils/Updater.kt` |
 | Voice-turn timeout configurable (`pipeline_timeout`, default 60 s, was a fixed 20 s) | Odysseus agent turns with Athena tool calls on a local model take longer than 20 s | `satellite/SatelliteAudioPipeline.kt`, `settings/Settings.kt` |
 | Own application id and version | never collides with or "updates" to the official build | `app/build.gradle.kts` |
+| Bundled "Hey Athena" microWakeWord model | Odysseus wake word, trained locally (`docs/odysseus/wake-word.md`) | `assets/microwakeword/wakeWords/hey_athena.*` |
+| Wake word during a turn starts a new turn (barge-in) | upstream only stops the turn, so the question said right after the wake word was lost | `satellite/Satellite.kt` |
+| On-screen listening indicator ("Listening…", "Thinking…", "Answering…" + glowing bottom bar) | visible feedback on a quiet or muted device, independent of the HA dashboard | new `odysseus/ListeningIndicator.kt`; hooks in `satellite/Satellite.kt`, `MainActivity.kt` |
 
 What's lost: face-detection motion mode (pixel-difference motion detection still works),
 in-app updates, and upstream's crash reports.

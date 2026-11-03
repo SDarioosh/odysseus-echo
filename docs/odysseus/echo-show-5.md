@@ -143,3 +143,32 @@ adb shell appops get com.msp1974.vacompanion.odysseus PLAY_AUDIO
 # Bring the app back as the home screen.
 adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME
 ```
+
+## Listening feedback (0.14.0+odysseus.4)
+
+- **Visual:** the app draws its own overlay on top of the dashboard or the blank screen.
+  - A blue bar along the bottom pulses with "Listening…", and pulses faster once you start speaking.
+  - It turns violet with "Thinking…" while HA and Odysseus work, then green with "Answering…".
+  - It needs no HA configuration.
+- **Audio:** VACA's wake sound, set from HA: `select.<device>_wake_word_sound` = **Ding**.
+  - The app must be allowed to play audio, and VACA's do-not-disturb must be off. Use the device volume to keep it quiet.
+- **Barge-in:** saying "Hey Athena" while the device is still thinking or answering stops that turn and starts listening again.
+
+```sh
+# Allow the app to play the wake sound and answers again (the silent test setup had denied it).
+adb shell appops set com.msp1974.vacompanion.odysseus PLAY_AUDIO allow
+```
+
+HA test-instance settings for this (made through the HA API, not adb):
+
+| Entity | Value |
+|---|---|
+| `switch.<device>_do_not_disturb` | off |
+| `select.<device>_wake_word_sound` | Ding |
+| `number.<device>_wake_word_threshold` | 9.3 |
+
+The app turns 9.3 into a cutoff of 0.93. The live test at 0.91 had one false wake, which scored exactly 0.91.
+
+**Follow-ups and "prefer handling commands locally".** When the conversation agent asks for a follow-up (`continue_conversation`), HA sends the next turn in that chat session *only* to that agent and skips local intents. This is `prepare_recognize_intent`, `_intent_agent_only`, in `assist_pipeline/default_pipeline.py`.
+In the live test, a follow-up that Odysseus had asked for was interrupted, so a fresh "what time is it?" went to Odysseus instead of HA.
+The Odysseus voice endpoint should therefore ask for a follow-up only when its answer really is a question.

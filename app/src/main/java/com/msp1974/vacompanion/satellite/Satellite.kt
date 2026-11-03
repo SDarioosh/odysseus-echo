@@ -1,5 +1,7 @@
 package com.msp1974.vacompanion.satellite
 
+import com.msp1974.vacompanion.odysseus.VoiceActivity // Odysseus fork
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -447,6 +449,9 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
                     Timber.d("Wake word detected: $detection")
                     if (isResponding()) {
                         interruptResponse(detection)
+                        // Odysseus fork: a wake word during a turn starts a fresh turn (barge-in).
+                        // Upstream only stops, which drops the question asked right after it.
+                        handleWakeWordDetection(detection)
                     } else if (mediaManager.alarmPlayer.isSounding()) {
                         onStopWordDetected(detection)
                     } else {
@@ -542,6 +547,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
         cancelDetectionBuffer()
         audioPipeline?.stop()
         audioPipeline = null
+        VoiceActivity.onIdle() // Odysseus fork
         if (mediaManager.alarmPlayer.isSounding()) {
             handleAlarmAction(false)
         }
@@ -574,6 +580,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             // heard, and the audio from now on is kept, so nothing said while the devices agree
             // who answers is lost. Only the winner uses the audio; the others drop it.
             buffer = DetectionBuffer(microphone.audio, scope).also { detectionBuffer = it }
+            VoiceActivity.onWakeWord() // Odysseus fork: show "Listening…" at once
             playWakeWordDetectionSound()
 
             val won = VacaUdpBroadcast.instance?.arbitrateWakeWord(
@@ -704,6 +711,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
             override fun onStateChange(state: PipelineStage) {
                 Timber.d("Audio pipeline state: $state")
+                VoiceActivity.onPipelineStage(state) // Odysseus fork: on-screen listening indicator
                 audioPipelineLastStateChange = System.currentTimeMillis()
                 // Past listening the kept audio is of no use any more.
                 if (state.ordinal > PipelineStage.VOICE_STARTED.ordinal) cancelDetectionBuffer()

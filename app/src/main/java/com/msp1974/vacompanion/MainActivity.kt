@@ -1,5 +1,7 @@
 package com.msp1974.vacompanion
 
+import com.msp1974.vacompanion.odysseus.ListeningIndicator // Odysseus fork
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
@@ -200,6 +202,9 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                                 }
                             }
                         }
+
+                        // Odysseus fork: listening/thinking/answering overlay over any layout.
+                        if (vaUiState.satelliteRunning) ListeningIndicator()
 
                         vaUiState.onboardingDeviceId?.let { defaultId ->
                             UUIDEditDialog(

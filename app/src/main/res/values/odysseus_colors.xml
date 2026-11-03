@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Odysseus fork: the Odysseus web app's colours (odysseus/OdysseusTheme.kt). -->
+<resources>
+    <color name="odysseus_bg">#FF282C34</color>
+    <color name="odysseus_red">#FFE06C75</color>
+</resources>

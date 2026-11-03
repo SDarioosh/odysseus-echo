@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">View Assist Companion App</string>
+    <string name="app_name">Odysseus Echo</string> <!-- Odysseus fork; upstream: View Assist Companion App -->
 
     <string name="audio_playback_attribution">"This app plays audio"</string>
     <string name="empty" />

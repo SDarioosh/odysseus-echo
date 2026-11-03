@@ -186,13 +186,8 @@ fun ConnectionContent(
 
 @Composable
 fun LogoImage(modifier: Modifier = Modifier) {
-    Image(
-        painter = painterResource(id = R.drawable.main_logo),
-        contentDescription = "Logo",
-        contentScale = ContentScale.Fit,
-        colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground),
-        modifier = modifier
-    )
+    // Odysseus fork: the Odysseus logo in place of View Assist's (odysseus/OdysseusTheme.kt)
+    com.msp1974.vacompanion.odysseus.OdysseusLogo(modifier)
 }
 
 /** Device/app details. Values never wrap: they stay on one line and ellipsize only as a last resort. */
@@ -205,7 +200,8 @@ fun InfoCard(infoItems: Map<String, String>) {
     val cardColor = if (isLight) lerp(background, Color.White, 0.3f) else MaterialTheme.colorScheme.surfaceContainer
     val labelColor = if (isLight) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
-        shape = RoundedCornerShape(24.dp),
+        shape = MaterialTheme.shapes.medium, // Odysseus fork: web app card corners; upstream: 24.dp
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), // Odysseus fork
         color = cardColor,
         modifier = Modifier
             .widthIn(min = 280.dp, max = 520.dp)

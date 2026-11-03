@@ -43,9 +43,10 @@ import com.msp1974.vacompanion.utils.WakeWordType
 private data class FileCategory(val title: String, val icon: ImageVector, val color: Color)
 
 private val FILE_CATEGORIES = listOf(
-    FileCategory("Wake Words", Icons.Default.Mic, Color(0xFF6366F1)),        // indigo
-    FileCategory("Wake Sounds", Icons.Default.MusicNote, Color(0xFF14B8A6)), // teal
-    FileCategory("Alarms", Icons.Default.Alarm, Color(0xFFF59E0B)),          // amber
+    // Odysseus fork: the first three Configuration section colours (odysseus/OdysseusTheme.kt), as upstream matches them
+    FileCategory("Wake Words", Icons.Default.Mic, SECTION_COLORS[0]),
+    FileCategory("Wake Sounds", Icons.Default.MusicNote, SECTION_COLORS[1]),
+    FileCategory("Alarms", Icons.Default.Alarm, SECTION_COLORS[2]),
 )
 
 private val ENGINES = listOf("microWakeWord", "openWakeWord", "openWakeWord_rt")

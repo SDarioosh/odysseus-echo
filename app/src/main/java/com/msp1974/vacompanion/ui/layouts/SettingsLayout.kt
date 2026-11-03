@@ -66,7 +66,7 @@ fun SettingsLayout(
         modifier = modifier
             .fillMaxSize()
             .zIndex(10f),
-        color = Color.White // As requested, white background for menu
+        color = androidx.compose.material3.MaterialTheme.colorScheme.surface // Odysseus fork: theme surface; upstream: Color.White
     ) {
         AnimatedContent(
             targetState = currentScreen,

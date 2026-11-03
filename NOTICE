@@ -7,3 +7,8 @@ https://github.com/dscripka/openWakeWord/
 Copyright © 2025 Mark Parker
 
 Licensed under the Apache License, Version 2.0.
+
+Odysseus fork: the app bundles the Fira Code font (app/src/main/res/font/fira_code_*.ttf),
+Copyright (c) 2014, The Fira Code Project Authors (https://github.com/tonsky/FiraCode),
+licensed under the SIL Open Font License, Version 1.1
+(app/src/main/assets/licenses/FiraCode-OFL.txt).

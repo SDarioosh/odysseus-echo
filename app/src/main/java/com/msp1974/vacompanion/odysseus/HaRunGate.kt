@@ -13,7 +13,10 @@ package com.msp1974.vacompanion.odysseus
 //   - the new run waits until HA says the old one ended ("pipeline-ended", sent by the VACA
 //     integration on every RUN_END); the audio said meanwhile is kept by DetectionBuffer;
 //   - the old run's remaining events (its answer audio, transcript, pipeline-ended) are dropped,
-//     so the interrupted answer is never played and can't end the new run;
+//     so the interrupted answer is never played and can't end the new run. HA streams the answer
+//     audio *after* its RUN_END, so after the old run ended its next audio stream is dropped too,
+//     until its audio-stop or until the new run's own transcript arrives (the new run can't have
+//     an answer before its transcript);
 //   - if HA hasn't ended the old run within MAX_WAIT_MS the new turn is given up, not started,
 //     which keeps HA's state consistent.
 
@@ -29,8 +32,8 @@ object HaRunGate {
     /** A run HA never reported ended is treated as gone after this (longest pipeline timeout + margin). */
     private const val STALE_RUN_MS = 200_000L
 
-    /** Old answer audio still streaming after its run ended is dropped for at most this long. */
-    private const val OLD_AUDIO_GRACE_MS = 5_000L
+    /** The interrupted answer's audio, sent after its run ended, is expected within this long. */
+    private const val OLD_AUDIO_GRACE_MS = 10_000L
 
     private val active = MutableStateFlow(false)
     @Volatile private var activeSince = 0L
@@ -82,37 +85,36 @@ object HaRunGate {
      * an interrupted run and must be dropped.
      */
     fun onServerPacket(type: String): Boolean {
+        val isAudio = type == "audio-start" || type == "audio-chunk" || type == "audio-stop"
         if (type == "pipeline-ended") {
             val wasSuppressing = suppressing
             active.value = false
             if (wasSuppressing) {
                 suppressing = false
+                // Its answer audio may still follow.
+                oldAudioOpen = true
                 oldRunEndedAt = System.currentTimeMillis()
                 Timber.i("Barge-in: interrupted run ended")
                 return true
             }
             return false
         }
-        if (type == "transcribe") {
-            // HA started a run itself (e.g. a follow-up it asked for).
-            if (!suppressing) runStarted()
-            return suppressing
-        }
-        val isAudio = type == "audio-start" || type == "audio-chunk" || type == "audio-stop"
-        if (suppressing) {
-            if (type == "audio-start") oldAudioOpen = true
-            if (type == "audio-stop") oldAudioOpen = false
-            return true
-        }
-        // The interrupted answer's audio can still be streaming after its run ended.
-        if (oldAudioOpen && isAudio) {
-            if (System.currentTimeMillis() - oldRunEndedAt > OLD_AUDIO_GRACE_MS) {
-                oldAudioOpen = false
-                return false
+        if (suppressing) return true
+        if (oldAudioOpen) {
+            when {
+                // The new run's own transcript: nothing more can come from the old one.
+                type == "transcript" -> oldAudioOpen = false
+                System.currentTimeMillis() - oldRunEndedAt > OLD_AUDIO_GRACE_MS -> oldAudioOpen = false
+                isAudio -> {
+                    if (type == "audio-stop") {
+                        oldAudioOpen = false
+                        Timber.i("Barge-in: dropped the interrupted answer's audio")
+                    }
+                    return true
+                }
             }
-            if (type == "audio-stop") oldAudioOpen = false
-            return true
         }
+        if (type == "transcribe") runStarted() // HA started a run itself (e.g. a follow-up it asked for)
         return false
     }
 }

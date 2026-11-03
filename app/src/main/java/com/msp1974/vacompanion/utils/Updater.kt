@@ -55,7 +55,13 @@ class Updater(val context: Context) {
         return ""
     }
 
+    // Odysseus fork: no in-app updates. Upstream downloads the official VACA APK from GitHub,
+    // which is signed differently and would bring Firebase back. This fork is updated by
+    // rebuilding and installing over adb, so no release is ever reported.
+    private val inAppUpdatesEnabled = false
+
     suspend fun getLatestRelease(forceUpdate: Boolean = true): LatestRelease {
+        if (!inAppUpdatesEnabled) return LatestRelease("0.0.0", "")
         if (latestRelease.version == "0.0.0" || forceUpdate) {
             val data = githubApiGET("${APPConfig.GITHUB_API_URL}/latest")
             latestRelease.version =
@@ -67,6 +73,7 @@ class Updater(val context: Context) {
     }
 
     suspend fun getVersionRelease(version: String): LatestRelease {
+        if (!inAppUpdatesEnabled) return LatestRelease("0.0.0", "")
         val data = githubApiGET("${APPConfig.GITHUB_API_URL}/tags/v$version")
         latestRelease.version =
             data.getOrDefault("name", "0.0.0").toString().replace("v", "").replace("\"", "")

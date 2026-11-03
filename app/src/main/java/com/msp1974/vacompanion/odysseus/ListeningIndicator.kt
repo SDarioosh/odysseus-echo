@@ -9,6 +9,18 @@ package com.msp1974.vacompanion.odysseus
 //   - a pill with the current phase: "Listening…", "Thinking…", "Answering…"
 // It's driven only by the satellite's own pipeline stages, so it needs nothing from HA.
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -51,6 +63,11 @@ object VoiceActivity {
     private val _phase = MutableStateFlow(Phase.IDLE)
     val phase: StateFlow<Phase> = _phase.asStateFlow()
 
+    /** The hardware privacy switch (or anything else) has muted the microphone. */
+    private val _micMuted = MutableStateFlow(false)
+    val micMuted: StateFlow<Boolean> = _micMuted.asStateFlow()
+    fun setMicMuted(muted: Boolean) { _micMuted.value = muted }
+
     /** Called the moment a wake word is accepted, before the pipeline starts, so feedback is instant. */
     fun onWakeWord() {
         VoiceActions.onTurnStarted()
@@ -85,6 +102,22 @@ private val AnsweringGreen = Color(0xFF69F0AE)
 @Composable
 fun ListeningIndicator(modifier: Modifier = Modifier) {
     val phase by VoiceActivity.phase.collectAsState()
+    val micMuted by VoiceActivity.micMuted.collectAsState()
+    val context = LocalContext.current
+
+    // The Echo Show's privacy button mutes the microphone in hardware; Android reports it as a
+    // microphone mute (AudioService.setMicrophoneMuteFromSwitch). Show it on screen.
+    DisposableEffect(context) {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        VoiceActivity.setMicMuted(audio.isMicrophoneMute)
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, i: Intent?) {
+                VoiceActivity.setMicMuted(audio.isMicrophoneMute)
+            }
+        }
+        context.registerReceiver(receiver, IntentFilter(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED))
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
 
     LaunchedEffect(phase) {
         if (phase != VoiceActivity.Phase.IDLE) {
@@ -110,7 +143,23 @@ fun ListeningIndicator(modifier: Modifier = Modifier) {
 
     Box(modifier = modifier.fillMaxSize()) {
         AnimatedVisibility(
-            visible = phase != VoiceActivity.Phase.IDLE,
+            visible = micMuted,
+            enter = fadeIn(tween(150)),
+            exit = fadeOut(tween(300)),
+            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .background(Color(0xE6B71C1C), RoundedCornerShape(50))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Icon(Icons.Filled.MicOff, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                Text("  Microphone off", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+        AnimatedVisibility(
+            visible = phase != VoiceActivity.Phase.IDLE && !micMuted,
             enter = fadeIn(tween(120)),
             exit = fadeOut(tween(300)),
             modifier = Modifier.align(Alignment.BottomCenter),

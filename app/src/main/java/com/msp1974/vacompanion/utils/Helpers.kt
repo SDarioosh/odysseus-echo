@@ -80,7 +80,9 @@ class Helpers {
             return input.all { it in integerChars || it == '.' && dotOccurred++ < 1 }
         }
 
-        fun Float.round(decimals: Int = 2): Float  = (this * 10f.pow(decimals)).toInt() / 10f.pow(decimals)
+        // Odysseus fork: round to nearest. Upstream truncated (toInt), so a threshold of 9.2 set in
+        // HA became 0.91 (9.2f / 10 = 0.9199999). General fix, worth offering upstream.
+        fun Float.round(decimals: Int = 2): Float  = kotlin.math.round(this * 10f.pow(decimals)) / 10f.pow(decimals)
 
         fun String.capitalizeWords(delimiter: String = " ") =
             split(delimiter).joinToString(delimiter) { word ->

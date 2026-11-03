@@ -194,3 +194,35 @@ adb reverse tcp:18123 tcp:18123; adb reverse tcp:17020 tcp:17020; adb forward tc
 ```
 
 Then a turn started from HA's wake button showed the four fictional actions after the turn ended: three added (to-do with due time, list line, event) and one completed (an Athena item, struck through).
+
+## Privacy button: mute only, no sleep (0.14.0+odysseus.8)
+
+On this LineageOS build, the microphone privacy button is two input devices:
+
+| Device | Sends | Effect |
+|---|---|---|
+| `gpio-privacy-state` | `SW_MUTE_DEVICE` | Android mutes the microphone (the HAL logs `setMicMute 0 => 1`) |
+| `gpio-privacy-button` | `KEY_POWER` | `Going to sleep due to power_button`: the screen turns off |
+
+The fix is a key layout for `gpio-privacy-button` in `/data/system/devices/keylayout/`. That's on `/data`, not `/system`. It maps no keys, so the button's power key is ignored and only the mute switch takes effect. The file is `scripts/odysseus/gpio-privacy-button.kl`. It is loaded at boot.
+
+```sh
+adb root                                   # root is needed to write /data/system
+adb push scripts/odysseus/gpio-privacy-button.kl /data/local/tmp/
+adb shell 'mkdir -p /data/system/devices/keylayout \
+  && cp /data/local/tmp/gpio-privacy-button.kl /data/system/devices/keylayout/ \
+  && chown -R system:system /data/system/devices && chmod 755 /data/system/devices /data/system/devices/keylayout \
+  && chmod 644 /data/system/devices/keylayout/gpio-privacy-button.kl \
+  && restorecon -R /data/system/devices; rm /data/local/tmp/gpio-privacy-button.kl'
+adb unroot
+adb reboot                                 # ask the owner first; the layout loads at boot
+# Check: dumpsys input shows the new KeyLayoutFile for gpio-privacy-button
+adb shell dumpsys input | grep -A8 gpio-privacy-button | grep KeyLayoutFile
+# Undo: adb root; adb shell rm /data/system/devices/keylayout/gpio-privacy-button.kl; adb reboot
+```
+
+When the microphone is muted, the app shows a red "Microphone off" pill at the bottom left, driven by `AudioManager.ACTION_MICROPHONE_MUTE_CHANGED`. The listening overlay is hidden while muted.
+
+## Wake word threshold rounding
+
+VACA turned the HA threshold into a cutoff by truncating (`Float.round` used `toInt`), so 9.2 became 0.91. It rounds to the nearest value now, so 9.2 means 0.92. The scores come in steps of 1/255, so 0.92 rejects the two false wakes seen in testing (a cough and background speech), which both scored just under 0.92.

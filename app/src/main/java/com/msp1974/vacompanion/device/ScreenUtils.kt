@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorManager
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -237,10 +239,14 @@ class ScreenUtils (val context: Context, val config: APPConfig) : ContextWrapper
         }
     }
 
+    // Odysseus fork: ask the sensor service for a real sensor instead of trusting the declared
+    // features. LineageOS 18.1 on the Echo Show 5 (cronos) declares an accelerometer it doesn't
+    // have (its only sensor is the light sensor), so "auto" asked for SCREEN_ORIENTATION_SENSOR,
+    // which overrides the system rotation lock, and with no readings the screen went portrait.
     private fun hasOrientationSensor(): Boolean {
-        val pm = context.packageManager
-        return pm.hasSystemFeature(PackageManager.FEATURE_SENSOR_ACCELEROMETER) ||
-            pm.hasSystemFeature(PackageManager.FEATURE_SENSOR_GYROSCOPE)
+        val sm = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager ?: return false
+        return sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null ||
+            sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE) != null
     }
 
     fun wakeScreen(lockDuration: Long = 500) {

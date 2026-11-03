@@ -32,6 +32,9 @@ a cmd package set-home-activity $P/com.msp1974.vacompanion.MainActivity
 a settings put global stay_on_while_plugged_in 7
 a locksettings set-disabled true
 a settings put secure screensaver_enabled 0
+# Landscape, rotation locked (rotation 0 is landscape on cronos; there is no accelerometer)
+a settings put system accelerometer_rotation 0
+a settings put system user_rotation 0
 
 echo "== start"
 a am start -n $P/com.msp1974.vacompanion.MainActivity

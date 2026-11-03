@@ -117,3 +117,29 @@ Still to do:
 - Check that the foreground service survives a reboot. A reboot needs the owner's OK.
 - The device moved to another Wi-Fi network; the owner
   connected it on the device.
+
+## "Hey Athena" wake word (0.14.0+odysseus.3)
+
+The app bundles a custom microWakeWord model, `app/src/main/assets/microwakeword/wakeWords/hey_athena.{tflite,json}`.
+It was trained locally with synthetic Piper voices (see `docs/odysseus/wake-word.md`).
+
+**Threshold.** VACA's global "wake word threshold" setting overrides `probability_cutoff` in the JSON.
+In HA, set the device's wake word threshold to **9.2** (that is 0.92) when you choose Hey Athena. The default of 6 (0.6) gives about 1.5 false wakes per hour.
+
+| Threshold | Missed "Hey Athena" (held-out voices) | False wakes per hour (5.3 h dinner-party test set) |
+|---|---|---|
+| 0.94 | 6.9 % | 0 |
+| 0.92 | 6.5 % | 0.19 |
+| 0.78 | 3.6 % | 0.38 |
+| 0.59 | 3.1 % | 1.5 |
+
+**adb commands for the update:**
+
+```sh
+# Update in place. -r keeps the app's data, permissions, appops and pairing.
+adb install -r odysseus-vaca-0.14.0+odysseus.3-debug.apk
+# Check that the speaker is still blocked for the app after the update.
+adb shell appops get com.msp1974.vacompanion.odysseus PLAY_AUDIO
+# Bring the app back as the home screen.
+adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME
+```

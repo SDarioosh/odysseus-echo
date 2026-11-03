@@ -153,6 +153,8 @@ adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME
 - **Audio:** VACA's wake sound, set from HA: `select.<device>_wake_word_sound` = **Ding**.
   - The app must be allowed to play audio, and VACA's do-not-disturb must be off. Use the device volume to keep it quiet.
 - **Barge-in:** saying "Hey Athena" while the device is still thinking or answering stops that turn and starts listening again.
+  The new turn starts only once HA has ended the interrupted one. In the meantime the app keeps what you say, for up to 15 s. HA reports the end once the agent has answered and Piper has synthesized it; the interrupted answer is then dropped and never played.
+  Before 0.14.0+odysseus.5, a barge-in during "Thinking…" left the satellite deaf until it reconnected. The cause is in HA: `homeassistant/components/wyoming/assist_satellite.py` clears its run flag on any run's `RUN_END`. This is worth reporting to HA.
 
 ```sh
 # Allow the app to play the wake sound and answers again (the silent test setup had denied it).

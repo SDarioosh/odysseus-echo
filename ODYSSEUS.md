@@ -35,6 +35,7 @@ Each change is one commit, and every code change is marked `Odysseus fork` in a 
 | Own application id and version | never collides with or "updates" to the official build | `app/build.gradle.kts` |
 | Bundled "Hey Athena" microWakeWord model | Odysseus wake word, trained locally (`docs/odysseus/wake-word.md`) | `assets/microwakeword/wakeWords/hey_athena.*` |
 | Wake word during a turn starts a new turn (barge-in) | upstream only stops the turn, so the question said right after the wake word was lost | `satellite/Satellite.kt` |
+| Barge-in waits for HA to end the interrupted run, and drops that run's answer | HA's Wyoming satellite clears its "run in progress" flag on any run's end, so starting the new run first left the satellite deaf until it reconnected | new `odysseus/HaRunGate.kt`; hooks in `satellite/Satellite.kt`, `wyoming/WyomingTCPServer.kt` |
 | On-screen listening indicator ("Listening…", "Thinking…", "Answering…" + glowing bottom bar) | visible feedback on a quiet or muted device, independent of the HA dashboard | new `odysseus/ListeningIndicator.kt`; hooks in `satellite/Satellite.kt`, `MainActivity.kt` |
 
 What's lost: face-detection motion mode (pixel-difference motion detection still works),

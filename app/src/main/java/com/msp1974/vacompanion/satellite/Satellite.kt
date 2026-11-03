@@ -1,5 +1,6 @@
 package com.msp1974.vacompanion.satellite
 
+import com.msp1974.vacompanion.odysseus.HaRunGate // Odysseus fork
 import com.msp1974.vacompanion.odysseus.VoiceActivity // Odysseus fork
 
 import android.Manifest
@@ -394,6 +395,8 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
     }
 
     suspend fun processMessage(packet: WyomingPacket) {
+        // Odysseus fork: drop what HA still sends for a run a wake word interrupted (odysseus/HaRunGate.kt).
+        if (packet.type != WyomingEvent.CUSTOM_EVENT && HaRunGate.onServerPacket(packet.type)) return
         when (packet.type) {
             WyomingEvent.CUSTOM_EVENT -> customEventHandler(clientId, packet)
             else -> {
@@ -450,7 +453,9 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
                     if (isResponding()) {
                         interruptResponse(detection)
                         // Odysseus fork: a wake word during a turn starts a fresh turn (barge-in).
-                        // Upstream only stops, which drops the question asked right after it.
+                        // Upstream only stops, which drops the question asked right after it. The
+                        // new run waits for HA to end the old one (odysseus/HaRunGate.kt).
+                        HaRunGate.interrupted()
                         handleWakeWordDetection(detection)
                     } else if (mediaManager.alarmPlayer.isSounding()) {
                         onStopWordDetected(detection)
@@ -604,6 +609,8 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
                 config.screenSaver = false
             }
             audioLogManager.onWakeWordDetected(detection.timestamp, detection.wakeWord, detection.score)
+            // Odysseus fork: never start a run while HA's previous one is still going (odysseus/HaRunGate.kt).
+            if (!HaRunGate.awaitIdle()) { VoiceActivity.onIdle(); return }
             startAudioPipeline(PipelineStartMode.WAKE_WORD_DETECTED, detection.timestamp, buffer)
             buffer = null // the pipeline owns it now
         } finally {
@@ -704,6 +711,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             audioPipeline?.stop()
             audioPipeline = null
         }
+        if (startStage != PipelineStartMode.START_STREAM_TTS) HaRunGate.runStarted() // Odysseus fork
         audioPipeline = object: SatelliteAudioPipeline(context, scope, config, eventId, mediaManager, buffer?.frames ?: microphone.audio) {
             override fun sendMessage(packet: WyomingPacket) {
                 sendSatelliteMessage(clientId, packet.type, packet.data, packet.payload)

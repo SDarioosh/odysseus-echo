@@ -36,10 +36,13 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.msp1974.vacompanion"
+        // Odysseus fork: own package id, so it never collides with (or is "updated" to) the
+        // official Firebase-enabled VACA build. The "+odysseus.N" build metadata is ignored by
+        // semver comparisons, so HA's minimum-app-version check still sees 0.14.0.
+        applicationId = "com.msp1974.vacompanion.odysseus"
         minSdk = 26
         targetSdk = 36
-        versionName = "0.14.0"
+        versionName = "0.14.0+odysseus.1"
         versionCode = code
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
@@ -93,7 +96,7 @@ android {
 androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->
-            val name = "vaca-${variant.outputs.first().versionName.get()}-${variant.name}.apk"
+            val name = "odysseus-vaca-${variant.outputs.first().versionName.get()}-${variant.name}.apk"
             (output as? com.android.build.api.variant.impl.VariantOutputImpl)?.outputFileName?.set(name)
         }
     }

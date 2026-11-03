@@ -1,4 +1,5 @@
 [versions]
+zxingCore = "3.5.3" # Odysseus fork: QR code for phone pairing
 agp = "9.2.1"
 kotlin = "2.3.21"
 kotlinSerialization = "1.11.0"
@@ -29,6 +30,7 @@ hilt = "2.59.2"
 
 
 [libraries]
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxingCore" } # Odysseus fork
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "materialIconsExtended" }
 androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3Exoplayer" }

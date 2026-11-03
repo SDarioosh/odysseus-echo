@@ -42,7 +42,7 @@ android {
         applicationId = "com.msp1974.vacompanion.odysseus"
         minSdk = 26
         targetSdk = 36
-        versionName = "0.14.0+odysseus.8"
+        versionName = "0.14.0+odysseus.9"
         versionCode = code
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
@@ -109,6 +109,7 @@ dependencies {
     implementation(project(":webrtc-apm"))
     implementation(project(":sendspin"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.zxing.core) // Odysseus fork: QR code for phone pairing (odysseus/OdysseusPairing.kt)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)

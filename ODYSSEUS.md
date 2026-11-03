@@ -12,9 +12,14 @@ stays as close to upstream as possible, so new VACA releases can be rebased onto
 
 ## Base
 
-- Branch `odysseus`, based on upstream commit `6fa8fd5` ("v0.14.0", the code of the VACA
-  0.14.0 release). Use HA integration **v0.14.0** with it.
-- Package `com.msp1974.vacompanion.odysseus`, version `0.14.0+odysseus.N`.
+- Branch `odysseus`, rebased onto upstream `dev` at `5b42d23` (2026-10-31: 0.14.0 plus the
+  post-release speech-buffering and wake-word race fixes). The 0.14.0 release itself clipped
+  the start of a command and lost back-to-back requests with Home Assistant 2026.11 (seen on
+  the Echo Show; see docs/odysseus/echo-show-5.md). Use the HA integration **v0.14.0** (its
+  only later change is a translation). The fork on the 0.14.0 release is kept on branch
+  `odysseus-on-0.14.0`.
+- Package `com.msp1974.vacompanion.odysseus`, version `0.14.0+odysseus.N`. `version.properties`
+  is committed with each fork release so `versionCode` only goes up (adb refuses downgrades).
 
 ## Changes from upstream
 
@@ -41,7 +46,7 @@ installing over adb).
 
 ```bash
 git fetch upstream
-git rebase --onto <upstream release commit> 6fa8fd5 odysseus
+git rebase --onto <new upstream commit> 5b42d23 odysseus
 git grep -n "firebase\|crashlytics\|mlkit\|gms" -- '*.kts' '*.toml' '*.kt' '*.xml'   # must be empty except "Odysseus fork" comments
 ./gradlew assembleRelease
 python3 scripts/odysseus/check_apk_privacy.py app/build/outputs/apk/release/*.apk

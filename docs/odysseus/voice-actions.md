@@ -42,19 +42,10 @@ The device asks once when a turn ends. If the answer is empty it asks once more 
 
 ## Setup on the device
 
-### Pair with your phone (QR code)
+### Set up with your phone (QR code)
 
-1. On the Echo: a two-finger swipe up from the bottom, then **Menu → Odysseus → Pair with phone (QR code)**.
-2. Scan the QR code with your phone. The page needs the phone on the same Wi-Fi as the Echo, or on your tailnet.
-   - The QR shows the Echo's Tailscale address first. **Use Wi-Fi address** switches it; the same code works on both.
-   - Over Tailscale the token travels inside WireGuard. Over Wi-Fi it's plain HTTP on your home network, so prefer Tailscale once incoming connections to the Echo are allowed (see `tailscale.md`).
-3. On the page, paste the base URL and the voice token (Odysseus → Settings → Integrations → Voice assistant) and tap **Save**. The Echo saves the token encrypted, tests it, and shows "✓ Linked: Odysseus answered" or the error.
-
-How the pairing server works (`odysseus/OdysseusPairing.kt`):
-- It runs on port 10801 only while the pairing screen is open.
-- The link carries a one-time 128-bit code. A wrong code returns 404.
-- The server closes after one successful pairing, after 5 minutes, after 5 wrong requests, or when you leave the screen.
-- The QR code is drawn on the device with ZXing core (Apache-2.0, no network code).
+The phone setup links the Echo to Odysseus as one of its steps: see [setup.md](setup.md).
+Menu → Odysseus → **Set up with phone (QR code)** runs it again on an Echo that is already set up.
 
 ### Or type them
 
@@ -71,7 +62,7 @@ The URL must be reachable from the device: Odysseus's LAN or Tailscale address, 
 - `odysseus/OdysseusLink.kt`: settings, the Keystore-encrypted token, and the feed client.
 - `odysseus/VoiceActionsCard.kt`: the card, and fetching after a turn.
 - `odysseus/OdysseusSettingsLayout.kt`: Menu → Odysseus.
-- `odysseus/OdysseusPairing.kt`: the pairing server for the phone (QR code).
+- `odysseus/EchoSetup.kt` and the files next to it: the phone setup ([setup.md](setup.md)).
 - Hooks: `MainActivity.kt` (the overlay), `ui/layouts/SettingsLayout.kt` (the tile and screen).
 
 ## Testing without the hub feed

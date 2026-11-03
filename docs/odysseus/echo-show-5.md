@@ -77,8 +77,7 @@ the owner stopped speaking; a question routed to the (mock) conversation agent t
 
 ## adb commands (fresh device)
 
-If more than one device is attached, use `adb -s <serial>`;
-is attached. Everything below can be undone with adb (undo column). Steps 12–20 are
+If more than one device is attached, use `adb -s <serial>`. Everything below can be undone with adb (undo column). Steps 12–20 are
 scripted in `scripts/odysseus/setup_device.sh`. `P=com.msp1974.vacompanion.odysseus`.
 
 | # | Command | Why | Undo |
@@ -112,11 +111,8 @@ location (only needed for VACA's BLE proxy).
 
 Still to do:
 
-- Install the custom "Hey Athena" wake-word model (being trained; "Hey Jarvis" stands in).
 - Tailscale for use away from home: [tailscale.md](tailscale.md).
 - Check that the foreground service survives a reboot. A reboot needs the owner's OK.
-- The device moved to another Wi-Fi network; the owner
-  connected it on the device.
 
 ## "Hey Athena" wake word (0.14.0+odysseus.3)
 

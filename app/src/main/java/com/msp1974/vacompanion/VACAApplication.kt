@@ -14,15 +14,6 @@ import com.msp1974.vacompanion.utils.Helpers
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
 import timber.log.Timber.DebugTree
-import java.security.KeyManagementException
-import java.security.NoSuchAlgorithmException
-import java.security.SecureRandom
-import java.security.cert.CertificateException
-import java.security.cert.X509Certificate
-import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
 
 
 @HiltAndroidApp
@@ -46,7 +37,11 @@ class VACAApplication: Application(), CameraXConfig.Provider {
 
         Thread.setDefaultUncaughtExceptionHandler(AppExceptionHandler(this.applicationContext))
 
-        disableSSLCertificateChecking()
+        // Odysseus fork: upstream replaced the process-wide HTTPS socket factory with a
+        // trust-all one here, which silently disabled certificate checks for every
+        // HttpsURLConnection (and so the Ktor Android engine), overriding the per-request
+        // ignoreSSLErrors opt-in in HttpClientProvider. Removed: certificates are verified
+        // unless the user opts in.
 
         activityManager = ActivityManager(this)
 
@@ -83,39 +78,6 @@ class VACAApplication: Application(), CameraXConfig.Provider {
             .setAvailableCamerasLimiter(CameraSelector.DEFAULT_FRONT_CAMERA)
             .setMinimumLoggingLevel(android.util.Log.ERROR)
             .build()
-    }
-
-    private fun disableSSLCertificateChecking() {
-        val trustAllCerts: Array<TrustManager?> = arrayOf<TrustManager>(@SuppressLint("CustomX509TrustManager")
-        object : X509TrustManager {
-            override fun getAcceptedIssuers(): Array<X509Certificate?>? {
-                return null
-            }
-
-            @SuppressLint("TrustAllX509TrustManager")
-            @Throws(CertificateException::class)
-            override fun checkClientTrusted(arg0: Array<X509Certificate?>?, arg1: String?) {
-                // Not implemented
-            }
-
-            @SuppressLint("TrustAllX509TrustManager")
-            @Throws(CertificateException::class)
-            override fun checkServerTrusted(arg0: Array<X509Certificate?>?, arg1: String?) {
-                // Not implemented
-            }
-        }) as Array<TrustManager?>
-
-        try {
-            val sc = SSLContext.getInstance("TLS")
-
-            sc.init(null, trustAllCerts, SecureRandom())
-
-            HttpsURLConnection.setDefaultSSLSocketFactory(sc.socketFactory)
-        } catch (e: KeyManagementException) {
-            e.printStackTrace()
-        } catch (e: NoSuchAlgorithmException) {
-            e.printStackTrace()
-        }
     }
 
     companion object {

@@ -19,6 +19,10 @@ package com.msp1974.vacompanion.odysseus
 //     an answer before its transcript);
 //   - if HA hasn't ended the old run within MAX_WAIT_MS the new turn is given up, not started,
 //     which keeps HA's state consistent.
+//
+// HA ends the old run only once its conversation agent has answered. An Odysseus turn that looks
+// things up takes longer than MAX_WAIT_MS, so the device also asks Odysseus to end that turn at
+// once (odysseus/BargeIn.kt); HA then ends the run within about a second.
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -47,14 +51,17 @@ object HaRunGate {
         active.value = true
     }
 
-    /** A wake word interrupted the current turn: drop what HA still sends for it. */
-    fun interrupted() {
-        if (isActive()) {
-            suppressing = true
-            oldAudioOpen = false
-            oldRunEndedAt = 0L
-            Timber.i("Barge-in: waiting for Home Assistant to end the interrupted run")
-        }
+    /**
+     * A wake word interrupted the current turn: drop what HA still sends for it. True when HA
+     * had a run and it is dropped from now on; false when there was none, or it already is.
+     */
+    fun interrupted(): Boolean {
+        if (!isActive() || suppressing) return false
+        suppressing = true
+        oldAudioOpen = false
+        oldRunEndedAt = 0L
+        Timber.i("Barge-in: waiting for Home Assistant to end the interrupted run")
+        return true
     }
 
     /** New connection or satellite restart: HA has no run for us. */

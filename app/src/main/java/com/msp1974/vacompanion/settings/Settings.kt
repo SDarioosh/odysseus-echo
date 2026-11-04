@@ -513,6 +513,14 @@ class APPConfig @Inject constructor(val context: Context) {
         get() = this.sharedPrefs.getString("sendspin_preferred_server", "") ?: ""
         set(value) = this.sharedPrefs.edit { putString("sendspin_preferred_server", value.trim()) }
 
+    // Odysseus fork: Music Assistant server ids (comma separated) accepted from any address, on top
+    // of the preferred server. On-device only, never pushed by HA: HA always sends its MA's LAN URL,
+    // so an Echo reaching MA over Tailscale would otherwise refuse it. The id is in the
+    // "refusing server" log line. See docs/odysseus/tailscale.md.
+    var sendspinTrustedServerIds: String
+        get() = this.sharedPrefs.getString("sendspin_trusted_server_ids", "") ?: ""
+        set(value) = this.sharedPrefs.edit { putString("sendspin_trusted_server_ids", value.trim()) }
+
     // Whether to run the Home Assistant Bluetooth proxy (this device appears as an ESPHome node that
     // forwards BLE advertisements and GATT connections). On-device preference that can also be
     // pushed by HA, so it is persisted rather than only held in memory.

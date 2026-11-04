@@ -63,3 +63,29 @@ Cost on a 1 GB device: about 40–60 MB RAM for the Tailscale service. Battery d
 - Accept or block `log.tailscale.com` (see Privacy).
 - Which HA URL the device uses off-LAN: the HA host's MagicDNS name works on both the LAN
   and the tailnet, so it's the simplest single setting for `ha_url`.
+
+## Music Assistant (Sendspin) over Tailscale
+
+- The Sendspin player waits for Music Assistant to connect to it (port 8928). MA finds
+  players by mDNS, which doesn't cross the tailnet, so add the device's 100.x address under
+  MA → Settings → Players → Sendspin → **Manual IP addresses for discovery**.
+- With one MA server, HA's VACA integration always pushes that server's URL as
+  `sendspin_preferred_server` (the "Sendspin Music Assistant Server" select only appears with
+  two or more). The URL is the LAN address, but over the tailnet MA connects from its
+  Tailscale address, so the player refuses it:
+  `refusing server '<name>' (<server id>): not the preferred server <LAN IP> or a trusted server id`.
+- Fix (fork): `sendspin_trusted_server_ids`, an on-device setting HA never touches. Server ids
+  in it (comma separated) are accepted from any address; every other server still has to
+  match the preferred server. Set it with the id from that log line:
+
+  ```sh
+  P=com.msp1974.vacompanion.odysseus
+  F=shared_prefs/${P}_preferences.xml
+  adb shell am force-stop $P
+  adb shell "run-as $P sed -i 's|</map>|    <string name=\"sendspin_trusted_server_ids\"><server id></string>\n</map>|' $F"
+  adb shell monkey -p $P -c android.intent.category.LAUNCHER 1
+  ```
+
+  Undo: the same with the entry removed. Check: `adb shell run-as $P grep trusted $F`, then
+  logcat shows no more "refusing server" and MA plays.
+- If the Tailscale ACL limits who reaches the device, also allow the MA host to port 8928.

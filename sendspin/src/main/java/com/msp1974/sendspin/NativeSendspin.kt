@@ -122,6 +122,12 @@ object NativeSendspin {
      */
     external fun nativeSetPreferredServer(handle: Long, ip: String)
 
+    /**
+     * Odysseus fork: ids of servers allowed to connect from any address, even when a preferred
+     * server is set, separated by commas or whitespace. Blank trusts none.
+     */
+    external fun nativeSetTrustedServerIds(handle: Long, ids: String)
+
     external fun nativeIsConnected(handle: Long): Boolean
 
     external fun nativeMonotonicTimeUs(): Long

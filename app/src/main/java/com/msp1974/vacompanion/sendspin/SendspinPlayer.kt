@@ -141,6 +141,7 @@ class SendspinPlayer(
             NativeSendspin.nativeUpdateVolume(handle, volume)
             NativeSendspin.nativeUpdateMuted(handle, muted)
             NativeSendspin.nativeSetPreferredServer(handle, preferredServerIp())
+            NativeSendspin.nativeSetTrustedServerIds(handle, config.sendspinTrustedServerIds) // Odysseus fork
             config.eventBroadcaster.addListener(this)
             startFeedbackLoop()
             Timber.i("Sendspin: listening on port $port")
@@ -449,6 +450,11 @@ class SendspinPlayer(
             "sendspin_preferred_server" -> {
                 val h = handle
                 if (h != 0L) NativeSendspin.nativeSetPreferredServer(h, preferredServerIp())
+            }
+            // Odysseus fork: servers trusted from any address (Tailscale).
+            "sendspin_trusted_server_ids" -> {
+                val h = handle
+                if (h != 0L) NativeSendspin.nativeSetTrustedServerIds(h, config.sendspinTrustedServerIds)
             }
             "audioOutputId" ->
                 output.setPreferredDevice(AudioOutputRouter.resolvePreferredDevice(context, config))

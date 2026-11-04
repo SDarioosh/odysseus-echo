@@ -28,6 +28,8 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -209,6 +211,11 @@ public:
     std::string verified_id;
     std::chrono::steady_clock::time_point next_check{};
 
+    // Odysseus fork: ids of servers allowed whatever address they connect from (set on the device,
+    // never by HA). Lets the one Music Assistant reach the device over Tailscale, where it arrives
+    // from its Tailscale address rather than the LAN address in preferred_ip.
+    std::set<std::string> trusted_ids;
+
     // Server id to the address it was last seen connecting from; kept in memory only.
     std::map<std::string, std::string> id_to_ip;
 
@@ -254,6 +261,7 @@ public:
 
     // Whether the connected server [id] is the one at preferred_ip.
     Verdict check_server(const std::string& id) {
+        if (trusted_ids.count(id) != 0) return Verdict::ALLOW;  // Odysseus fork
         const auto peers = inbound_peers();
         if (peers.empty()) return Verdict::UNDECIDED;
         // One inbound peer is unambiguously the connected server, which also teaches us its
@@ -316,7 +324,7 @@ public:
                             case Verdict::REFUSE:
                                 __android_log_print(
                                     ANDROID_LOG_INFO, TAG,
-                                    "refusing server '%s' (%s): not the preferred server %s",
+                                    "refusing server '%s' (%s): not the preferred server %s or a trusted server id",
                                     info->name.c_str(), info->server_id.c_str(),
                                     preferred_ip.c_str());
                                 client->disconnect(sendspin::SendspinGoodbyeReason::ANOTHER_SERVER);
@@ -685,6 +693,24 @@ extern "C" JNIEXPORT void JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativ
     std::string value = to_std_string(env, ip);
     bridge->post([bridge, value = std::move(value)] {
         bridge->preferred_ip = value;
+        bridge->verified_id.clear();
+        bridge->next_check = {};
+    });
+}
+
+// Odysseus fork: sets the ids of servers allowed from any address, separated by commas or
+// whitespace; blank trusts none. Changing it re-checks a connected server.
+extern "C" JNIEXPORT void JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativeSetTrustedServerIds(
+    JNIEnv* env, jobject, jlong handle, jstring ids) {
+    Bridge* bridge = bridge_from(handle);
+    if (bridge == nullptr) return;
+    std::string value = to_std_string(env, ids);
+    std::replace(value.begin(), value.end(), ',', ' ');
+    std::set<std::string> parsed;
+    std::istringstream stream(value);
+    for (std::string id; stream >> id;) parsed.insert(id);
+    bridge->post([bridge, parsed = std::move(parsed)] {
+        bridge->trusted_ids = parsed;
         bridge->verified_id.clear();
         bridge->next_check = {};
     });

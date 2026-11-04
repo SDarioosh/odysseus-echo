@@ -52,6 +52,7 @@ class AuthenticationManager(
             url = getBaseUrl(),
             code = code,
         ).let {
+            com.msp1974.vacompanion.odysseus.HaClientId.set(config.context, null) // Odysseus fork: VACA's own client id again (odysseus/HaClientId.kt)
             config.accessToken = it.accessToken
             config.refreshToken = it.refreshToken.toString()
             config.tokenExpiry = System.currentTimeMillis() + (it.expiresIn * 1000)
@@ -64,6 +65,7 @@ class AuthenticationManager(
             return authenticationService.refreshToken(
                 url = getBaseUrl(),
                 refreshToken = refreshToken,
+                clientId = com.msp1974.vacompanion.odysseus.HaClientId.get(config.context), // Odysseus fork: tokens from the phone setup (odysseus/HaClientId.kt)
             ).let { refreshedToken ->
                 invalidRequestCount = 0
                 config.accessToken = refreshedToken.accessToken

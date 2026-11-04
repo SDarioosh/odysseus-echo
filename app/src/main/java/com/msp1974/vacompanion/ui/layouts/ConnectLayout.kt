@@ -94,6 +94,7 @@ fun ConnectionContent(
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     val details: @Composable () -> Unit = {
+        com.msp1974.vacompanion.odysseus.FirstRunSetup() // Odysseus fork: setup QR until HA is signed in (odysseus/EchoSetupPanel.kt)
         InfoCard(vaUiState.appInfo)
         Spacer(modifier = Modifier.height(16.dp))
         LaunchOnBootHint()

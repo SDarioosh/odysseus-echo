@@ -1,5 +1,5 @@
 [versions]
-zxingCore = "3.5.3" # Odysseus fork: QR code for phone pairing
+zxingCore = "3.5.3" # Odysseus fork: QR code for phone setup
 agp = "9.2.1"
 kotlin = "2.3.21"
 kotlinSerialization = "1.11.0"

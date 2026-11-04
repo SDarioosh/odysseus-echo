@@ -361,11 +361,10 @@ object EchoSetup {
         }
         OdysseusLink.baseUrl = baseUrl
         OdysseusLink.setToken(token)
-        val test = runBlocking { OdysseusLink.fetchActions(System.currentTimeMillis() - 60_000L, 1) }
-        val step = when (test) {
-            is OdysseusLink.Result.Ok -> Step("Link to Odysseus", StepStatus.OK, "Odysseus answered")
-            is OdysseusLink.Result.Failed -> Step("Link to Odysseus", StepStatus.WARN, "Saved, but the test failed: ${test.message}")
-        }
+        VoiceTurns.resetFeed()
+        val (ok, msg) = runBlocking { OdysseusLink.testLink() }
+        val step = if (ok) Step("Link to Odysseus", StepStatus.OK, "Odysseus answered")
+        else Step("Link to Odysseus", StepStatus.WARN, msg)
         Timber.i("Echo setup: Odysseus link saved (${step.status})")
         val haUrl = EchoSetupRules.normalizeBaseUrl(form["ha_url"])
         val target = synchronized(s) {

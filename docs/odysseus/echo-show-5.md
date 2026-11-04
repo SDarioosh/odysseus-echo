@@ -173,7 +173,7 @@ The Odysseus voice endpoint should therefore ask for a follow-up only when its a
 
 ## Voice actions card test (0.14.0+odysseus.6)
 
-This test runs against a stand-in for Odysseus's actions feed (`~/sbx/mock_actions.py` on the host, fictional actions); see `voice-actions.md`. The adb commands, and why:
+This test runs against a stand-in for Odysseus's actions feed (`~/sbx/mock_actions.py` on the host, fictional actions); see `turn-card.md`. The adb commands, and why:
 
 ```sh
 # The stand-in on the host is reached from the device over USB.

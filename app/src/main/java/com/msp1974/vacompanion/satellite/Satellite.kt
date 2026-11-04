@@ -1,6 +1,7 @@
 package com.msp1974.vacompanion.satellite
 
 import com.msp1974.vacompanion.odysseus.HaRunGate // Odysseus fork
+import com.msp1974.vacompanion.odysseus.OdysseusTurn // Odysseus fork
 import com.msp1974.vacompanion.odysseus.VoiceActivity // Odysseus fork
 
 import android.Manifest
@@ -712,7 +713,9 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             audioPipeline = null
         }
         if (startStage != PipelineStartMode.START_STREAM_TTS) HaRunGate.runStarted() // Odysseus fork
-        audioPipeline = object: SatelliteAudioPipeline(context, scope, config, eventId, mediaManager, buffer?.frames ?: microphone.audio) {
+        // Odysseus fork: per-turn satellite post, voice check audio and thinking sound (odysseus/OdysseusTurn.kt).
+        val odysseusTurn = OdysseusTurn.begin(context, startStage, config)
+        audioPipeline = object: SatelliteAudioPipeline(context, scope, config, eventId, mediaManager, odysseusTurn.tee(buffer?.frames ?: microphone.audio)) {
             override fun sendMessage(packet: WyomingPacket) {
                 sendSatelliteMessage(clientId, packet.type, packet.data, packet.payload)
             }
@@ -720,6 +723,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             override fun onStateChange(state: PipelineStage) {
                 Timber.d("Audio pipeline state: $state")
                 VoiceActivity.onPipelineStage(state) // Odysseus fork: on-screen listening indicator
+                odysseusTurn.onStage(state, mediaManager) // Odysseus fork (odysseus/OdysseusTurn.kt)
                 audioPipelineLastStateChange = System.currentTimeMillis()
                 // Past listening the kept audio is of no use any more.
                 if (state.ordinal > PipelineStage.VOICE_STARTED.ordinal) cancelDetectionBuffer()

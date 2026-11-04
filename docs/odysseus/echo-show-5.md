@@ -75,6 +75,22 @@ on it (`0.14.0+odysseus.2`). Measured on the device after the fix (test HA, fast
 `small-int8` on CPU, owner at 1 m): "what time is it" was answered by HA locally 1.85 s after
 the owner stopped speaking; a question routed to the (mock) conversation agent took 1.67 s.
 
+## Microphone processing (0.14.0+odysseus.16)
+
+The Echo's audio front-end already does noise reduction and gain control (see Mic
+measurements). Upstream VACA (since 2026-10-30) runs WebRTC noise suppression, gain control
+and a high-pass filter on top of it. Doing it twice distorts speech: the owner was misheard at
+1 m in a quiet room, while the same microphone's unprocessed clips were word-perfect. The fork
+turns the app's processing off by default and sends the front-end's audio as it is.
+
+- Setting: Settings → Experimental → Voice assistant → **App microphone processing** (stored on
+  the device, applies at once, also to the wake word engine). Settings → Audio → Audio
+  Capabilities then shows gain control and noise suppression as "Off (device's own)".
+- The `mic_gain` setting, the minimum microphone level and wake sound suppression still apply.
+- To compare, save Home Assistant's pipeline audio (`assist_pipeline: debug_recording_dir:
+  /share/assist_pipeline` in `configuration.yaml`) and listen to a turn with the setting on and
+  one with it off.
+
 ## adb commands (fresh device)
 
 If more than one device is attached, use `adb -s <serial>`. Everything below can be undone with adb (undo column). Steps 12–20 are

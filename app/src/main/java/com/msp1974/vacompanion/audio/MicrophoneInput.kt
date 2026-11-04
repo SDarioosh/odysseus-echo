@@ -164,7 +164,9 @@ class MicrophoneInput (
                 // WebRTC levels the signal to a fixed output level; the mic gain setting then
                 // raises or lowers that, unless the microphone is being turned right down.
                 val micGainDb = config.micGain.toFloat().coerceIn(-MIC_GAIN_LIMIT_DB, MIC_GAIN_LIMIT_DB)
-                return suppressor.applyTo(webRtc?.process(frame) ?: frame, micGainDb)
+                // Odysseus fork: WebRTC only when switched on (odysseus/MicProcessing.kt)
+                val processor = webRtc?.takeIf { com.msp1974.vacompanion.odysseus.MicProcessing.isOn(context) }
+                return suppressor.applyTo(processor?.process(frame) ?: frame, micGainDb)
             }
             return frame
         }

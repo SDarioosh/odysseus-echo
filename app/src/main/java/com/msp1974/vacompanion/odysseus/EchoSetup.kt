@@ -87,6 +87,8 @@ object EchoSetup {
         var expiresAt: Long = 0,
         var badAttempts: Int = 0,
         var steps: List<Step> = emptyList(),
+        /** The link from Odysseus was taken: a later or repeated one is ignored. */
+        var odysseusLinked: Boolean = false,
     ) {
         val qrHost get() = hosts[hostIndex]
         /** The host in Odysseus's return URL and HA's client_id/redirect_uri. */
@@ -352,13 +354,22 @@ object EchoSetup {
     }
 
     private fun submitOdysseus(out: OutputStream, s: Session, form: Map<String, String>) {
-        if (synchronized(s) { s.phase == Phase.RUNNING || s.phase == Phase.DONE }) return redirect(out, "/setup/${s.code}")
+        // Only while this setup waits for Odysseus, and only once: anyone else who learns the
+        // code (it is in plain-HTTP LAN URLs) can't swap the token or the HA address afterwards.
+        if (!synchronized(s) { EchoSetupRules.acceptsOdysseusLink(s.phase == Phase.ODYSSEUS, s.odysseusLinked) }) {
+            return redirect(out, "/setup/${s.code}")
+        }
         val baseUrl = EchoSetupRules.normalizeBaseUrl(form["base_url"])
         val token = form["token"].orEmpty().trim()
         if (baseUrl == null || !EchoSetupRules.isPlausibleToken(token)) {
             return respond(out, 400, EchoSetupPages.page("Link incomplete",
                 "<p>Odysseus sent an incomplete link. <a href=\"/setup/${s.code}\">Start again</a>.</p>"))
         }
+        val claimed = synchronized(s) {
+            EchoSetupRules.acceptsOdysseusLink(s.phase == Phase.ODYSSEUS, s.odysseusLinked)
+                .also { if (it) s.odysseusLinked = true }
+        }
+        if (!claimed) return redirect(out, "/setup/${s.code}")
         OdysseusLink.baseUrl = baseUrl
         OdysseusLink.setToken(token)
         VoiceTurns.resetFeed()

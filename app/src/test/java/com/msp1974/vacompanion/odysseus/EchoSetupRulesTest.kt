@@ -152,6 +152,13 @@ class EchoSetupRulesTest {
     }
 
     @Test
+    fun odysseusLinkIsTakenOnceAndOnlyWhileWaiting() {
+        assertTrue(EchoSetupRules.acceptsOdysseusLink(waitingForOdysseus = true, alreadyLinked = false))
+        assertFalse(EchoSetupRules.acceptsOdysseusLink(waitingForOdysseus = true, alreadyLinked = true))
+        assertFalse(EchoSetupRules.acceptsOdysseusLink(waitingForOdysseus = false, alreadyLinked = false))
+    }
+
+    @Test
     fun escaping() {
         assertEquals("&lt;a href=&quot;x&quot;&gt;&amp;&#39;", EchoSetupRules.esc("<a href=\"x\">&'"))
     }

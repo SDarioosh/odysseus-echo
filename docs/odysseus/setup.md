@@ -72,6 +72,8 @@ Tailscale they travel inside WireGuard.
   part is running), and a minute after setup finishes.
 - Odysseus hands the token over in the URL fragment, which never reaches a server or a log.
   The Echo's page removes it from the address bar and posts it to the Echo.
+- The Echo takes that link only while it waits for Odysseus, and only once: someone else on
+  the network who learns the code can't swap the token or the Home Assistant address later.
 - Home Assistant sign-in uses a random `state` that the Echo checks.
 - Pages are `Cache-Control: no-store` and `Referrer-Policy: no-referrer`, every value is
   escaped, and tokens are never logged.

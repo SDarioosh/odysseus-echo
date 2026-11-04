@@ -13,6 +13,8 @@ fun experimentalConfig(vm: VAViewModel): ConfigSection {
     val c = vm.config
     return ConfigSection(
         "Experimental", Icons.Default.Science, listOf(
+            // Odysseus fork: the app's own microphone processing, off by default (odysseus/MicProcessing.kt)
+            com.msp1974.vacompanion.odysseus.MicProcessing.toggle(vm.getApplication<android.app.Application>(), VOICE),
             ConfigItem.Toggle(VOICE, "Suppress wake sound",
                 "Turn the microphone right down while the wake sound plays. Use this when the sound is a spoken one, such as 'how can i help?', so it isn't heard as part of your command",
                 Icons.Default.MicOff, key = "suppress_wake_sound",

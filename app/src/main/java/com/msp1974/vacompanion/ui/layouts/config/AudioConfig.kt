@@ -79,10 +79,10 @@ fun audioConfig(vm: VAViewModel): ConfigSection {
                 value = { yesNo(audioEnhancementsSupported) },
                 valueColor = { yesNoColor(audioEnhancementsSupported) }),
             ConfigItem.Info(CAPABILITIES, "Automatic Gain Control", null, Icons.Default.Equalizer,
-                value = { enhancementSourceLabel(MicrophoneInput.agcSource) },
+                value = { com.msp1974.vacompanion.odysseus.MicProcessing.offLabel(context, MicrophoneInput.agcSource) ?: enhancementSourceLabel(MicrophoneInput.agcSource) }, // Odysseus fork (odysseus/MicProcessing.kt)
                 valueColor = { enhancementSourceColor(MicrophoneInput.agcSource) }),
             ConfigItem.Info(CAPABILITIES, "Noise Suppression", null, Icons.Default.NoiseAware,
-                value = { enhancementSourceLabel(MicrophoneInput.nsSource) },
+                value = { com.msp1974.vacompanion.odysseus.MicProcessing.offLabel(context, MicrophoneInput.nsSource) ?: enhancementSourceLabel(MicrophoneInput.nsSource) }, // Odysseus fork (odysseus/MicProcessing.kt)
                 valueColor = { enhancementSourceColor(MicrophoneInput.nsSource) }),
             ConfigItem.Info(CAPABILITIES, "Echo Cancellation", null, Icons.Default.PhoneInTalk,
                 value = { enhancementSourceLabel(MicrophoneInput.aecSource) },

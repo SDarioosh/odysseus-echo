@@ -2,7 +2,9 @@ package com.msp1974.vacompanion.odysseus
 
 // Odysseus fork: the Echo's side of the phone setup (EchoSetup.kt): the QR code and what the
 // phone is doing. Shown on the connection screen while the Echo has no Home Assistant login
-// (FirstRunSetup, hook in ui/layouts/ConnectLayout.kt) and in Menu → Odysseus.
+// (FirstRunSetup, hook in ui/layouts/ConnectLayout.kt) and in Menu → Odysseus. Sized for the
+// Echo Show 5 (960×480 px, about 640×320 dp): while the QR shows, the connection screen gives the
+// panel its whole width (setupQrShowing) and the QR shrinks to the screen height.
 
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
@@ -10,6 +12,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -29,8 +33,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,8 +54,16 @@ fun FirstRunSetup() {
     if (LocalInspectionMode.current) return
     val vm: VAViewModel = viewModel()
     if (!EchoSetup.needsSetup(vm.config) && EchoSetup.state.collectAsState().value is EchoSetup.State.Idle) return
-    EchoSetupPanel(vm.config, autoStart = EchoSetup.needsSetup(vm.config), qrSize = 170.dp)
+    EchoSetupPanel(vm.config, autoStart = EchoSetup.needsSetup(vm.config), qrSize = 200.dp)
 }
+
+/**
+ * True while the setup QR is on screen. The connection screen then leaves out the logo and the
+ * device details (hook in ui/layouts/ConnectLayout.kt), which don't fit beside it on an Echo Show 5.
+ */
+@Composable
+fun setupQrShowing(): Boolean =
+    !LocalInspectionMode.current && EchoSetup.state.collectAsState().value is EchoSetup.State.Waiting
 
 /**
  * The QR code while the setup server runs, else a "Set up with phone" button. Leaving the screen
@@ -65,20 +79,28 @@ fun EchoSetupPanel(config: APPConfig, autoStart: Boolean = false, qrSize: Dp = 2
     when (val st = state) {
         is EchoSetup.State.Waiting -> Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             val qr = remember(st.url) { qrBitmap(st.url, 600) }
+            // Room for the status line and settings button below; never so small a phone can't scan it.
+            val fit = (LocalConfiguration.current.screenHeightDp - 120).dp.coerceAtLeast(120.dp)
             Image(bitmap = qr.asImageBitmap(), contentDescription = "Setup QR code",
-                modifier = Modifier.size(qrSize).background(Color.White).padding(6.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
-                Text("Set up with your phone", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                Text(st.phoneStep ?: "Scan the code. The phone must be on Tailscale or the same Wi-Fi.", fontSize = 14.sp, color = muted)
-                Text(st.url.substringBefore("/setup/"), fontSize = 12.sp, color = muted)
+                modifier = Modifier.size(minOf(qrSize, fit)).background(Color.White).padding(6.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                Text("Set up with your phone", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(st.phoneStep ?: "Scan the code. The phone must be on Tailscale or the same Wi-Fi.", fontSize = 13.sp, lineHeight = 17.sp, color = muted)
+                Text(st.url.substringBefore("/setup/"), fontSize = 11.sp, lineHeight = 14.sp, color = muted)
                 var left by remember { mutableLongStateOf(0L) }
                 LaunchedEffect(st.expiresAt) {
                     while (true) { left = (st.expiresAt - System.currentTimeMillis()).coerceAtLeast(0) / 1000; delay(1000) }
                 }
-                Text("Closes in ${left / 60}:${"%02d".format(left % 60)}", fontSize = 13.sp, color = muted)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (st.hasOther) OutlinedButton(onClick = { EchoSetup.swapAddress() }) { Text("Other address") }
-                    OutlinedButton(onClick = { EchoSetup.stop("Cancelled") }) { Text("Cancel") }
+                Text("Closes in ${left / 60}:${"%02d".format(left % 60)}", fontSize = 12.sp, color = muted)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val compact = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    if (st.hasOther) OutlinedButton(onClick = { EchoSetup.swapAddress() }, contentPadding = compact) {
+                        Text("Other address", maxLines = 1, softWrap = false)
+                    }
+                    TextButton(onClick = { EchoSetup.stop("Cancelled") }, contentPadding = compact) {
+                        Text("Cancel", maxLines = 1, softWrap = false)
+                    }
                 }
             }
         }

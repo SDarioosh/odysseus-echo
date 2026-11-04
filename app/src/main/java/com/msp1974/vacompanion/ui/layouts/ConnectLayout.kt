@@ -92,9 +92,11 @@ fun ConnectionContent(
     onPermissionsClick: () -> Unit,
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val setupQr = com.msp1974.vacompanion.odysseus.setupQrShowing() // Odysseus fork: the QR gets the screen (odysseus/EchoSetupPanel.kt)
 
-    val details: @Composable () -> Unit = {
+    val details: @Composable () -> Unit = details@{
         com.msp1974.vacompanion.odysseus.FirstRunSetup() // Odysseus fork: setup QR until HA is signed in (odysseus/EchoSetupPanel.kt)
+        if (setupQr) return@details // Odysseus fork
         InfoCard(vaUiState.appInfo)
         Spacer(modifier = Modifier.height(16.dp))
         LaunchOnBootHint()
@@ -136,7 +138,7 @@ fun ConnectionContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(32.dp)
             ) {
-                Box(modifier = Modifier.weight(0.4f), contentAlignment = Alignment.Center) {
+                if (!setupQr) Box(modifier = Modifier.weight(0.4f), contentAlignment = Alignment.Center) { // Odysseus fork: if
                     LogoImage(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
                 }
                 Column(

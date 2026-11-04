@@ -62,6 +62,10 @@ data class SatelliteTurnResponse(
     val speaker: TurnSpeaker? = null,
 )
 
+/** The /satellite/interrupt answer (a barge-in, BargeIn.kt). */
+@Serializable
+data class InterruptResponse(val ok: Boolean = false, val cut: Int = 0, val marked: Int = 0)
+
 /** What the device tells the hub when the owner stops speaking (contract §4). */
 data class SatelliteTurnForm(
     val deviceId: String,
@@ -102,6 +106,10 @@ object VoiceTurnApi {
 
     fun parseSatelliteTurnResponse(body: String): SatelliteTurnResponse =
         json.decodeFromString<SatelliteTurnResponse>(body)
+
+    /** The /satellite/interrupt answer: {"ok": true, "cut": n, "marked": n}. Throws on a body that isn't JSON. */
+    fun parseInterruptResponse(body: String): OdysseusLink.InterruptResult.Ok =
+        json.decodeFromString<InterruptResponse>(body).let { OdysseusLink.InterruptResult.Ok(it.cut, it.marked) }
 
     /** The links worth a chip: http(s) only, no duplicates, at most [max]. */
     fun displayLinks(links: List<TurnLink>, max: Int = MAX_LINKS): List<TurnLink> =

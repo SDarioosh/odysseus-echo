@@ -9,6 +9,7 @@ package com.msp1974.vacompanion.odysseus
 //   -> {"actions": [VoiceAction, ...]}   newest first; see VoiceAction for the fields.
 //   GET <base>/turns/latest?since=<epoch ms>           -> {"turn": VoiceTurn | null}  (VoiceTurnApi.kt)
 //   POST <base>/satellite/turn (multipart)             -> device, area, wake word and the spoken command
+//   POST <base>/satellite/interrupt (form: device_id)  -> a barge-in: end this device's turn now (BargeIn.kt)
 //
 
 // The token is the same `voice`-scope token Home Assistant uses (read-only plus voice actions).
@@ -237,6 +238,32 @@ object OdysseusLink {
             PostResult.Ok(VoiceTurnApi.parseSatelliteTurnResponse(r.body))
         } catch (e: Exception) {
             PostResult.Failed(e.message ?: e.javaClass.simpleName)
+        }
+    }
+
+    sealed class InterruptResult {
+        /** The hub cut [cut] running turns short and marked [marked] it hadn't been asked yet. */
+        data class Ok(val cut: Int, val marked: Int) : InterruptResult()
+        /** An older Odysseus without the route: the barge-in waits for the old answer as before. */
+        object NotSupported : InterruptResult()
+        data class Failed(val message: String) : InterruptResult()
+    }
+
+    /**
+     * POST /satellite/interrupt: this device's wake word interrupted its turn, so Odysseus ends
+     * that turn at once and Home Assistant can end its run (odysseus/BargeIn.kt).
+     */
+    suspend fun interruptTurn(deviceId: String): InterruptResult = withContext(Dispatchers.IO) {
+        try {
+            val body = "device_id=" + java.net.URLEncoder.encode(deviceId, "UTF-8")
+            val r = request("/satellite/interrupt", "application/x-www-form-urlencoded", body.toByteArray(), readTimeoutMs = 4000)
+            when (r.code) {
+                200 -> VoiceTurnApi.parseInterruptResponse(r.body)
+                404, 405 -> InterruptResult.NotSupported
+                else -> InterruptResult.Failed(describe(r.code, "interrupt route"))
+            }
+        } catch (e: Exception) {
+            InterruptResult.Failed(e.message ?: e.javaClass.simpleName)
         }
     }
 

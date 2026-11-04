@@ -1,6 +1,7 @@
 package com.msp1974.vacompanion.satellite
 
 import com.msp1974.vacompanion.odysseus.HaRunGate // Odysseus fork
+import com.msp1974.vacompanion.odysseus.BargeIn // Odysseus fork
 import com.msp1974.vacompanion.odysseus.OdysseusTurn // Odysseus fork
 import com.msp1974.vacompanion.odysseus.VoiceActivity // Odysseus fork
 
@@ -455,8 +456,9 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
                         interruptResponse(detection)
                         // Odysseus fork: a wake word during a turn starts a fresh turn (barge-in).
                         // Upstream only stops, which drops the question asked right after it. The
-                        // new run waits for HA to end the old one (odysseus/HaRunGate.kt).
-                        HaRunGate.interrupted()
+                        // new run waits for HA to end the old one (odysseus/HaRunGate.kt), which
+                        // Odysseus is asked to end at once (odysseus/BargeIn.kt).
+                        BargeIn.interruptHaRun(config.uuid)
                         handleWakeWordDetection(detection)
                     } else if (mediaManager.alarmPlayer.isSounding()) {
                         onStopWordDetected(detection)
@@ -611,6 +613,8 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             }
             audioLogManager.onWakeWordDetected(detection.timestamp, detection.wakeWord, detection.score)
             // Odysseus fork: never start a run while HA's previous one is still going (odysseus/HaRunGate.kt).
+            // A run still going here is interrupted too, e.g. after > 15 s of "Thinking…" (odysseus/BargeIn.kt).
+            BargeIn.interruptHaRun(config.uuid)
             if (!HaRunGate.awaitIdle()) { VoiceActivity.onIdle(); return }
             startAudioPipeline(PipelineStartMode.WAKE_WORD_DETECTED, detection.timestamp, buffer)
             buffer = null // the pipeline owns it now

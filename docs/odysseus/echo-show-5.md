@@ -150,6 +150,8 @@ adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME
   - The app must be allowed to play audio, and VACA's do-not-disturb must be off. Use the device volume to keep it quiet.
 - **Barge-in:** saying "Hey Athena" while the device is still thinking or answering stops that turn and starts listening again.
   The new turn starts only once HA has ended the interrupted one. In the meantime the app keeps what you say, for up to 15 s. HA reports the end once the agent has answered and Piper has synthesized it; the interrupted answer is then dropped and never played.
+  Since 0.14.0+odysseus.14 the app also tells Odysseus (`POST <base>/satellite/interrupt`, `odysseus/BargeIn.kt`), which ends that turn at once with an empty answer; HA then ends its run within about a second. Before, an Odysseus answer that took longer than 15 s meant the new question was dropped and the device went idle. A wake word after more than 15 s of "Thinking…" also counts as a barge-in now (it used to let the old answer play). Without the Odysseus link, or with an older Odysseus, the app waits for the old answer as before.
+  Reproduced and checked in the hub's sandbox (a real Home Assistant and an emulator of this code): `docs/fork/sandbox.md#voice-barge-in` in `SDarioosh/odysseus-expanded`.
   Before 0.14.0+odysseus.5, a barge-in during "Thinking…" left the satellite deaf until it reconnected. The cause is in HA: `homeassistant/components/wyoming/assist_satellite.py` clears its run flag on any run's `RUN_END`. This is worth reporting to HA.
 
 ```sh

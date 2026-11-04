@@ -42,7 +42,7 @@ android {
         applicationId = "com.msp1974.vacompanion.odysseus"
         minSdk = 26
         targetSdk = 36
-        versionName = "0.14.0+odysseus.14"
+        versionName = "0.14.0+odysseus.15"
         versionCode = code
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")

@@ -153,6 +153,10 @@ object EchoSetupRules {
         cleanName(name).replace(' ', '_').filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(32)
 
     /** A voice token as Odysseus mints it: visible ASCII, no spaces, at most 512 characters. */
+    /** The link Odysseus sends back is taken only while setup waits for it, and only once. */
+    fun acceptsOdysseusLink(waitingForOdysseus: Boolean, alreadyLinked: Boolean) =
+        waitingForOdysseus && !alreadyLinked
+
     fun isPlausibleToken(token: String) = token.length in 8..512 && token.all { it.code in 0x21..0x7e }
 
     fun esc(s: String): String = buildString(s.length) {

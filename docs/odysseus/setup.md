@@ -13,7 +13,8 @@ A new Echo is set up with one QR code. You type nothing on the Echo.
 ## Steps
 
 1. Start the app on the Echo. While it has no Home Assistant login, the connection screen shows
-   a QR code. On an Echo that is already set up: a two-finger swipe up, then **Menu → Odysseus →
+   a QR code (with the logo and device details hidden, so it fits the Echo Show 5's screen). On
+   an Echo that is already set up: a two-finger swipe up, then **Menu → Odysseus →
    Set up with phone (QR code)**.
 2. Scan the code with your phone. Enter a **Name** (for example Kitchen) and check the
    **Odysseus address**. Tap **Continue**.

@@ -260,19 +260,14 @@ fun AppTheme(
     dynamicColor: Boolean = true,
     content: @Composable() () -> Unit
 ) {
-  val colorScheme = when {
-      dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-          val context = LocalContext.current
-          if (darkMode) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-      }
-
-      darkMode -> darkScheme
-      else -> lightScheme
-  }
+  // Odysseus fork: the Odysseus web app's colours, font and corners in place of upstream's
+  // (dynamic) schemes and AppTypography (odysseus/OdysseusTheme.kt).
+  val colorScheme = com.msp1974.vacompanion.odysseus.OdysseusTheme.colorScheme(darkMode)
 
   MaterialTheme(
     colorScheme = colorScheme,
-    typography = AppTypography,
+    typography = com.msp1974.vacompanion.odysseus.OdysseusTheme.typography, // Odysseus fork
+    shapes = com.msp1974.vacompanion.odysseus.OdysseusTheme.shapes, // Odysseus fork
     content = content
   )
 }

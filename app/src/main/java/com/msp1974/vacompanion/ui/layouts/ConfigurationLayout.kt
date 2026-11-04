@@ -78,18 +78,8 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 // Accent colour for each section, in list order, matching the Manage Custom Files screen.
-val SECTION_COLORS = listOf(
-    Color(0xFF6366F1), // indigo
-    Color(0xFF14B8A6), // teal
-    Color(0xFFF59E0B), // amber
-    Color(0xFFEC4899), // pink
-    Color(0xFF3B82F6), // blue
-    Color(0xFF22C55E), // green
-    Color(0xFFA855F7), // purple
-    Color(0xFFEF4444), // red
-    Color(0xFF06B6D4), // cyan
-    Color(0xFFF97316), // orange
-)
+// Odysseus fork: the Odysseus palette (odysseus/OdysseusTheme.kt); upstream: indigo, teal, amber, pink, blue, ...
+val SECTION_COLORS = com.msp1974.vacompanion.odysseus.OdysseusTheme.sectionColors
 
 fun sectionColor(index: Int) = SECTION_COLORS[index % SECTION_COLORS.size]
 

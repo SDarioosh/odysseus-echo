@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Odysseus fork: the Odysseus logo (odysseus/OdysseusTheme.kt). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="96dp"
+    android:viewportWidth="27"
+    android:viewportHeight="24">
+    <group android:translateX="-2.5" android:translateY="-3.5">
+        <!-- The Odysseus sailboat, from the web app's favicon (32 x 32). -->
+        <path android:fillColor="@color/odysseus_red" android:pathData="M16,4L16,22L6,22Z" />
+        <path android:fillColor="@color/odysseus_red" android:fillAlpha="0.6" android:pathData="M16,8L16,22L24,22Z" />
+        <path android:fillColor="#00000000" android:strokeColor="@color/odysseus_red" android:strokeWidth="2.5"
+            android:strokeLineCap="round" android:pathData="M4,24Q10,20 16,24Q22,28 28,24" />
+    </group>
+</vector>

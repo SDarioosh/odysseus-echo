@@ -86,7 +86,7 @@ fun SettingsTileGrid(
 private fun SettingsTileButton(tile: SettingsTile, wide: Boolean) {
     Surface(
         onClick = tile.onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large, // Odysseus fork: web app corners; upstream: 16.dp
         color = tile.color.copy(alpha = 0.16f),
         border = BorderStroke(1.dp, tile.color.copy(alpha = 0.55f)),
         modifier = Modifier

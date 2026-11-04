@@ -31,6 +31,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -95,9 +96,13 @@ object VoiceActivity {
     const val MAX_VISIBLE_MS = 90_000L
 }
 
-private val ListeningBlue = Color(0xFF4FC3F7)
-private val ThinkingViolet = Color(0xFFB388FF)
-private val AnsweringGreen = Color(0xFF69F0AE)
+// The Odysseus web app's colours (OdysseusTheme.kt). The indicator floats over the dashboard, so it
+// keeps the dark theme's look whatever the app theme is.
+private val ListeningColor = OdysseusColors.Fg
+private val ThinkingColor = OdysseusColors.Red
+private val AnsweringColor = OdysseusColors.Green
+private val PillBg = OdysseusColors.Bg.copy(alpha = 0.92f)
+private val PillShape = RoundedCornerShape(8.dp)
 
 @Composable
 fun ListeningIndicator(modifier: Modifier = Modifier) {
@@ -127,11 +132,11 @@ fun ListeningIndicator(modifier: Modifier = Modifier) {
     }
 
     val (label, color, periodMs) = when (phase) {
-        VoiceActivity.Phase.LISTENING -> Triple("Listening…", ListeningBlue, 900)
-        VoiceActivity.Phase.HEARING -> Triple("Listening…", ListeningBlue, 350)
-        VoiceActivity.Phase.THINKING -> Triple("Thinking…", ThinkingViolet, 1200)
-        VoiceActivity.Phase.ANSWERING -> Triple("Answering…", AnsweringGreen, 1600)
-        VoiceActivity.Phase.IDLE -> Triple("", ListeningBlue, 1000)
+        VoiceActivity.Phase.LISTENING -> Triple("Listening…", ListeningColor, 900)
+        VoiceActivity.Phase.HEARING -> Triple("Listening…", ListeningColor, 350)
+        VoiceActivity.Phase.THINKING -> Triple("Thinking…", ThinkingColor, 1200)
+        VoiceActivity.Phase.ANSWERING -> Triple("Answering…", AnsweringColor, 1600)
+        VoiceActivity.Phase.IDLE -> Triple("", ListeningColor, 1000)
     }
 
     val pulse by rememberInfiniteTransition(label = "voice-pulse").animateFloat(
@@ -151,11 +156,12 @@ fun ListeningIndicator(modifier: Modifier = Modifier) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .background(Color(0xE6B71C1C), RoundedCornerShape(50))
+                    .background(PillBg, PillShape)
+                    .border(1.dp, OdysseusColors.Red, PillShape)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
-                Icon(Icons.Filled.MicOff, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                Text("  Microphone off", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                Icon(Icons.Filled.MicOff, contentDescription = null, tint = OdysseusColors.Red, modifier = Modifier.size(24.dp))
+                Text("  Microphone off", color = OdysseusColors.Red, fontSize = 18.sp, fontWeight = FontWeight.Medium)
             }
         }
         AnimatedVisibility(
@@ -167,12 +173,13 @@ fun ListeningIndicator(modifier: Modifier = Modifier) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = label,
-                    color = Color.White,
+                    color = color,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier
                         .padding(bottom = 10.dp)
-                        .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(50))
+                        .background(PillBg, PillShape)
+                        .border(1.dp, OdysseusColors.Border, PillShape)
                         .padding(horizontal = 22.dp, vertical = 8.dp),
                 )
                 Box(

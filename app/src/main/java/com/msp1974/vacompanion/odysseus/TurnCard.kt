@@ -18,6 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -165,11 +166,14 @@ object VoiceTurns {
     }
 }
 
-private val CardBg = Color(0xFF1E1E24)
-private val DoneGreen = Color(0xFF69F0AE)
-private val AddBlue = Color(0xFF4FC3F7)
+// An Odysseus web app card (OdysseusTheme.kt): panel, 1 px border, 8 px corners. It floats over the
+// dashboard, so it keeps the dark theme's look whatever the app theme is.
+private val CardBg = OdysseusColors.Panel.copy(alpha = 0.95f)
+private val CardShape = RoundedCornerShape(8.dp)
+private val DoneGreen = OdysseusColors.Green
+private val AddBlue = OdysseusColors.Red
 private val AskAmber = Color(0xFFFFD54F)
-private val Muted = Color(0xFFB0B0B8)
+private val Muted = OdysseusColors.muted(OdysseusColors.Fg, OdysseusColors.Panel)
 
 @Composable
 fun TurnCard(modifier: Modifier = Modifier) {
@@ -209,7 +213,8 @@ private fun CardContent(c: TurnCardState) {
     Column(
         modifier = Modifier
             .widthIn(min = 420.dp, max = 620.dp)
-            .background(CardBg, RoundedCornerShape(20.dp))
+            .background(CardBg, CardShape)
+            .border(1.dp, OdysseusColors.Border, CardShape)
             .clickable { VoiceTurns.dismiss() }
             .padding(horizontal = 22.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -317,7 +322,7 @@ private fun ActionRow(a: VoiceAction) {
         Column(Modifier.fillMaxWidth()) {
             Text(
                 text = a.title.ifBlank { a.detail ?: "" },
-                color = if (completed) Color(0xFFDADADA) else Color.White,
+                color = if (completed) Muted else OdysseusColors.Fg,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Medium,
                 textDecoration = if (completed) TextDecoration.LineThrough else null,

@@ -90,7 +90,7 @@ class VAForegroundService @Inject constructor() : LifecycleService(), EventListe
                 // starts; foregroundServiceTypes() only declares the types that are granted.
                 val notification =
                     NotificationCompat.Builder(this, "VACAForegroundServiceChannelId")
-                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setSmallIcon(R.drawable.odysseus_notification) // Odysseus fork: the sailboat; upstream: R.mipmap.ic_launcher
                         .setContentTitle("View Assist Companion App")
                         .setContentText("Service is running")
                         .apply {

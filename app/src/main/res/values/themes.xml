@@ -2,13 +2,13 @@
     <!-- Base application theme. -->
     <style name="Base.Theme.VACompanion" parent="">
         <item name="android:windowFullscreen">true</item>
-        <item name="android:windowBackground">@color/blue</item>
+        <item name="android:windowBackground">@color/odysseus_bg</item> <!-- Odysseus fork -->
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
     </style>
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/blue</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_image</item>
+        <item name="windowSplashScreenBackground">@color/odysseus_bg</item> <!-- Odysseus fork -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/odysseus_launcher_foreground</item> <!-- Odysseus fork -->
         <item name="windowSplashScreenAnimationDuration">200</item>
         <item name="postSplashScreenTheme">@style/Theme.VACompanion</item>
     </style>

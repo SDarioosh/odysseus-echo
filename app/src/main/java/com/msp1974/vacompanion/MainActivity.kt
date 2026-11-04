@@ -205,8 +205,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
 
                         // Odysseus fork: listening/thinking/answering overlay over any layout.
                         if (vaUiState.satelliteRunning) ListeningIndicator()
-                        // Odysseus fork: what a voice turn added or completed (odysseus/VoiceActionsCard.kt)
-                        if (vaUiState.satelliteRunning) com.msp1974.vacompanion.odysseus.VoiceActionsCard()
+                        // Odysseus fork: what a voice turn did: actions, sources, confirmation (odysseus/TurnCard.kt)
+                        if (vaUiState.satelliteRunning) com.msp1974.vacompanion.odysseus.TurnCard()
 
                         vaUiState.onboardingDeviceId?.let { defaultId ->
                             UUIDEditDialog(

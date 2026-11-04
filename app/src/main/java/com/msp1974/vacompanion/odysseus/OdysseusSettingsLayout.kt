@@ -1,8 +1,9 @@
 package com.msp1974.vacompanion.odysseus
 
 // Odysseus fork: Menu → Odysseus. Links the device to Odysseus so it can show what voice turns
-// created or completed (VoiceActionsCard). The base URL and token are the same ones Home
-// Assistant's conversation agent uses; the token is stored encrypted (OdysseusLink).
+// did (TurnCard), tell Odysseus where a turn was asked and who asked it (OdysseusTurn), and play
+// the thinking sound. The base URL and token are the same ones Home Assistant's conversation
+// agent uses; the token is stored encrypted (OdysseusLink).
 
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
@@ -56,6 +57,9 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
     var url by remember { mutableStateOf(OdysseusLink.baseUrl) }
     var token by remember { mutableStateOf("") }
     var show by remember { mutableStateOf(OdysseusLink.showActions) }
+    var checkVoice by remember { mutableStateOf(OdysseusLink.checkVoice) }
+    var thinking by remember { mutableStateOf(OdysseusLink.thinkingSound) }
+    var deviceName by remember { mutableStateOf(OdysseusLink.deviceName) }
     var status by remember {
         mutableStateOf(if (OdysseusLink.isConfigured) "Linked (token saved)" else "Not linked")
     }
@@ -70,7 +74,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
         ) {
             PairWithPhone(onPaired = { status = it; url = OdysseusLink.baseUrl })
             Text(
-                "Or type them here. Show what you add or complete by voice. Use the base URL and voice token from " +
+                "Or type them here. Use the base URL and voice token from " +
                     "Odysseus → Settings → Integrations → Voice assistant (the same ones Home Assistant uses).",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp,
             )
@@ -86,22 +90,30 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = show, onCheckedChange = { show = it; OdysseusLink.showActions = it })
-                Text("  Show added and completed items after a voice turn", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+            Setting(show, "Show what a voice turn did", "Added and completed items, its sources, and questions waiting for a yes") {
+                show = it; OdysseusLink.showActions = it
             }
+            Setting(checkVoice, "Check my voice", "Send the spoken command to Odysseus so Athena can tell if it's you. Not stored.") {
+                checkVoice = it; OdysseusLink.checkVoice = it
+            }
+            Setting(thinking, "Thinking sound", "A soft tone once when an answer takes longer than 5 seconds") {
+                thinking = it; OdysseusLink.thinkingSound = it
+            }
+            OutlinedTextField(
+                value = deviceName,
+                onValueChange = { deviceName = it; OdysseusLink.deviceName = it },
+                singleLine = true,
+                label = { Text("Device name told to Odysseus (e.g. Kitchen Echo; blank: VACA <id>)") },
+                modifier = Modifier.fillMaxWidth(),
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = {
                     OdysseusLink.baseUrl = url
                     if (token.isNotBlank()) OdysseusLink.setToken(token)
                     token = ""
+                    VoiceTurns.resetFeed()
                     status = "Saved. Testing…"
-                    scope.launch {
-                        status = when (val r = OdysseusLink.fetchActions(System.currentTimeMillis() - 86_400_000L, 1)) {
-                            is OdysseusLink.Result.Ok -> "Linked: Odysseus answered"
-                            is OdysseusLink.Result.Failed -> "Saved, but the test failed: ${r.message}"
-                        }
-                    }
+                    scope.launch { status = OdysseusLink.testLink().second }
                 }) { Text("Save and test") }
                 OutlinedButton(onClick = {
                     OdysseusLink.setToken(""); OdysseusLink.baseUrl = ""
@@ -109,6 +121,17 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
                 }) { Text("Unlink") }
             }
             Text(status, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun Setting(checked: Boolean, title: String, detail: String, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(checked = checked, onCheckedChange = onChange)
+        Column(Modifier.padding(start = 14.dp)) {
+            Text(title, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -18,8 +18,11 @@ stays as close to upstream as possible, so new VACA releases can be rebased onto
   the Echo Show; see docs/odysseus/echo-show-5.md). Use the HA integration **v0.14.0** (its
   only later change is a translation). The fork on the 0.14.0 release is kept on branch
   `odysseus-on-0.14.0`.
-- Package `com.msp1974.vacompanion.odysseus`, version `0.14.0+odysseus.N`. `version.properties`
-  is committed with each fork release so `versionCode` only goes up (adb refuses downgrades).
+- Package `com.msp1974.vacompanion.odysseus`, version `0.14.0+odysseus.N`, set once as
+  `odysseusVersionName` in `app/build.gradle.kts`. `versionCode` is worked out from it
+  (`major*10^7 + minor*10^5 + patch*10^3 + N`, e.g. 1400016), so bumping `N` for a release (or
+  rebasing onto a newer upstream) is all it takes for it to go up; adb refuses downgrades.
+  Upstream's `version.properties` counter is removed.
 
 ## Changes from upstream
 
@@ -32,7 +35,7 @@ Each change is one commit, and every code change is marked `Odysseus fork` in a 
 | No process-wide trust-all TLS | upstream disabled certificate checks for every HTTPS request; a general fix to offer upstream | `VACAApplication.kt` |
 | No in-app updates | they would install the official, Firebase-enabled APK | `utils/Updater.kt` |
 | Voice-turn timeout configurable (`pipeline_timeout`, default 60 s, was a fixed 20 s) | Odysseus agent turns with Athena tool calls on a local model take longer than 20 s | `satellite/SatelliteAudioPipeline.kt`, `settings/Settings.kt` |
-| Own application id and version | never collides with or "updates" to the official build | `app/build.gradle.kts` |
+| Own application id and version; `versionCode` derived from `versionName`, `version.properties` removed | never collides with or "updates" to the official build; the upstream counter went up on every Gradle run and a fresh clone could build a code lower than the one installed | `app/build.gradle.kts` |
 | Bundled "Hey Athena" microWakeWord model | Odysseus wake word, trained locally (`docs/odysseus/wake-word.md`) | `assets/microwakeword/wakeWords/hey_athena.*` |
 | Wake word during a turn starts a new turn (barge-in) | upstream only stops the turn, so the question said right after the wake word was lost | `satellite/Satellite.kt` |
 | Barge-in waits for HA to end the interrupted run, and drops that run's answer | HA's Wyoming satellite clears its "run in progress" flag on any run's end, so starting the new run first left the satellite deaf until it reconnected | new `odysseus/HaRunGate.kt`; hooks in `satellite/Satellite.kt`, `wyoming/WyomingTCPServer.kt` |

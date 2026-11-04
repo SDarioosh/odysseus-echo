@@ -19,7 +19,7 @@ This is a Gradle Android project (Kotlin, Jetpack Compose, Hilt DI). Use the Gra
 
 On Windows use `gradlew.bat` instead of `./gradlew`.
 
-Note: every Gradle sync/build **increments and persists `version.properties`** (`VERSION_CODE`) as a side effect of evaluating `app/build.gradle.kts` — this file will show as modified after essentially any build, independent of code changes. Don't be alarmed by it appearing in `git status`/`git diff`; only worry if `VERSION_CODE` changes are being deliberately committed.
+Note (Odysseus fork): the version is set once, as `odysseusVersionName` (`0.14.0+odysseus.N`) in `app/build.gradle.kts`; bump `N` for a release. `versionCode` is derived from it (`major*10^7 + minor*10^5 + patch*10^3 + N`) — don't set it by hand. Upstream's `version.properties` counter (which incremented on every Gradle run) is removed; if a rebase brings it back, delete it again.
 
 There are 3 Gradle modules (`settings.gradle.kts`):
 - `:app` — the application itself.

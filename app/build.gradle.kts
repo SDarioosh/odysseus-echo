@@ -1,5 +1,3 @@
-import java.io.FileInputStream
-import java.util.Properties
 import kotlin.toString
 
 plugins {
@@ -18,22 +16,36 @@ tasks.register("printVersionName") {
     }
 }
 
+tasks.register("printVersionCode") {
+    group = "custom"
+    description = "Output version code (Odysseus fork: derived from versionName)"
+    doLast {
+        println(android.defaultConfig.versionCode)
+    }
+}
+
 android {
     namespace = "com.msp1974.vacompanion"
     compileSdk = 36
 
-    val versionPropsFile = file("../version.properties")
-    var code = 0
-
-    if (versionPropsFile.canRead()) {
-        val versionProps = Properties()
-        versionProps.load(FileInputStream(versionPropsFile))
-        code = versionProps["VERSION_CODE"].toString().toInt() + 1
-        versionProps["VERSION_CODE"] = code.toString()
-        versionProps.store(versionPropsFile.writer(), null)
-    } else {
-        throw GradleException("Could not read version.properties!")
-    }
+    // Odysseus fork: versionCode is worked out from versionName instead of upstream's
+    // version.properties counter (which went up on every Gradle run and had to be committed by
+    // hand, so a fresh clone could build a lower code than the one installed and adb would refuse
+    // it). major.minor.patch+odysseus.N gives major*10^7 + minor*10^5 + patch*10^3 + N, so a new
+    // fork release (N+1) or a rebase onto a newer upstream always goes up, and every build of a
+    // commit gets the same code. Starts at 1400016 for 0.14.0+odysseus.16 (above the old 52xx).
+    val odysseusVersionName = "0.14.0+odysseus.16"
+    val odysseusVersionCode = Regex("""(\d+)\.(\d+)\.(\d+)\+odysseus\.(\d+)""")
+        .matchEntire(odysseusVersionName)
+        ?.destructured
+        ?.let { (major, minor, patch, n) ->
+            val parts = listOf(major, minor, patch, n).map { it.toInt() }
+            if (parts[1] > 99 || parts[2] > 99 || parts[3] > 999) {
+                throw GradleException("versionName $odysseusVersionName out of range for versionCode")
+            }
+            parts[0] * 10_000_000 + parts[1] * 100_000 + parts[2] * 1_000 + parts[3]
+        }
+        ?: throw GradleException("versionName must look like 0.14.0+odysseus.N, got $odysseusVersionName")
 
     defaultConfig {
         // Odysseus fork: own package id, so it never collides with (or is "updated" to) the
@@ -42,8 +54,8 @@ android {
         applicationId = "com.msp1974.vacompanion.odysseus"
         minSdk = 26
         targetSdk = 36
-        versionName = "0.14.0+odysseus.16"
-        versionCode = code
+        versionName = odysseusVersionName
+        versionCode = odysseusVersionCode
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
         // Odysseus fork: Odysseus address prefilled on the phone setup page (odysseus/EchoSetup.kt);

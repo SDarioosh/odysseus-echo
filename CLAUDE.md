@@ -36,6 +36,10 @@ There are 3 Gradle modules (`settings.gradle.kts`):
 
 State is centralized in `VAViewModel` (`ui/VAViewModel.kt`) via a single `vacaState` `StateFlow`, and cross-cutting settings/events flow through `APPConfig.eventBroadcaster` (an `EventNotifier`/`EventListener` pub-sub — see `utils/Events.kt`), which both `MainActivity` and `Satellite` subscribe to for things like screen mode, dark mode, mute state, etc. Don't wire new cross-component state through direct references between `MainActivity`/`Satellite`/`VAViewModel` — go through `config.eventBroadcaster` or `BroadcastSender` (`broadcasts/BroadcastSender.kt`, backed by `LocalBroadcastManager` + explicit `Context.registerReceiver`) the way existing code does.
 
+### Home screen (Odysseus fork)
+
+Full description in [docs/odysseus/home-screen.md](docs/odysseus/home-screen.md). Native pages (`odysseus/home/`, the clock first) are drawn by `HomeHost` **over** the dashboard; the `WebViewScreen` stays composed underneath so HA stays live. Swipe right from the clock reveals the dashboard, swipe left (or the idle timeout, `HomeSettings`) brings the clock back. The rules live in `HomeNavigator` (plain Kotlin, unit-tested); `HomeScreenController` is the one process-wide holder of that state as Compose state, and the target of the dashboard's gesture hook in `WebViewLayout`. To add a page, implement `HomePage`, add it to `HomePages.all`, and pass any new data through `HomePageContext` (pages don't read the view model).
+
 ### DI and app-wide singletons
 
 Hilt (`@HiltAndroidApp` on `VACAApplication`, `@AndroidEntryPoint` on `MainActivity`/`VAForegroundService`). The one hand-wired module is `di/AppModule.kt`, providing the single `DeviceManager` singleton. `DeviceManager` (`device/DeviceManager.kt`) is the root object graph: it owns `APPConfig` (`settings/Settings.kt` — the mutable, `SharedPreferences`-backed app config, with `Delegates.observable` properties that fire `eventBroadcaster` notifications on change), `DeviceInfo`, `SensorManager`, and `AuthenticationManager` (HA long-lived token auth), and exposes `StateFlow`s for network/server/sensor/UI status.

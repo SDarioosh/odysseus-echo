@@ -184,7 +184,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                             vaUiState.screenBlank -> BlackScreen()
                             vaUiState.satelliteRunning -> {
                                 Box(modifier = Modifier.fillMaxSize()) {
-                                    WebViewScreen(webView)
+                                    // Odysseus fork: clock home screen over the dashboard (odysseus/home/HomeHost.kt)
+                                    com.msp1974.vacompanion.odysseus.home.HomeHost { WebViewScreen(webView) }
                                     if (vaUiState.showMenu) {
                                         SettingsLayout(
                                             viewModel = viewModel,

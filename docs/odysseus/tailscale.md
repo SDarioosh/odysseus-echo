@@ -1,6 +1,6 @@
 # Tailscale: reaching Home Assistant from anywhere
 
-Status: planned, not yet installed on the device.
+Status: installed on the device by the owner (reported 2026-11-05). The steps below are the plan it followed; the open questions at the end still stand until the owner confirms them.
 
 ## Why and how it fits
 
@@ -44,7 +44,7 @@ Status: planned, not yet installed on the device.
 - Use split tunnelling so only the satellite app goes through Tailscale (Tailscale settings →
   App split tunnelling), and leave the exit node off. LAN access keeps working.
 
-## Planned adb steps (each undoable)
+## adb steps (each undoable)
 
 | # | Command | Why | Undo |
 |---|---|---|---|

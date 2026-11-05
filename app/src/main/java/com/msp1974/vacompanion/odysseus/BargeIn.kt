@@ -26,6 +26,7 @@ object BargeIn {
     /** True when HA had a run and it is now interrupted (its end is asked of Odysseus). */
     fun interruptHaRun(deviceId: String): Boolean {
         if (!HaRunGate.interrupted()) return false
+        OdysseusTurn.current?.markBargeIn() // its timings say it was cut short (TurnTimings)
         if (!OdysseusLink.isConfigured) {
             Timber.i("Barge-in: no Odysseus link; waiting for Home Assistant to end the run by itself")
             return true

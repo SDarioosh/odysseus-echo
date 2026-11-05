@@ -8,6 +8,8 @@ package com.msp1974.vacompanion.odysseus
 //     device, area, wake word and, with "Check my voice" on, the command as WAV (≤ 15 s). It never
 //     blocks or fails the pipeline.
 //   - AWAITING_RESPONSE for ThinkingChime.DELAY_MS without TTS: the thinking sound, once.
+//   - every stage: its time after the wake word (TurnTimings); at ENDED the times go to Odysseus
+//     (POST /satellite/timing) in the background.
 //
 // Later per-turn features plug in here. Nothing happens when the device isn't linked to Odysseus.
 
@@ -31,7 +33,13 @@ class OdysseusTurn private constructor(
     private val startedAtMs: Long,
     private val recorder: TurnAudioRecorder?,
     private val active: Boolean,
+    startMode: PipelineStartMode,
 ) {
+    private val timings = TurnTimings(startedAtMs, startMode.name.lowercase()).also {
+        if (recorder != null) it.flag(TurnTimings.VOICE_CHECK)
+    }
+    @Volatile private var timingsPosted = false
+
     @Volatile private var stage = PipelineStage.INIT
     @Volatile private var posted = false
     @Volatile private var chimePlayed = false
@@ -43,6 +51,7 @@ class OdysseusTurn private constructor(
     fun onStage(newStage: PipelineStage, mediaManager: SatelliteMediaManager) {
         stage = newStage
         if (!active) return
+        timings.mark(newStage, System.currentTimeMillis())
         // HA may skip voice-stopped (straight to the transcript); post at the first stage past speech.
         if (!posted && newStage.ordinal >= PipelineStage.VOICE_STOPPED.ordinal && newStage != PipelineStage.ENDED &&
             newStage.ordinal <= PipelineStage.AWAITING_RESPONSE.ordinal
@@ -56,7 +65,27 @@ class OdysseusTurn private constructor(
                 chimeJob?.cancel(); chimeJob = null
             }
         }
-        if (newStage == PipelineStage.ENDED) recorder?.discard()
+        if (newStage == PipelineStage.ENDED) {
+            recorder?.discard()
+            postTimings()
+        }
+    }
+
+    /** A wake word interrupted this turn (odysseus/BargeIn.kt). */
+    fun markBargeIn() = timings.flag(TurnTimings.BARGE_IN)
+
+    private fun postTimings() {
+        if (timingsPosted) return
+        timingsPosted = true
+        if (current === this) current = null
+        val body = timings.toJson(config.uuid)
+        scope.launch {
+            when (val r = OdysseusLink.postTimings(body)) {
+                is OdysseusLink.TimingResult.Ok -> Timber.d("Odysseus turn timings sent: ${timings.marks()}")
+                OdysseusLink.TimingResult.NotSupported -> Timber.d("Odysseus turn timings: this Odysseus doesn't keep them")
+                is OdysseusLink.TimingResult.Failed -> Timber.w("Odysseus turn timings: ${r.message}")
+            }
+        }
     }
 
     private fun postContext() {
@@ -93,6 +122,7 @@ class OdysseusTurn private constructor(
             )
             if (play) {
                 chimePlayed = true
+                timings.flag(TurnTimings.THINKING_SOUND)
                 Timber.d("Odysseus: answer is taking a while, playing the thinking sound")
                 mediaManager.soundPlayer.play(Uri.parse(ThinkingChime.SOUND_URI))
             }
@@ -101,6 +131,10 @@ class OdysseusTurn private constructor(
 
     companion object {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+        /** The turn running now (the one a barge-in interrupts), until it ends. */
+        @Volatile var current: OdysseusTurn? = null
+            private set
 
         /** A wake word older than this isn't this turn's start (a pipeline started some other way). */
         private const val WAKE_RECENT_MS = 60_000L
@@ -119,7 +153,7 @@ class OdysseusTurn private constructor(
             val startedAt = if (startMode == PipelineStartMode.WAKE_WORD_DETECTED && wakeAt > 0 && now - wakeAt < WAKE_RECENT_MS) wakeAt else now
             val active = listens && OdysseusLink.isConfigured
             val recorder = if (active && OdysseusLink.checkVoice) TurnAudioRecorder(config.sampleRate) else null
-            return OdysseusTurn(config, startedAt, recorder, active)
+            return OdysseusTurn(config, startedAt, recorder, active, startMode).also { if (active) current = it }
         }
     }
 }

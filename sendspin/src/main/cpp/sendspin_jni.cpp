@@ -1,5 +1,5 @@
 // JNI bridge between com.msp1974.sendspin.NativeSendspin and sendspin-cpp (player, metadata,
-// controller and colour roles).
+// controller, colour and - Odysseus fork - artwork roles).
 //
 // sendspin-cpp expects one thread - its "main loop" - to call start(), loop() and stop(), and the
 // player update_* calls are only safe from there too. So that thread is owned here: it starts the
@@ -34,6 +34,7 @@
 #include <thread>
 #include <vector>
 
+#include "sendspin/artwork_role.h"
 #include "sendspin/client.h"
 #include "sendspin/color_role.h"
 #include "sendspin/controller_role.h"
@@ -171,6 +172,7 @@ class Bridge final : public sendspin::PlayerRoleListener,
                      public sendspin::MetadataRoleListener,
                      public sendspin::ControllerRoleListener,
                      public sendspin::ColorRoleListener,
+                     public sendspin::ArtworkRoleListener,
                      public sendspin::SendspinClientListener,
                      public sendspin::SendspinNetworkProvider {
 public:
@@ -179,6 +181,7 @@ public:
     sendspin::ControllerRole* controller = nullptr;
     sendspin::MetadataRole* metadata = nullptr;
     sendspin::ColorRole* color = nullptr;
+    sendspin::ArtworkRole* artwork = nullptr;
 
     jobject callbacks = nullptr;  // global ref
     jmethodID on_audio_write_mid = nullptr;
@@ -193,6 +196,9 @@ public:
     jmethodID on_group_id_mid = nullptr;
     jmethodID on_controller_mid = nullptr;
     jmethodID on_colors_mid = nullptr;
+    jmethodID on_artwork_image_mid = nullptr;
+    jmethodID on_artwork_display_mid = nullptr;
+    jmethodID on_artwork_clear_mid = nullptr;
 
     std::thread loop_thread;
     std::atomic<bool> running{false};
@@ -511,6 +517,46 @@ public:
         clear_exception(env);
     }
 
+    // --- ArtworkRoleListener (Odysseus fork) --------------------------------
+
+    // One slot (0, album art). The encoded image goes to Kotlin as it arrives (on the role's
+    // decode thread), which decodes it; it is shown when on_image_display fires at the server's
+    // timestamp, i.e. at the track change it belongs to.
+    void on_image_decode(uint8_t slot, const uint8_t* data, size_t length,
+                         sendspin::SendspinImageFormat /*format*/) override {
+        if (slot != 0 || data == nullptr || length == 0 || length > kMaxArtworkBytes) return;
+        JNIEnv* env = env_for_this_thread();
+        if (env == nullptr) return;
+        jbyteArray bytes = env->NewByteArray(static_cast<jsize>(length));
+        if (bytes == nullptr) {
+            clear_exception(env);
+            return;
+        }
+        env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(length),
+                                reinterpret_cast<const jbyte*>(data));
+        env->CallVoidMethod(callbacks, on_artwork_image_mid, bytes);
+        clear_exception(env);
+        env->DeleteLocalRef(bytes);
+    }
+
+    void on_image_display(uint8_t slot, uint32_t /*lateness_ms*/) override {
+        if (slot != 0) return;
+        JNIEnv* env = env_for_this_thread();
+        if (env == nullptr) return;
+        env->CallVoidMethod(callbacks, on_artwork_display_mid);
+        clear_exception(env);
+    }
+
+    void on_image_clear(uint8_t slot) override {
+        if (slot != 0) return;
+        JNIEnv* env = env_for_this_thread();
+        if (env == nullptr) return;
+        env->CallVoidMethod(callbacks, on_artwork_clear_mid);
+        clear_exception(env);
+    }
+
+    static constexpr size_t kMaxArtworkBytes = 4 * 1024 * 1024;
+
     // --- SendspinClientListener ---------------------------------------------
 
     void on_group_update(const sendspin::GroupUpdateObject& group) override {
@@ -573,11 +619,15 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_msp1974_sendspin_NativeSendspin_nati
     bridge->on_controller_mid =
         find_method(env, cls, "onControllerState", "(Ljava/lang/String;ZLjava/lang/String;)V");
     bridge->on_colors_mid = find_method(env, cls, "onColors", "(IIII)V");
+    bridge->on_artwork_image_mid = find_method(env, cls, "onArtworkImage", "([B)V");
+    bridge->on_artwork_display_mid = find_method(env, cls, "onArtworkDisplay", "()V");
+    bridge->on_artwork_clear_mid = find_method(env, cls, "onArtworkClear", "()V");
     env->DeleteLocalRef(cls);
     if (bridge->on_metadata_mid == nullptr || bridge->on_metadata_clear_mid == nullptr ||
         bridge->on_playback_state_mid == nullptr || bridge->on_group_id_mid == nullptr ||
         bridge->on_controller_mid == nullptr ||
-        bridge->on_colors_mid == nullptr ||
+        bridge->on_colors_mid == nullptr || bridge->on_artwork_image_mid == nullptr ||
+        bridge->on_artwork_display_mid == nullptr || bridge->on_artwork_clear_mid == nullptr ||
         bridge->on_audio_write_mid == nullptr || bridge->on_stream_start_mid == nullptr ||
         bridge->on_stream_end_mid == nullptr || bridge->on_volume_mid == nullptr ||
         bridge->on_mute_mid == nullptr || bridge->on_connection_mid == nullptr) {
@@ -625,6 +675,17 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_msp1974_sendspin_NativeSendspin_nati
     bridge->metadata->set_listener(bridge.get());
     bridge->color = &bridge->client->add_color();
     bridge->color->set_listener(bridge.get());
+    // Odysseus fork: album art pushed by the server, sized for the overlay's artwork (up to
+    // 168 dp) on the Echo's screen. JPEG keeps it small.
+    sendspin::ArtworkRoleConfig artwork_config;
+    sendspin::ImageSlotPreference album;
+    album.source = sendspin::SendspinImageSource::ALBUM;
+    album.format = sendspin::SendspinImageFormat::JPEG;
+    album.width = 320;
+    album.height = 320;
+    artwork_config.preferred_formats.push_back(album);
+    bridge->artwork = &bridge->client->add_artwork(std::move(artwork_config));
+    bridge->artwork->set_listener(bridge.get());
     bridge->client->set_listener(bridge.get());
     bridge->client->set_network_provider(bridge.get());
 

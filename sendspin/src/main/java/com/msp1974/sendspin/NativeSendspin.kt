@@ -63,6 +63,19 @@ interface NativeSendspinCallbacks {
      * foreground: [onDark] on [backgroundDark], [onLight] on [backgroundLight].
      */
     fun onColors(backgroundDark: Int, backgroundLight: Int, onDark: Int, onLight: Int)
+
+    /**
+     * Odysseus fork (artwork role): album art pushed by the server as an encoded image (JPEG, up
+     * to 320 px square). Called on the library's decode thread as soon as it arrives; decode it
+     * there, but show it only at [onArtworkDisplay].
+     */
+    fun onArtworkImage(data: ByteArray)
+
+    /** Show the image from the last [onArtworkImage]: its track has started. */
+    fun onArtworkDisplay()
+
+    /** The server cleared the artwork (track without art), or the stream ended. */
+    fun onArtworkClear()
 }
 
 /**

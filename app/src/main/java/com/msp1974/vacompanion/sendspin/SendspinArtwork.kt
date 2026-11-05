@@ -61,6 +61,14 @@ object SendspinArtwork {
         return out.toByteArray()
     }
 
+    /** Decodes pushed artwork (Sendspin artwork role), or null if it isn't a valid image. */
+    fun decodePushed(bytes: ByteArray): Bitmap? = try {
+        decode(bytes)
+    } catch (e: Exception) {
+        Timber.w("Sendspin: pushed artwork decode failed: $e")
+        null
+    }
+
     // Full-size art can be several thousand pixels square; the overlay needs a small thumbnail.
     private fun decode(bytes: ByteArray): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

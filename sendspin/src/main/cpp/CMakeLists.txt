@@ -14,14 +14,15 @@ FetchContent_Declare(
 )
 
 # Player plays the audio; metadata (track info, progress), controller (transport, shuffle, repeat)
-# and colour (the track's palette) feed the on-screen now-playing overlay. Artwork arrives as a URL
-# in the metadata, so the artwork role, and the other roles VACA has no use for, stay out of the
-# binary.
+# and colour (the track's palette) feed the on-screen now-playing overlay. Odysseus fork: the
+# artwork role is on so the server pushes the album art over the Sendspin connection itself; the
+# artwork URL in the metadata points at the server's LAN address, which a device reaching it over
+# Tailscale can't load. The visualizer role stays out of the binary.
 set(SENDSPIN_ENABLE_PLAYER ON CACHE BOOL "" FORCE)
 set(SENDSPIN_ENABLE_CONTROLLER ON CACHE BOOL "" FORCE)
 set(SENDSPIN_ENABLE_METADATA ON CACHE BOOL "" FORCE)
 set(SENDSPIN_ENABLE_COLOR ON CACHE BOOL "" FORCE)
-set(SENDSPIN_ENABLE_ARTWORK OFF CACHE BOOL "" FORCE)
+set(SENDSPIN_ENABLE_ARTWORK ON CACHE BOOL "" FORCE)
 set(SENDSPIN_ENABLE_VISUALIZER OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 

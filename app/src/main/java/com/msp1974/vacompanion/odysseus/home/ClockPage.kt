@@ -223,7 +223,7 @@ private fun TrackRow(nowPlaying: SendspinNowPlaying, onCommand: (String) -> Unit
             .fillMaxWidth()
             .alpha(if (nowPlaying.active) 1f else 0.6f),
     ) {
-        Artwork(nowPlaying.artworkUrl)
+        Artwork(nowPlaying.artwork, nowPlaying.artworkUrl)
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -281,10 +281,13 @@ private fun SkipButton(icon: ImageVector, description: String, enabled: Boolean,
 }
 
 @Composable
-private fun Artwork(url: String?) {
-    val bitmap by produceState<Bitmap?>(initialValue = null, url) {
-        value = url?.let { SendspinArtwork.load(it) }
+private fun Artwork(pushed: Bitmap?, url: String?) {
+    // Art pushed over the Sendspin connection first; the URL only when there is none (it points
+    // at the server's LAN address, out of reach over Tailscale).
+    val fetched by produceState<Bitmap?>(initialValue = null, url, pushed) {
+        value = if (pushed == null) url?.let { SendspinArtwork.load(it) } else null
     }
+    val bitmap = pushed ?: fetched
     Box(
         modifier = Modifier
             .size(ARTWORK_SIZE)

@@ -87,6 +87,7 @@ class SendspinPlayer(
     private var shuffle = false
     private var repeat = "off"
     private var colors = SendspinColors()
+    private val pushedArtwork = PushedArtwork<android.graphics.Bitmap>()
     private var published = SendspinNowPlaying()
 
     private val focusAttributes = AudioAttributes.Builder()
@@ -288,8 +289,30 @@ class SendspinPlayer(
             this.positionMs = progressMs.coerceAtLeast(0)
             this.positionAtMs = SystemClock.elapsedRealtime()
             this.speed = speed
+            pushedArtwork.onTrack(trackKey())
         }
         publishNowPlaying()
+    }
+
+    private fun trackKey() = "$title\u0000$artist\u0000$album"
+
+    // --- Odysseus fork: album art pushed over the Sendspin connection (artwork role) ---------
+
+    override fun onArtworkImage(data: ByteArray) {
+        // On the library's decode thread, so decoding here keeps it off the main loop.
+        val bitmap = SendspinArtwork.decodePushed(data) ?: return
+        Timber.d("Sendspin: artwork received, ${data.size} bytes, ${bitmap.width}x${bitmap.height}")
+        synchronized(nowPlayingLock) { pushedArtwork.onImage(bitmap) }
+    }
+
+    override fun onArtworkDisplay() {
+        val changed = synchronized(nowPlayingLock) { pushedArtwork.onDisplay() }
+        if (changed) publishNowPlaying()
+    }
+
+    override fun onArtworkClear() {
+        val changed = synchronized(nowPlayingLock) { pushedArtwork.onClear(streamActive, trackKey()) }
+        if (changed) publishNowPlaying()
     }
 
     override fun onMetadataCleared() {
@@ -328,6 +351,7 @@ class SendspinPlayer(
             artist = ""
             album = ""
             artworkUrl = null
+            pushedArtwork.reset()
             durationMs = 0
             positionMs = 0
             speed = -1
@@ -352,6 +376,7 @@ class SendspinPlayer(
                 artist = artist,
                 album = album,
                 artworkUrl = artworkUrl,
+                artwork = pushedArtwork.shown,
                 durationMs = durationMs,
                 positionMs = positionMs,
                 positionAtMs = positionAtMs,

@@ -205,7 +205,7 @@ private fun MiniPlayer(
             modifier = Modifier.padding(metrics.padding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Artwork(nowPlaying.artworkUrl, metrics)
+            Artwork(nowPlaying.artwork, nowPlaying.artworkUrl, metrics)
             Spacer(Modifier.width(metrics.padding))
             Column(modifier = Modifier.weight(1f)) {
                 Details(nowPlaying, metrics, colors)
@@ -268,10 +268,13 @@ private fun Details(nowPlaying: SendspinNowPlaying, metrics: PlayerMetrics, colo
 }
 
 @Composable
-private fun Artwork(url: String?, metrics: PlayerMetrics) {
-    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, url) {
-        value = url?.let { SendspinArtwork.load(it) }
+private fun Artwork(pushed: android.graphics.Bitmap?, url: String?, metrics: PlayerMetrics) {
+    // Odysseus fork: art pushed over the Sendspin connection first; the URL only when there is
+    // none (it points at the server's LAN address, out of reach over Tailscale).
+    val fetched by produceState<android.graphics.Bitmap?>(initialValue = null, url, pushed) {
+        value = if (pushed == null) url?.let { SendspinArtwork.load(it) } else null
     }
+    val bitmap = pushed ?: fetched
     Box(
         modifier = Modifier
             .size(metrics.artwork)

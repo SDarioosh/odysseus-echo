@@ -1,5 +1,6 @@
 package com.msp1974.vacompanion.sendspin
 
+import android.graphics.Bitmap
 import android.os.SystemClock
 
 /**
@@ -12,6 +13,12 @@ data class SendspinNowPlaying(
     val artist: String = "",
     val album: String = "",
     val artworkUrl: String? = null,
+    /**
+     * Odysseus fork: album art the server pushed over the Sendspin connection (artwork role).
+     * Preferred over [artworkUrl], which points at the server's LAN address and can't be loaded
+     * over Tailscale.
+     */
+    val artwork: Bitmap? = null,
     val durationMs: Long = 0,
     /** Track position when this state arrived; see [positionAtMs]. */
     val positionMs: Long = 0,

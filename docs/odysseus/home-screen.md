@@ -6,7 +6,9 @@ away, and the Echo goes back to the clock by itself.
 ## What you see
 
 - **The clock page**: the weather in the top left (see below), the time, the date, and below them the song that is playing (title,
-  artist, artwork) with previous, play/pause and next buttons. The song comes from Music Assistant through the
+  artist, artwork) with previous, play/pause and next buttons. The artwork is pushed by Music
+  Assistant over the Sendspin connection, so it also shows when the Echo reaches it over Tailscale
+  (`sendspin/README.md`). The song comes from Music Assistant through the
   Sendspin player (Configuration → Sendspin). With nothing playing, the line is hidden.
 - **Swipe right** (finger moves right) on the clock: the Home Assistant dashboard.
 - **Swipe left** on the dashboard: back to the clock.

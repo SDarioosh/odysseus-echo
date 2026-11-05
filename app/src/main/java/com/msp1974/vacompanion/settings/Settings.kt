@@ -521,6 +521,14 @@ class APPConfig @Inject constructor(val context: Context) {
         get() = this.sharedPrefs.getString("sendspin_trusted_server_ids", "") ?: ""
         set(value) = this.sharedPrefs.edit { putString("sendspin_trusted_server_ids", value.trim()) }
 
+    // Odysseus fork: whether Music Assistant servers that haven't paired with this device may play
+    // on it (Sendspin v0.9 connections are always encrypted; pairing proves which server it is).
+    // On by default so an existing setup keeps playing; turn it off once the server is paired.
+    // On-device preference (HA doesn't push it). See sendspin/README.md "Encryption and pairing".
+    var sendspinUnpairedAccess: Boolean
+        get() = this.sharedPrefs.getBoolean("sendspin_unpaired_access", true)
+        set(value) = this.sharedPrefs.edit { putBoolean("sendspin_unpaired_access", value) }
+
     // Whether to run the Home Assistant Bluetooth proxy (this device appears as an ESPHome node that
     // forwards BLE advertisements and GATT connections). On-device preference that can also be
     // pushed by HA, so it is persisted rather than only held in memory.

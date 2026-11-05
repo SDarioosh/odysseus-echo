@@ -18,6 +18,7 @@ import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
 import timber.log.Timber
+import java.io.File
 import java.io.IOException
 import java.net.URI
 import java.net.URISyntaxException
@@ -34,11 +35,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * players, so music ducks while the voice assistant is listening or speaking.
  *
  * Bad construction (e.g. no free port) is reported through [isRunning] rather than an exception.
+ *
+ * Odysseus fork: connections are encrypted (sendspin-cpp v0.9). The device key and the records of
+ * paired servers live in [KEY_DIR] under the app's private files; pairing state goes to
+ * [SendspinSecurity] for the UI.
  */
 class SendspinPlayer(
     private val context: Context,
     private val config: APPConfig,
-    clientId: String,
     playerName: String,
     softwareVersion: String,
 ) : NativeSendspinCallbacks, EventListener {
@@ -117,7 +121,7 @@ class SendspinPlayer(
         } else {
             val created = NativeSendspin.nativeCreate(
                 callbacks = this,
-                clientId = clientId,
+                storageDir = File(context.filesDir, KEY_DIR).absolutePath,
                 name = playerName,
                 productName = "View Assist Companion App",
                 manufacturer = "VACA",
@@ -125,6 +129,7 @@ class SendspinPlayer(
                 serverPort = candidate,
                 audioBufferCapacity = AUDIO_BUFFER_BYTES,
                 formats = formats,
+                unpairedAccess = config.sendspinUnpairedAccess,
             )
             if (created != 0L) {
                 if (NativeSendspin.nativeStart(created)) {
@@ -143,6 +148,11 @@ class SendspinPlayer(
             NativeSendspin.nativeUpdateMuted(handle, muted)
             NativeSendspin.nativeSetPreferredServer(handle, preferredServerIp())
             NativeSendspin.nativeSetTrustedServerIds(handle, config.sendspinTrustedServerIds) // Odysseus fork
+            // Odysseus fork: encryption and pairing.
+            val clientId = NativeSendspin.nativeClientId(handle)
+            SendspinSecurity.update { it.started(clientId, config.sendspinUnpairedAccess) }
+            SendspinSecurity.onPairingWindowAnswer = ::answerPairingWindow
+            Timber.i("Sendspin: client id $clientId, unpaired access ${config.sendspinUnpairedAccess}")
             config.eventBroadcaster.addListener(this)
             startFeedbackLoop()
             Timber.i("Sendspin: listening on port $port")
@@ -175,6 +185,9 @@ class SendspinPlayer(
     fun destroy(restarting: Boolean = false) {
         if (!destroyed.compareAndSet(false, true)) return
         config.eventBroadcaster.removeListener(this)
+        if (SendspinSecurity.onPairingWindowAnswer == ::answerPairingWindow) {
+            SendspinSecurity.onPairingWindowAnswer = null
+        }
         feedbackThread?.interrupt()
         feedbackThread = null
         mainHandler.removeCallbacksAndMessages(null)
@@ -184,6 +197,7 @@ class SendspinPlayer(
         output.release()
         abandonAudioFocus()
         resetNowPlaying()
+        SendspinSecurity.update { it.stopped() }
         Timber.i("Sendspin: stopped")
     }
 
@@ -264,6 +278,7 @@ class SendspinPlayer(
 
     override fun onConnectionChanged(connected: Boolean, serverName: String?) {
         Timber.i("Sendspin: ${if (connected) "connected to $serverName" else "disconnected"}")
+        SendspinSecurity.update { it.connection(connected, serverName) }
         if (!connected) {
             output.pause()
             abandonAudioFocus()
@@ -317,6 +332,47 @@ class SendspinPlayer(
 
     override fun onMetadataCleared() {
         resetNowPlaying()
+    }
+
+    // --- Odysseus fork: encryption and pairing (sendspin-cpp v0.9) --------------------------
+    // These fire on the native loop thread. The code itself is never logged.
+
+    override fun onTrustChanged(paired: Boolean) {
+        Timber.i("Sendspin: server ${if (paired) "is paired" else "is not paired"}")
+        SendspinSecurity.update { it.trust(paired) }
+    }
+
+    override fun onPairingCode(code: String?) {
+        Timber.i("Sendspin: pairing code ${if (code != null) "shown" else "cleared"}")
+        SendspinSecurity.update { it.code(code) }
+        if (code != null) promptOnScreen()
+    }
+
+    override fun onPairingWindow(open: Boolean) {
+        Timber.i("Sendspin: pairing ${if (open) "waits for approval on the device" else "approval withdrawn"}")
+        SendspinSecurity.update { it.window(open) }
+        if (open) promptOnScreen()
+    }
+
+    override fun onPairingResult(stage: Int, serverId: String, reason: String?) {
+        when (stage) {
+            0 -> Timber.i("Sendspin: pairing started by $serverId")
+            1 -> Timber.i("Sendspin: paired with $serverId")
+            else -> Timber.w("Sendspin: pairing with $serverId failed ($reason)")
+        }
+        SendspinSecurity.update { it.result(stage, reason, SystemClock.elapsedRealtime()) }
+    }
+
+    // The code is no use on a dark screen.
+    private fun promptOnScreen() {
+        config.eventBroadcaster.notifyEvent(Event("sendspinPairingPrompt", "", ""))
+    }
+
+    private fun answerPairingWindow(allow: Boolean) {
+        val h = handle
+        if (h == 0L) return
+        if (allow) NativeSendspin.nativeConfirmPairingWindow(h) else NativeSendspin.nativeCancelPairingWindow(h)
+        if (!allow) SendspinSecurity.update { it.window(false) }
     }
 
     // Ducking is by area/custom zone, not Sendspin group, so the group id isn't needed.
@@ -482,6 +538,13 @@ class SendspinPlayer(
                 val h = handle
                 if (h != 0L) NativeSendspin.nativeSetTrustedServerIds(h, config.sendspinTrustedServerIds)
             }
+            // Odysseus fork: whether unpaired servers may play.
+            "sendspin_unpaired_access" -> {
+                val h = handle
+                val enabled = config.sendspinUnpairedAccess
+                if (h != 0L) NativeSendspin.nativeSetUnpairedAccess(h, enabled)
+                SendspinSecurity.update { it.copy(unpairedAccess = enabled) }
+            }
             "audioOutputId" ->
                 output.setPreferredDevice(AudioOutputRouter.resolvePreferredDevice(context, config))
             // A set-volume action while Sendspin is the thing playing (0-100).
@@ -531,6 +594,8 @@ class SendspinPlayer(
 
     companion object {
         private const val PREFS = "sendspin_player"
+        // Odysseus fork: device key + paired-server records (files/, never backed up).
+        private const val KEY_DIR = "sendspin"
         private const val PREF_VOLUME = "volume"
         private const val PREF_MUTED = "muted"
 

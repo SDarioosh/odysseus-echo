@@ -6,6 +6,7 @@ import android.provider.Settings
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.Color
+import com.msp1974.vacompanion.sendspin.SendspinSecurity
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.ui.theme.CustomColours
 
@@ -68,6 +69,28 @@ fun servicesConfig(vm: VAViewModel): ConfigSection {
                 }),
             ConfigItem.Info(SENDSPIN, "Preferred server", null, Icons.Default.Dns,
                 value = { c.sendspinPreferredServer.ifBlank { "Automatic" } }),
+            // Odysseus fork: encryption and pairing (sendspin-cpp v0.9).
+            ConfigItem.Info(SENDSPIN, "Security", null, Icons.Default.Lock,
+                value = { SendspinSecurity.state.value.label() },
+                valueColor = {
+                    val s = SendspinSecurity.state.value
+                    when {
+                        s.connected && s.paired -> CustomColours.GREEN
+                        s.connected -> CustomColours.AMBER
+                        else -> null
+                    }
+                }),
+            ConfigItem.Toggle(SENDSPIN, "Allow unpaired servers",
+                "Let a Music Assistant server play here without pairing. Turn off once it is paired",
+                Icons.Default.LockOpen, key = "sendspin_unpaired_access",
+                get = { c.sendspinUnpairedAccess }, set = { c.sendspinUnpairedAccess = it }),
+            ConfigItem.Action(SENDSPIN, "Allow pairing",
+                "Let the next pairing from Music Assistant through for 5 minutes, if it asks for approval on the device",
+                Icons.Default.Link,
+                onClick = { SendspinSecurity.answerPairingWindow(true) })
+                .enabledWhen { SendspinSecurity.state.value.running },
+            ConfigItem.Info(SENDSPIN, "Player id", null, Icons.Default.Fingerprint,
+                value = { SendspinSecurity.state.value.clientId.ifBlank { "Not running" } }),
             ConfigItem.Toggle(SENDSPIN, "Now playing overlay", "Show the player on screen while Sendspin audio plays",
                 Icons.Default.MusicNote, key = "sendspin_overlay_enabled",
                 get = { c.sendspinOverlayEnabled }, set = { c.sendspinOverlayEnabled = it }),

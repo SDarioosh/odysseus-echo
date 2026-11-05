@@ -19,13 +19,45 @@ Fetched at build time and linked into `libsendspin_jni.so`:
 - ArduinoJson — MIT
 - micro-flac, micro-opus (libopus, libFLAC) — Apache-2.0 / BSD-3-Clause
 - IXWebSocket — BSD-3-Clause
+- noise-c (esphome-libs fork, reference crypto backend) — MIT
 
-## Protocol version
+## Encryption and pairing (Odysseus fork, sendspin-cpp v0.9.5)
 
-The pinned sendspin-cpp (v0.8.0) speaks the plaintext Sendspin protocol: it has no Noise encryption
-or pairing, so Music Assistant reports the device as connected in legacy mode. v0.9.0 and later add
-encryption and pairing; moving to one means a bridge change (a persistence provider for the device
-key and paired-server records, and the pairing callbacks).
+Up to v0.8.0 sendspin-cpp spoke the plaintext protocol, which Music Assistant shows as "connected
+without encryption (legacy mode). Pairing is not available", and which it will stop accepting once its
+"Allow legacy clients" option goes. From v0.9 every connection is encrypted (Noise KKpsk2, X25519 +
+ChaChaPoly; noise-c's pure-C reference backend) and a server can **pair**: prove, in every later
+handshake, that it is the server the owner approved.
+
+- **Identity.** The library derives the client id from a static X25519 key (base64url of the public
+  key) instead of the old `vaca-<uuid>`. Music Assistant therefore sees a **new player** the first time
+  this build runs; the old `vaca-…` entry stays "unavailable" until removed. The id is shown in
+  Configuration → Services → Sendspin player → Player id.
+- **Key store.** The bridge is the library's `SendspinPersistenceProvider`, backed by `BlobStore`
+  (`src/main/cpp/blob_store.h`): one owner-only file per key in `files/sendspin/` (the device key, the
+  Pairing PSK, `rec_<n>` per paired server, `rec_order`, `last_played`, `output_delay`). Written to a
+  temp file, fsynced and renamed; the directory is fsynced on `commit()`. Excluded from backup and
+  device transfer. Clearing the app's data (`pm clear`) gives the device a new identity and forgets every
+  pairing. Host test: `sendspin/src/test/cpp/blob_store_test.cpp` (the command is in its header).
+- **Pairing.** Started from Music Assistant (Setup on the player). The device offers the dynamic
+  six-digit code (`pairing_code_out_channels = DISPLAY`, `DIGITS`) plus the Pairing-PSK method every
+  client has; no static code. `onPairingCode` shows the code (`odysseus/SendspinPairingOverlay.kt`, which
+  also turns the screen on); the owner types it into MA. After 20 wrong rounds the library holds
+  attempts until the owner allows pairing on the device (`onPairingWindow` → Allow, or Configuration →
+  Allow pairing, which opens a 5-minute window). The code is never logged.
+- **Trust.** `onTrustChanged(paired)` reports whether the connected server used a pairing record. A
+  **paired server passes the preferred-server check from any address**, so with pairing the
+  `sendspin_trusted_server_ids` workaround for Tailscale (`docs/odysseus/tailscale.md`) is no longer
+  needed (it still works).
+- **Unpaired access** (`sendspin_unpaired_access`, on-device, default **on**): whether a server that
+  hasn't paired may play. The library defaults to off; the fork keeps it on so an existing setup keeps
+  playing after the update. Turn it off once Music Assistant is paired: unpaired servers then only get
+  an idle connection (enough to pair). Changing it applies live (`nativeSetUnpairedAccess`).
+- State for the UI is `app/.../sendspin/SendspinSecurity.kt` (rules unit-tested in
+  `SendspinSecurityStateTest`).
+- API changes taken in the bridge: `config.client_id` is gone, `set_static_delay_adjustable` →
+  `set_output_delay_adjustable`, `ControllerRole::send_command` returns `bool`. The source and
+  visualizer roles are compiled out.
 
 ## Goodbye reason when the app stops (Odysseus fork)
 

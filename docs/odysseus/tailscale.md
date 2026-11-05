@@ -89,3 +89,6 @@ Cost on a 1 GB device: about 40–60 MB RAM for the Tailscale service. Battery d
   Undo: the same with the entry removed. Check: `adb shell run-as $P grep trusted $F`, then
   logcat shows no more "refusing server" and MA plays.
 - If the Tailscale ACL limits who reaches the device, also allow the MA host to port 8928.
+- Since 0.14.0+odysseus.24 (encrypted Sendspin): once Music Assistant is **paired** with the device
+  it is accepted from any address, LAN or Tailscale, without a trusted id. The trusted-id setting
+  above stays for an unpaired server. See `sendspin/README.md` "Encryption and pairing".

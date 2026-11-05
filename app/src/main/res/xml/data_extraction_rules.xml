@@ -4,16 +4,15 @@
    for details.
 -->
 <data-extraction-rules>
+    <!-- Odysseus fork: the Sendspin device key and pairing records never leave the device. -->
     <cloud-backup>
+        <exclude domain="file" path="sendspin/" />
         <!-- TODO: Use <include> and <exclude> to control what is backed up.
         <include .../>
         <exclude .../>
         -->
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="sendspin/" />
     </device-transfer>
-    -->
 </data-extraction-rules>

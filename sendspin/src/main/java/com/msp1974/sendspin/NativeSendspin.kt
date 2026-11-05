@@ -76,6 +76,29 @@ interface NativeSendspinCallbacks {
 
     /** The server cleared the artwork (track without art), or the stream ended. */
     fun onArtworkClear()
+
+    // --- Odysseus fork: encryption and pairing (sendspin-cpp v0.9) ---------------------------
+
+    /**
+     * The connected server's handshake used a pairing record ([paired]) or not (an unpaired
+     * server). Fires on admission and again after the rekey that follows a successful pairing.
+     */
+    fun onTrustChanged(paired: Boolean)
+
+    /** Show [code] (six digits) for the server's pairing attempt; null takes it off screen. */
+    fun onPairingCode(code: String?)
+
+    /**
+     * [open]: a pairing attempt waits for the operator to allow it on the device (after too many
+     * wrong codes); answer with [NativeSendspin.nativeConfirmPairingWindow]. False withdraws it.
+     */
+    fun onPairingWindow(open: Boolean)
+
+    /**
+     * A pairing with server [serverId]: [stage] 0 started, 1 succeeded (the record is stored), 2
+     * failed with [reason] ("timeout", "code_mismatch", "cancelled", ...).
+     */
+    fun onPairingResult(stage: Int, serverId: String, reason: String?)
 }
 
 /**
@@ -96,10 +119,14 @@ object NativeSendspin {
     /**
      * [formats] is a flattened list of supported formats, four ints each: codec id, channels,
      * sample rate, bit depth - in the order they are offered to the server. Returns 0 on failure.
+     *
+     * Odysseus fork: [storageDir] is a private directory for the device key and pairing records
+     * (created if missing; the client id is derived from the key, so it must persist).
+     * [unpairedAccess]: whether servers that haven't paired may play.
      */
     external fun nativeCreate(
         callbacks: NativeSendspinCallbacks,
-        clientId: String,
+        storageDir: String,
         name: String,
         productName: String,
         manufacturer: String,
@@ -107,6 +134,7 @@ object NativeSendspin {
         serverPort: Int,
         audioBufferCapacity: Int,
         formats: IntArray,
+        unpairedAccess: Boolean,
     ): Long
 
     /** Starts the client and its WebSocket server. False if it could not start. */
@@ -145,6 +173,17 @@ object NativeSendspin {
      * server is set, separated by commas or whitespace. Blank trusts none.
      */
     external fun nativeSetTrustedServerIds(handle: Long, ids: String)
+
+    /** Odysseus fork: whether servers that haven't paired may play. Any thread, any time. */
+    external fun nativeSetUnpairedAccess(handle: Long, enabled: Boolean)
+
+    /** Odysseus fork: the operator allows pairing (see [NativeSendspinCallbacks.onPairingWindow]). */
+    external fun nativeConfirmPairingWindow(handle: Long)
+
+    external fun nativeCancelPairingWindow(handle: Long)
+
+    /** Odysseus fork: the id servers know this player by (derived from its key). After start. */
+    external fun nativeClientId(handle: Long): String
 
     external fun nativeIsConnected(handle: Long): Boolean
 

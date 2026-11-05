@@ -8,6 +8,11 @@
 // straight from another thread is PlayerRole::notify_audio_played(), which the library documents
 // as thread-safe.
 //
+// Odysseus fork (sendspin-cpp v0.9): every connection is encrypted (Noise). The bridge is also the
+// library's persistence provider, backed by BlobStore files in the app's private files dir: the
+// device key (which the client id is derived from) and the paired-server records live there. It
+// forwards the pairing events (code to show, operator window, result, trust) to Kotlin.
+//
 
 #include <jni.h>
 #include <android/log.h>
@@ -34,6 +39,7 @@
 #include <thread>
 #include <vector>
 
+#include "blob_store.h"
 #include "sendspin/artwork_role.h"
 #include "sendspin/client.h"
 #include "sendspin/color_role.h"
@@ -174,7 +180,8 @@ class Bridge final : public sendspin::PlayerRoleListener,
                      public sendspin::ColorRoleListener,
                      public sendspin::ArtworkRoleListener,
                      public sendspin::SendspinClientListener,
-                     public sendspin::SendspinNetworkProvider {
+                     public sendspin::SendspinNetworkProvider,
+                     public sendspin::SendspinPersistenceProvider {
 public:
     std::unique_ptr<sendspin::SendspinClient> client;
     sendspin::PlayerRole* player = nullptr;
@@ -199,6 +206,22 @@ public:
     jmethodID on_artwork_image_mid = nullptr;
     jmethodID on_artwork_display_mid = nullptr;
     jmethodID on_artwork_clear_mid = nullptr;
+    // Odysseus fork: encryption and pairing (sendspin-cpp v0.9).
+    jmethodID on_trust_mid = nullptr;
+    jmethodID on_pairing_code_mid = nullptr;
+    jmethodID on_pairing_window_mid = nullptr;
+    jmethodID on_pairing_result_mid = nullptr;
+
+    // Odysseus fork: where the library's identity and pairing blobs are kept.
+    std::unique_ptr<odysseus::BlobStore> store;
+
+    // The client id the library derived from its key, copied once start() has run (read from
+    // Kotlin's threads, so it's never touched again after that).
+    std::string client_id;
+
+    // Whether the connected server is one this device paired with (the last on_trust_changed);
+    // such a server passes the preferred-server check from any address. Loop thread only.
+    bool server_paired = false;
 
     std::thread loop_thread;
     std::atomic<bool> running{false};
@@ -275,6 +298,9 @@ public:
     // Whether the connected server [id] is the one at preferred_ip.
     Verdict check_server(const std::string& id) {
         if (trusted_ids.count(id) != 0) return Verdict::ALLOW;  // Odysseus fork
+        // Odysseus fork: a paired server proved it holds this device's pairing record in the
+        // handshake, so where it connects from (LAN or Tailscale) doesn't matter.
+        if (server_paired) return Verdict::ALLOW;
         const auto peers = inbound_peers();
         if (peers.empty()) return Verdict::UNDECIDED;
         // One inbound peer is unambiguously the connected server, which also teaches us its
@@ -300,6 +326,7 @@ public:
     // whether start() succeeded through [started].
     void run_loop(std::promise<bool> started) {
         const bool ok = client->start();
+        if (ok) client_id = client->client_id();
         started.set_value(ok);
         if (!ok) return;
 
@@ -316,7 +343,10 @@ public:
 
             // The library has no connection callback, so watch for the edge here.
             bool now_connected = client->is_connected();
-            if (!now_connected) verified_id.clear();
+            if (!now_connected) {
+                verified_id.clear();
+                server_paired = false;
+            }
             if (now_connected && !preferred_ip.empty()) {
                 // The library accepts whichever server connects first and has no hook to refuse
                 // one earlier, so a server that isn't the preferred one is dropped as soon as its
@@ -577,6 +607,107 @@ public:
         }
     }
 
+    // --- Pairing (Odysseus fork, sendspin-cpp v0.9) --------------------------
+    // All of these fire on the loop thread (inside client->loop() or client->stop()).
+
+    // Which pre-shared key the server's handshake used: a pairing record (paired) or not.
+    void on_trust_changed(sendspin::ConnectionTrust trust) override {
+        server_paired = trust == sendspin::ConnectionTrust::USER;
+        // A server still waiting on the preferred-server check is checked again at once. One
+        // already let through stays (clearing verified_id would report a disconnect mid-song
+        // at the rekey that follows a pairing).
+        next_check = {};
+        JNIEnv* env = env_for_this_thread();
+        if (env == nullptr) return;
+        env->CallVoidMethod(callbacks, on_trust_mid, static_cast<jboolean>(server_paired));
+        clear_exception(env);
+    }
+
+    // The six-digit code for the server's pairing attempt; null clears it.
+    void on_display_pairing_code(const std::string& code,
+                                 sendspin::SendspinPairingCodeFormat format) override {
+        if (format != sendspin::SendspinPairingCodeFormat::DIGITS) return;  // only DIGITS offered
+        report_pairing_code(code.c_str());
+    }
+
+    void on_clear_pairing_code() override { report_pairing_code(nullptr); }
+
+    void report_pairing_code(const char* code) {
+        JNIEnv* env = env_for_this_thread();
+        if (env == nullptr) return;
+        jstring value = code != nullptr ? env->NewStringUTF(code) : nullptr;
+        env->CallVoidMethod(callbacks, on_pairing_code_mid, value);
+        clear_exception(env);
+        if (value != nullptr) env->DeleteLocalRef(value);
+    }
+
+    // An attempt is waiting for the operator to allow pairing on the device (after too many
+    // wrong codes); confirm_pairing_window() lets it through.
+    void on_open_pairing_window() override { report_pairing_window(true); }
+
+    void on_close_pairing_window() override { report_pairing_window(false); }
+
+    void report_pairing_window(bool open) {
+        JNIEnv* env = env_for_this_thread();
+        if (env == nullptr) return;
+        env->CallVoidMethod(callbacks, on_pairing_window_mid, static_cast<jboolean>(open));
+        clear_exception(env);
+    }
+
+    void on_pairing_started(const std::string& server_id) override {
+        report_pairing_result(0, server_id, nullptr);
+    }
+
+    void on_pairing_succeeded(const std::string& server_id) override {
+        report_pairing_result(1, server_id, nullptr);
+    }
+
+    void on_pairing_failed(const std::string& server_id,
+                           sendspin::SendspinPairAbortReason reason) override {
+        report_pairing_result(2, server_id, abort_reason_name(reason));
+    }
+
+    static const char* abort_reason_name(sendspin::SendspinPairAbortReason reason) {
+        switch (reason) {
+            case sendspin::SendspinPairAbortReason::ATTEMPT_TIMEOUT: return "timeout";
+            case sendspin::SendspinPairAbortReason::CONCURRENT_ATTEMPT: return "concurrent_attempt";
+            case sendspin::SendspinPairAbortReason::METHOD_NOT_SUPPORTED: return "method_not_supported";
+            case sendspin::SendspinPairAbortReason::PAIRING_CODE_MISMATCH: return "code_mismatch";
+            case sendspin::SendspinPairAbortReason::USER_CANCELLED: return "cancelled";
+            case sendspin::SendspinPairAbortReason::UNKNOWN: break;
+        }
+        return "unknown";
+    }
+
+    // stage: 0 started, 1 succeeded, 2 failed ([reason] set).
+    void report_pairing_result(jint stage, const std::string& server_id, const char* reason) {
+        JNIEnv* env = env_for_this_thread();
+        if (env == nullptr) return;
+        jstring id = env->NewStringUTF(server_id.c_str());
+        jstring why = reason != nullptr ? env->NewStringUTF(reason) : nullptr;
+        env->CallVoidMethod(callbacks, on_pairing_result_mid, stage, id, why);
+        clear_exception(env);
+        env->DeleteLocalRef(id);
+        if (why != nullptr) env->DeleteLocalRef(why);
+    }
+
+    // --- SendspinPersistenceProvider (Odysseus fork) -------------------------
+    // Called on the loop thread only. Byte-for-byte storage; the library owns the format.
+
+    std::optional<std::vector<uint8_t>> load_blob(const std::string& key) override {
+        if (!store) return std::nullopt;
+        return store->load(key);
+    }
+
+    bool save_blob(const std::string& key, const uint8_t* data, size_t len) override {
+        if (!store) return false;
+        const bool ok = store->save(key, data, len);
+        if (!ok) __android_log_print(ANDROID_LOG_WARN, TAG, "could not store '%s'", key.c_str());
+        return ok;
+    }
+
+    bool commit() override { return !store || store->commit(); }
+
     // --- SendspinNetworkProvider --------------------------------------------
 
     // Android gives no cheap "network ready" signal here, and the server socket binds all
@@ -595,9 +726,9 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
 }
 
 extern "C" JNIEXPORT jlong JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativeCreate(
-    JNIEnv* env, jobject, jobject callbacks, jstring client_id, jstring name, jstring product_name,
-    jstring manufacturer, jstring software_version, jint server_port, jint audio_buffer_capacity,
-    jintArray formats) {
+    JNIEnv* env, jobject, jobject callbacks, jstring storage_dir, jstring name,
+    jstring product_name, jstring manufacturer, jstring software_version, jint server_port,
+    jint audio_buffer_capacity, jintArray formats, jboolean unpaired_access) {
     forward_stderr_to_logcat();
 
     auto bridge = std::make_unique<Bridge>();
@@ -622,6 +753,11 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_msp1974_sendspin_NativeSendspin_nati
     bridge->on_artwork_image_mid = find_method(env, cls, "onArtworkImage", "([B)V");
     bridge->on_artwork_display_mid = find_method(env, cls, "onArtworkDisplay", "()V");
     bridge->on_artwork_clear_mid = find_method(env, cls, "onArtworkClear", "()V");
+    bridge->on_trust_mid = find_method(env, cls, "onTrustChanged", "(Z)V");
+    bridge->on_pairing_code_mid = find_method(env, cls, "onPairingCode", "(Ljava/lang/String;)V");
+    bridge->on_pairing_window_mid = find_method(env, cls, "onPairingWindow", "(Z)V");
+    bridge->on_pairing_result_mid =
+        find_method(env, cls, "onPairingResult", "(ILjava/lang/String;Ljava/lang/String;)V");
     env->DeleteLocalRef(cls);
     if (bridge->on_metadata_mid == nullptr || bridge->on_metadata_clear_mid == nullptr ||
         bridge->on_playback_state_mid == nullptr || bridge->on_group_id_mid == nullptr ||
@@ -630,18 +766,31 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_msp1974_sendspin_NativeSendspin_nati
         bridge->on_artwork_display_mid == nullptr || bridge->on_artwork_clear_mid == nullptr ||
         bridge->on_audio_write_mid == nullptr || bridge->on_stream_start_mid == nullptr ||
         bridge->on_stream_end_mid == nullptr || bridge->on_volume_mid == nullptr ||
-        bridge->on_mute_mid == nullptr || bridge->on_connection_mid == nullptr) {
+        bridge->on_mute_mid == nullptr || bridge->on_connection_mid == nullptr ||
+        bridge->on_trust_mid == nullptr || bridge->on_pairing_code_mid == nullptr ||
+        bridge->on_pairing_window_mid == nullptr || bridge->on_pairing_result_mid == nullptr) {
+        return 0;
+    }
+    // Without its key store the device would get a new identity, and forget every pairing, on
+    // each start, so refuse to run rather than do that silently.
+    bridge->store = std::make_unique<odysseus::BlobStore>(to_std_string(env, storage_dir));
+    if (!bridge->store->ensure_dir()) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "no key store directory");
         return 0;
     }
     bridge->callbacks = env->NewGlobalRef(callbacks);
 
     sendspin::SendspinClientConfig config;
-    config.client_id = to_std_string(env, client_id);
+    // The client id is no longer chosen here: v0.9 derives it from the device key.
     config.name = to_std_string(env, name);
     config.product_name = to_std_string(env, product_name);
     config.manufacturer = to_std_string(env, manufacturer);
     config.software_version = to_std_string(env, software_version);
     config.server_port = static_cast<uint16_t>(server_port);
+    // Pairing by a six-digit code the device shows for each attempt (the Pairing PSK method is
+    // always offered as well). No static code: there is no label to print one on.
+    config.pairing_code_out_channels = {sendspin::SendspinPairingCodeChannel::DISPLAY};
+    config.pairing_code_formats = {sendspin::SendspinPairingCodeFormat::DIGITS};
     bridge->listen_port = config.server_port;
     bridge->client = std::make_unique<sendspin::SendspinClient>(std::move(config));
 
@@ -667,7 +816,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_msp1974_sendspin_NativeSendspin_nati
 
     bridge->player = &bridge->client->add_player(std::move(player_config));
     bridge->player->set_listener(bridge.get());
-    bridge->player->set_static_delay_adjustable(true);
+    bridge->player->set_output_delay_adjustable(true);
 
     bridge->controller = &bridge->client->add_controller();
     bridge->controller->set_listener(bridge.get());
@@ -688,6 +837,9 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_msp1974_sendspin_NativeSendspin_nati
     bridge->artwork->set_listener(bridge.get());
     bridge->client->set_listener(bridge.get());
     bridge->client->set_network_provider(bridge.get());
+    bridge->client->set_persistence_provider(bridge.get());
+    // Off by default in the library; the app keeps the owner's choice (see SendspinPlayer).
+    bridge->client->set_unpaired_access_enabled(unpaired_access == JNI_TRUE);
 
     return reinterpret_cast<jlong>(bridge.release());
 }
@@ -795,6 +947,39 @@ extern "C" JNIEXPORT void JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativ
         bridge->verified_id.clear();
         bridge->next_check = {};
     });
+}
+
+// Odysseus fork: whether servers that haven't paired may play (thread-safe in the library). Turning
+// it off drops an unpaired server that is playing; turning it on reconnects idle unpaired ones.
+extern "C" JNIEXPORT void JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativeSetUnpairedAccess(
+    JNIEnv*, jobject, jlong handle, jboolean enabled) {
+    Bridge* bridge = bridge_from(handle);
+    if (bridge == nullptr) return;
+    bridge->client->set_unpaired_access_enabled(enabled == JNI_TRUE);
+}
+
+// Odysseus fork: the operator allowed pairing on the device (thread-safe in the library). With no
+// attempt waiting it opens a 5-minute window for the next one.
+extern "C" JNIEXPORT void JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativeConfirmPairingWindow(
+    JNIEnv*, jobject, jlong handle) {
+    Bridge* bridge = bridge_from(handle);
+    if (bridge == nullptr) return;
+    bridge->client->confirm_pairing_window();
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativeCancelPairingWindow(
+    JNIEnv*, jobject, jlong handle) {
+    Bridge* bridge = bridge_from(handle);
+    if (bridge == nullptr) return;
+    bridge->client->cancel_pairing_window();
+}
+
+// Odysseus fork: the id Music Assistant knows this player by (base64url of the device's public
+// key; not a secret). Empty before start.
+extern "C" JNIEXPORT jstring JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativeClientId(
+    JNIEnv* env, jobject, jlong handle) {
+    Bridge* bridge = bridge_from(handle);
+    return env->NewStringUTF(bridge != nullptr ? bridge->client_id.c_str() : "");
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativeIsConnected(

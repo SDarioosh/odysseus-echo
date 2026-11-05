@@ -41,7 +41,6 @@ class SendspinManager(
         val newPlayer = SendspinPlayer(
             context = context,
             config = config,
-            clientId = "vaca-${config.uuid}",
             playerName = playerName,
             softwareVersion = appVersion(),
         )

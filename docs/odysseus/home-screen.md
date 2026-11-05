@@ -11,7 +11,7 @@ away, and the Echo goes back to the clock by itself.
 - **Swipe right** (finger moves right) on the clock: the Home Assistant dashboard.
 - **Swipe left** on the dashboard: back to the clock.
 - **Idle**: after 2 minutes without a touch, the dashboard goes back to the clock by itself.
-- **Menu from the clock**: two-finger swipe up. <!-- check: menu gesture -->
+- **Menu from the clock**: two-finger swipe up.
 - The listening indicator and the turn card show over the clock as they do over the dashboard.
 
 ## Settings

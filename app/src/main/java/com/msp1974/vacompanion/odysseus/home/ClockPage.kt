@@ -1,10 +1,11 @@
 package com.msp1974.vacompanion.odysseus.home
 
 // Odysseus fork: page 0 of the home screen, where the idle timer returns to. The weather in the
-// top left (weather/WeatherBadge), a large clock with the date under it, then the song Sendspin is playing (artwork, title, artist, play/pause), and
-// a quiet status line only when something is wrong (no Wi-Fi, Home Assistant not connected, do
-// not disturb). Built for the Echo Show 5 (about 790×395 dp, 1 GB RAM): the clock redraws once a
-// minute, not every second.
+// top left (weather/WeatherBadge), a large clock with the date under it, then the song Sendspin
+// is playing (artwork, title, artist, previous / play-pause / next), and a quiet status line
+// only when something is wrong (no Wi-Fi, Home Assistant not connected, do not disturb).
+// Built for the Echo Show 5 (about 790×395 dp, 1 GB RAM): the clock redraws once a minute, not
+// every second.
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -36,6 +37,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -243,6 +247,12 @@ private fun TrackRow(nowPlaying: SendspinNowPlaying, onCommand: (String) -> Unit
                 )
             }
         }
+        // Previous / play-pause / next. Skip buttons are always there (dimmed when Music
+        // Assistant doesn't offer them), as on the dashboard's now-playing card, so the row
+        // doesn't jump around between tracks.
+        SkipButton(Icons.Rounded.SkipPrevious, "Previous track", "previous" in nowPlaying.commands) {
+            onCommand("previous")
+        }
         val command = if (paused) "play" else "pause"
         if (command in nowPlaying.commands) {
             IconButton(onClick = { onCommand(command) }) {
@@ -253,6 +263,20 @@ private fun TrackRow(nowPlaying: SendspinNowPlaying, onCommand: (String) -> Unit
                 )
             }
         }
+        SkipButton(Icons.Rounded.SkipNext, "Next track", "next" in nowPlaying.commands) {
+            onCommand("next")
+        }
+    }
+}
+
+@Composable
+private fun SkipButton(icon: ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = if (enabled) 1f else 0.38f),
+        )
     }
 }
 

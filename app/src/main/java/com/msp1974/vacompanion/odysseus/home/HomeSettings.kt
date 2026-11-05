@@ -14,6 +14,8 @@ object HomeSettings {
     private const val PREFS = "odysseus_home"
     private const val KEY_ENABLED = "home_screen_enabled"
     private const val KEY_IDLE_SECONDS = "home_idle_seconds"
+    private const val KEY_WEATHER_ENABLED = "home_weather_enabled"
+    private const val KEY_WEATHER_ENTITY = "home_weather_entity"
 
     const val DEFAULT_IDLE_SECONDS = 120
 
@@ -24,6 +26,8 @@ object HomeSettings {
 
     private var enabledState by mutableStateOf(true)
     private var idleSecondsState by mutableIntStateOf(DEFAULT_IDLE_SECONDS)
+    private var weatherEnabledState by mutableStateOf(true)
+    private var weatherEntityState by mutableStateOf("")
 
     /** Loads the stored values. Safe to call more than once. */
     fun init(context: Context) {
@@ -32,6 +36,8 @@ object HomeSettings {
         val p = prefs() ?: return
         enabledState = p.getBoolean(KEY_ENABLED, true)
         idleSecondsState = p.getInt(KEY_IDLE_SECONDS, DEFAULT_IDLE_SECONDS).coerceAtLeast(0)
+        weatherEnabledState = p.getBoolean(KEY_WEATHER_ENABLED, true)
+        weatherEntityState = p.getString(KEY_WEATHER_ENTITY, "") ?: ""
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -50,6 +56,22 @@ object HomeSettings {
         set(value) {
             idleSecondsState = value.coerceAtLeast(0)
             prefs()?.edit()?.putInt(KEY_IDLE_SECONDS, idleSecondsState)?.apply()
+        }
+
+    /** Weather in the clock page's top left, read from Home Assistant. */
+    var weatherEnabled: Boolean
+        get() = weatherEnabledState
+        set(value) {
+            weatherEnabledState = value
+            prefs()?.edit()?.putBoolean(KEY_WEATHER_ENABLED, value)?.apply()
+        }
+
+    /** The weather entity to show; blank = Auto (the first available weather entity). */
+    var weatherEntity: String
+        get() = weatherEntityState
+        set(value) {
+            weatherEntityState = value.trim()
+            prefs()?.edit()?.putString(KEY_WEATHER_ENTITY, weatherEntityState)?.apply()
         }
 
     fun idleLabel(seconds: Int): String = when {

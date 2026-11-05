@@ -5,7 +5,7 @@ away, and the Echo goes back to the clock by itself.
 
 ## What you see
 
-- **The clock page**: the time, the date, and below them the song that is playing (title,
+- **The clock page**: the weather in the top left (see below), the time, the date, and below them the song that is playing (title,
   artist, artwork) with a play/pause button. The song comes from Music Assistant through the
   Sendspin player (Configuration → Sendspin). With nothing playing, the line is hidden.
 - **Swipe right** (finger moves right) on the clock: the Home Assistant dashboard.
@@ -22,6 +22,29 @@ Menu → Odysseus → **Home screen**. Stored on the Echo only, not sent to Home
 |---|---|---|
 | Home screen | on / off (off: the dashboard only, as upstream) | on |
 | Back to the clock after | 1, 2, 5, 10 min, Never | 2 min |
+| Weather | on / off | on |
+| Weather entity | Auto, or one of Home Assistant's `weather.*` entities | Auto |
+
+## Weather
+
+The clock page's top left shows Home Assistant's icon for the current condition (the same
+Material Design Icons as Home Assistant's weather card, with its night variants for sunny and
+partly cloudy after sunset), the temperature in whole degrees, and today's high and low small
+under it.
+
+- **Source**: a Home Assistant `weather.*` entity. *Auto* takes the first available one by entity
+  id; the setting lists every weather entity Home Assistant reported at the last refresh.
+- **High and low**: today's entry of the daily forecast (the first entry if the forecast starts
+  tomorrow); without a daily forecast, today's entries of the twice-daily one. If the entity has
+  neither, only the temperature shows.
+- **Refresh**: when the clock comes up, every 15 minutes while the home screen is on, when Home
+  Assistant reconnects and when the setting changes.
+- **Read-only**, with the access token the Echo already holds for the dashboard:
+  `POST /api/template` (the entity list; condition, temperature, unit and `sun.sun`) and
+  `POST /api/services/weather/get_forecasts?return_response` (the forecast). Nothing is changed in
+  Home Assistant.
+- **Failures** hide nothing else: a failed refresh keeps the last reading for up to an hour, then
+  the badge disappears. Logcat shows `Weather: ...` lines.
 
 ## How it works
 
@@ -77,7 +100,13 @@ animation need no change.
 | `odysseus/home/HomeSettings.kt` | on/off and idle time (SharedPreferences `odysseus_home`) |
 | `odysseus/home/HomePage.kt` | `HomePage`, `HomePageContext`, the page list `HomePages` |
 | `odysseus/home/ClockPage.kt` | the clock page |
+| `odysseus/home/weather/WeatherClient.kt` | the Home Assistant calls for the weather (testable `HaHttp`) |
+| `odysseus/home/weather/WeatherForecasts.kt` | today's high/low and condition → icon, plain Kotlin |
+| `odysseus/home/weather/WeatherRepository.kt` | the process-wide weather state and refresh |
+| `odysseus/home/weather/WeatherBadge.kt` | the badge in the clock's top left |
+| `res/drawable/odysseus_mdi_*.xml` | weather icons from @mdi/js 7.4.47 (`assets/licenses/MDI-LICENSE.txt`) |
 | `odysseus/home/HomeHost.kt` | draws the layers, swipes, animation, idle timer |
 | `odysseus/OdysseusSettingsLayout.kt` | the Home screen settings |
 | `MainActivity.kt`, `ui/layouts/WebViewLayout.kt` | hooks (marked `Odysseus fork`) |
 | `app/src/test/.../odysseus/home/HomeNavigatorTest.kt` | tests of the rules |
+| `app/src/test/.../odysseus/home/weather/WeatherClientTest.kt` | tests of the weather calls and rules |

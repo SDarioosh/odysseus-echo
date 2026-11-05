@@ -1,7 +1,7 @@
 package com.msp1974.vacompanion.odysseus.home
 
-// Odysseus fork: page 0 of the home screen, where the idle timer returns to. A large clock with
-// the date under it, then the song Sendspin is playing (artwork, title, artist, play/pause), and
+// Odysseus fork: page 0 of the home screen, where the idle timer returns to. The weather in the
+// top left (weather/WeatherBadge), a large clock with the date under it, then the song Sendspin is playing (artwork, title, artist, play/pause), and
 // a quiet status line only when something is wrong (no Wi-Fi, Home Assistant not connected, do
 // not disturb). Built for the Echo Show 5 (about 790×395 dp, 1 GB RAM): the clock redraws once a
 // minute, not every second.
@@ -62,6 +62,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.msp1974.vacompanion.odysseus.home.weather.WeatherBadge
 import com.msp1974.vacompanion.sendspin.SendspinArtwork
 import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
 import kotlinx.coroutines.delay
@@ -102,6 +103,9 @@ object ClockPage : HomePage {
             ) {
                 Clock(timeSize)
                 NowPlayingRow(context.nowPlaying, context.onSendspinCommand)
+            }
+            context.weather?.let {
+                WeatherBadge(it, Modifier.align(Alignment.TopStart).padding(start = 20.dp, top = 16.dp))
             }
             StatusLine(context, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
         }

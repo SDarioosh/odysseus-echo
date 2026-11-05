@@ -9,6 +9,7 @@ package com.msp1974.vacompanion.odysseus.home
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
+import com.msp1974.vacompanion.odysseus.home.weather.WeatherNow
 import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
 
 /** Everything a page may show or do. Add fields here when a new page needs more. */
@@ -19,6 +20,8 @@ data class HomePageContext(
     /** Home Assistant is connected to this device. */
     val isServerConnected: Boolean = true,
     val isDND: Boolean = false,
+    /** Current weather from Home Assistant; null = don't show any. */
+    val weather: WeatherNow? = null,
     /** Sends a Sendspin transport command ("play", "pause", "next", …). */
     val onSendspinCommand: (String) -> Unit = {},
 )

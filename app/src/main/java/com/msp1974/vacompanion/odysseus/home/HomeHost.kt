@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.msp1974.vacompanion.odysseus.home.weather.WeatherRepository
 import com.msp1974.vacompanion.ui.VAViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -96,12 +97,30 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
         // dashboard.
         dashboard()
 
+        // Weather for the clock page: at once, then every 15 min, while the home screen is on;
+        // again when Home Assistant reconnects or the weather setting changes.
+        val weatherOn = HomeSettings.enabled && HomeSettings.weatherEnabled
+        val weatherEntity = HomeSettings.weatherEntity
+        LaunchedEffect(weatherOn, weatherEntity, vaUiState.isServerConnected, vaUiState.isNetworkConnected) {
+            if (!weatherOn) {
+                WeatherRepository.clear()
+                return@LaunchedEffect
+            }
+            if (!vaUiState.isNetworkConnected) return@LaunchedEffect
+            WeatherRepository.refresh(vaViewModel.deviceManager, minAgeMs = 2 * 60_000L)
+            while (true) {
+                delay(WeatherRepository.REFRESH_MS)
+                WeatherRepository.refresh(vaViewModel.deviceManager)
+            }
+        }
+
         if (HomeSettings.enabled && HomePages.all.isNotEmpty()) {
             val context = HomePageContext(
                 nowPlaying = vaUiState.sendspinNowPlaying,
                 isNetworkConnected = vaUiState.isNetworkConnected,
                 isServerConnected = vaUiState.isServerConnected,
                 isDND = vaUiState.isDND,
+                weather = if (weatherOn) WeatherRepository.weather else null,
                 onSendspinCommand = vaViewModel::onSendspinCommand,
             )
             PageLayer(context, onOpenMenu = { vaViewModel.onOpenSettingsAction() })

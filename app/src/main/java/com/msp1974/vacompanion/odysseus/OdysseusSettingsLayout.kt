@@ -8,6 +8,8 @@ package com.msp1974.vacompanion.odysseus
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -37,6 +39,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.msp1974.vacompanion.odysseus.home.HomeSettings
+import com.msp1974.vacompanion.odysseus.home.weather.WeatherClient
+import com.msp1974.vacompanion.odysseus.home.weather.WeatherEntity
+import com.msp1974.vacompanion.odysseus.home.weather.WeatherRepository
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.ui.components.MenuLayout
 import kotlinx.coroutines.launch
@@ -130,7 +135,7 @@ private fun Setting(checked: Boolean, title: String, detail: String, onChange: (
 }
 
 /** Menu → Odysseus → Home screen: the clock over the dashboard (odysseus/home/). */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun HomeScreenSettings() {
     HomeSettings.init(LocalContext.current)
@@ -155,5 +160,41 @@ private fun HomeScreenSettings() {
                 enabled = enabled,
             )
         }
+    }
+
+    // Weather in the clock's top left (odysseus/home/weather/).
+    val weatherOn = HomeSettings.weatherEnabled
+    val chosen = HomeSettings.weatherEntity
+    val entities = WeatherRepository.entities
+    Setting(
+        weatherOn, "Weather",
+        "Icon, temperature and today's high and low in the clock's top left, from a Home Assistant weather entity.",
+    ) { HomeSettings.weatherEnabled = it }
+    Text("Weather entity", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+    val auto = WeatherClient.autoPick(entities)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = chosen.isBlank(),
+            onClick = { HomeSettings.weatherEntity = "" },
+            label = { Text(if (auto != null) "Auto (${auto.name})" else "Auto") },
+            enabled = enabled && weatherOn,
+        )
+        // The chosen entity stays listed even when Home Assistant no longer reports it.
+        val shown = if (chosen.isBlank() || entities.any { it.entityId == chosen }) entities
+        else entities + WeatherEntity(chosen, chosen, false)
+        shown.forEach { e ->
+            FilterChip(
+                selected = chosen == e.entityId,
+                onClick = { HomeSettings.weatherEntity = e.entityId },
+                label = { Text(if (e.available) e.name else "${e.name} (unavailable)") },
+                enabled = enabled && weatherOn,
+            )
+        }
+    }
+    if (entities.isEmpty()) {
+        Text(
+            "No weather entities seen yet. They are read from Home Assistant while the clock shows.",
+            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

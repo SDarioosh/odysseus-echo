@@ -267,6 +267,27 @@ object OdysseusLink {
         }
     }
 
+    sealed class TimingResult {
+        object Ok : TimingResult()
+        /** An older Odysseus without the route. */
+        object NotSupported : TimingResult()
+        data class Failed(val message: String) : TimingResult()
+    }
+
+    /** POST /satellite/timing: when each stage of a finished turn happened ([TurnTimings.toJson]). */
+    suspend fun postTimings(json: String): TimingResult = withContext(Dispatchers.IO) {
+        try {
+            val r = request("/satellite/timing", "application/json", json.toByteArray(), readTimeoutMs = 4000)
+            when (r.code) {
+                in 200..299 -> TimingResult.Ok
+                404, 405 -> TimingResult.NotSupported
+                else -> TimingResult.Failed(describe(r.code, "timing route"))
+            }
+        } catch (e: Exception) {
+            TimingResult.Failed(e.message ?: e.javaClass.simpleName)
+        }
+    }
+
     /** Tests the saved link: (ok, message to show). An older hub without the turn feed is tested with /actions. */
     suspend fun testLink(): Pair<Boolean, String> {
         val dayAgo = System.currentTimeMillis() - 86_400_000L

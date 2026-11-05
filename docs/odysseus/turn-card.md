@@ -49,6 +49,14 @@ When HA has the question (`AWAITING_RESPONSE`) and no answer has started 5 s lat
 - **Never during a barge-in** (a wake word ends the old turn and its timer), **muted** (HA's mute switch or the privacy button), or **do-not-disturb**.
 - **The sound:** generated locally from sine waves by `scripts/odysseus/make_thinking_sound.py` into `app/src/main/assets/odysseus/thinking.wav`. The script is reproducible (same bytes every run); nothing is downloaded.
 
+## Timings
+
+Each voice turn notes when it reached each pipeline stage, in milliseconds after the wake word (`odysseus/TurnTimings.kt`): run started, listening, speech started and stopped, transcript, speech output asked for, audio starting, first audio, playback done, ended. When the turn has ended, the device posts them to Odysseus in the background (`POST <base>/satellite/timing`, JSON), with three flags: the thinking sound played, a wake word interrupted the turn (`barge_in`), "Check my voice" was on. Odysseus joins them to its own times for the same turn (getting ready, the model's first token, each tool call, first sentence sent), so every step of a turn can be measured: Home Assistant's speech to text and text to speech on the device's clock, Odysseus's steps on its own.
+
+Only numbers, the device id and these flags are sent: never the question, the answer or audio. Nothing is sent without the Odysseus link; an older Odysseus without the route (404) is skipped quietly.
+
+Read them on the server: `python scripts/voice_timings.py` in the Odysseus checkout (hub docs: `docs/fork/voice-assistant.md#timings`).
+
 ## Settings (Menu → Odysseus)
 
 | Setting | Default | What it does |
@@ -111,10 +119,11 @@ The URL must be reachable from the device: Odysseus's LAN or Tailscale address, 
 
 ## Files
 
-- `odysseus/OdysseusLink.kt`: settings, the Keystore-encrypted token, and the hub client (`fetchLatestTurn`, `fetchActions`, `postSatelliteTurn`, `testLink`).
+- `odysseus/OdysseusLink.kt`: settings, the Keystore-encrypted token, and the hub client (`fetchLatestTurn`, `fetchActions`, `postSatelliteTurn`, `postTimings`, `testLink`).
 - `odysseus/VoiceTurnApi.kt`: the turn and satellite-post JSON, link filtering, the card's content, the multipart body (pure, unit-tested).
 - `odysseus/TurnCard.kt`: the card, the source overlay, and fetching after a turn (`VoiceTurns`).
-- `odysseus/OdysseusTurn.kt`: one per voice turn: the satellite post and the thinking sound. Later per-turn features plug in here.
+- `odysseus/OdysseusTurn.kt`: one per voice turn: the satellite post, the thinking sound and the timings. Later per-turn features plug in here.
+- `odysseus/TurnTimings.kt`: the turn's stage times and their JSON (unit-tested).
 - `odysseus/TurnAudioRecorder.kt`: the copy of the turn's streamed audio, and the WAV writer (unit-tested).
 - `odysseus/ThinkingChime.kt`: when the thinking sound plays (unit-tested).
 - `odysseus/OdysseusSettingsLayout.kt`: Menu → Odysseus. `odysseus/EchoSetup.kt` and the files next to it: the phone setup ([setup.md](setup.md)).
@@ -132,4 +141,5 @@ The URL must be reachable from the device: Odysseus's LAN or Tailscale address, 
 - A confirmation: the question stays on the card during HA's follow-up; "yes" shows the done action, "no" clears it.
 - `POST /satellite/turn` arrives before HA calls the agent (hub log: the context is claimed, not missed), with the audio of the whole command and not the wake sound; speaker check result for the owner's voice at 1 m and 3 m.
 - The thinking sound after 5 s on a slow turn: audible but soft at the usual volume, once, not after a barge-in, not with mute or DND on; it doesn't trigger the wake word.
+- Timings: after a few questions, `scripts/voice_timings.py` on the server lists them with the device's steps (speech to text, text to speech) next to Odysseus's.
 - Memory: 15 s of audio is 480 KB per turn; check nothing builds up over many turns on the 1 GB device.

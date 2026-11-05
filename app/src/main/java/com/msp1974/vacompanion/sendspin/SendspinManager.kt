@@ -27,9 +27,11 @@ class SendspinManager(
         if (config.sendspinEnabled) startPlayer()
     }
 
+    // The background task only stops when the app or its service does, and the satellite comes
+    // back with them, so tell Music Assistant to keep reconnecting (goodbye `restart`).
     fun shutdown() {
         config.eventBroadcaster.removeListener(this)
-        stopPlayer()
+        stopPlayer(restarting = true)
     }
 
     @Synchronized
@@ -58,10 +60,10 @@ class SendspinManager(
     }
 
     @Synchronized
-    private fun stopPlayer() {
+    private fun stopPlayer(restarting: Boolean = false) {
         advertiser?.stop()
         advertiser = null
-        player?.destroy()
+        player?.destroy(restarting)
         player = null
         config.sendspinPort = 0
         config.sendspinRunning = false

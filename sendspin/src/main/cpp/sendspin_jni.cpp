@@ -201,6 +201,13 @@ public:
 
     std::atomic<bool> connected{false};
 
+    // Odysseus fork: set by nativeDestroy when the player is coming back (the app or its service
+    // is stopping, not the owner switching Sendspin off). The loop thread then says goodbye with
+    // `restart` instead of the library's `shutdown`. Music Assistant only keeps re-dialling a
+    // manually configured address after `restart`; after `shutdown` it leaves reconnecting to
+    // mDNS, which doesn't cross Tailscale, so the player stayed "not yet available".
+    std::atomic<bool> goodbye_restart{false};
+
     uint16_t listen_port = 0;
 
     // Dotted IPv4 address of the only server allowed to connect; empty accepts any. Only touched
@@ -341,6 +348,18 @@ public:
                 report_connection(now_connected);
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        if (goodbye_restart.load() && client->is_connected()) {
+            // stop() always says `shutdown`, so say `restart` first and let the close land:
+            // stop() skips a goodbye for a connection that is no longer open. Bounded, so a
+            // stuck send can't hold up the service shutdown.
+            __android_log_write(ANDROID_LOG_INFO, TAG, "saying goodbye with reason restart");
+            client->disconnect(sendspin::SendspinGoodbyeReason::RESTART);
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+            while (client->is_connected() && std::chrono::steady_clock::now() < deadline) {
+                client->loop();
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
         }
         // Sends goodbyes, closes connections and fires the roles' clear callbacks.
         client->stop();
@@ -631,9 +650,10 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_msp1974_sendspin_NativeSendspin_n
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativeDestroy(
-    JNIEnv* env, jobject, jlong handle) {
+    JNIEnv* env, jobject, jlong handle, jboolean restarting) {
     Bridge* bridge = bridge_from(handle);
     if (bridge == nullptr) return;
+    bridge->goodbye_restart.store(restarting == JNI_TRUE);
     // The loop thread stops the client (goodbyes included) on its way out.
     if (bridge->running.exchange(false) && bridge->loop_thread.joinable()) {
         bridge->loop_thread.join();

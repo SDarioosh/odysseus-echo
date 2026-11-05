@@ -99,7 +99,12 @@ object NativeSendspin {
     /** Starts the client and its WebSocket server. False if it could not start. */
     external fun nativeStart(handle: Long): Boolean
 
-    external fun nativeDestroy(handle: Long)
+    /**
+     * Stops and frees the client. [restarting] = the player will be back (app/service stopping):
+     * goodbye says `restart`, so a server dialling a manual address keeps retrying. False = the
+     * owner turned the player off: the library's `shutdown` goodbye.
+     */
+    external fun nativeDestroy(handle: Long, restarting: Boolean)
 
     /** Thread-safe. [timestampUs] is on the [nativeMonotonicTimeUs] clock. */
     external fun nativeNotifyAudioPlayed(handle: Long, frames: Int, timestampUs: Long)

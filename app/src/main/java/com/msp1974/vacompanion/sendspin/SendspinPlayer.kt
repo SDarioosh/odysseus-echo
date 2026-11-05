@@ -130,7 +130,7 @@ class SendspinPlayer(
                     handle = created
                     port = candidate
                 } else {
-                    NativeSendspin.nativeDestroy(created)
+                    NativeSendspin.nativeDestroy(created, false)
                 }
             }
         }
@@ -170,7 +170,8 @@ class SendspinPlayer(
         return host
     }
 
-    fun destroy() {
+    /** [restarting]: the player will come back (see [NativeSendspin.nativeDestroy]). */
+    fun destroy(restarting: Boolean = false) {
         if (!destroyed.compareAndSet(false, true)) return
         config.eventBroadcaster.removeListener(this)
         feedbackThread?.interrupt()
@@ -178,7 +179,7 @@ class SendspinPlayer(
         mainHandler.removeCallbacksAndMessages(null)
         val h = handle
         handle = 0L
-        if (h != 0L) NativeSendspin.nativeDestroy(h)
+        if (h != 0L) NativeSendspin.nativeDestroy(h, restarting)
         output.release()
         abandonAudioFocus()
         resetNowPlaying()

@@ -15,6 +15,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.msp1974.vacompanion.odysseus.home.HomeSettings
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.ui.components.MenuLayout
 import kotlinx.coroutines.launch
@@ -110,6 +113,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
                 }) { Text("Unlink") }
             }
             Text(status, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            HomeScreenSettings()
         }
     }
 }
@@ -121,6 +125,35 @@ private fun Setting(checked: Boolean, title: String, detail: String, onChange: (
         Column(Modifier.padding(start = 14.dp)) {
             Text(title, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
             Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Menu → Odysseus → Home screen: the clock over the dashboard (odysseus/home/). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeScreenSettings() {
+    HomeSettings.init(LocalContext.current)
+    // HomeSettings is Compose state, so these recompose when it changes.
+    val enabled = HomeSettings.enabled
+    val idle = HomeSettings.idleSeconds
+    Text(
+        "Home screen", fontSize = 18.sp, color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 12.dp),
+    )
+    Setting(
+        enabled, "Clock home screen",
+        "A clock and the playing song over the dashboard. Swipe right for the dashboard, left for the clock.",
+    ) { HomeSettings.enabled = it }
+    Text("Back to the clock after", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        HomeSettings.IDLE_CHOICES_SECONDS.forEach { seconds ->
+            FilterChip(
+                selected = idle == seconds,
+                onClick = { HomeSettings.idleSeconds = seconds },
+                label = { Text(HomeSettings.idleLabel(seconds)) },
+                enabled = enabled,
+            )
         }
     }
 }

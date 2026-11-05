@@ -72,6 +72,8 @@ fun WebViewScreen (webView: CustomWebView, vaViewModel: VAViewModel = viewModel(
                     showBottomSheet = true
                     vaViewModel.hideSystemUI()
                 } else {
+                    // Odysseus fork: a left swipe goes back to the clock and isn't sent to HA (odysseus/home/HomeScreenController.kt)
+                    if (com.msp1974.vacompanion.odysseus.home.HomeScreenController.onDashboardGesture(event)) return
                     // Send the event to the ViewModel to send event to HA
                     vaViewModel.onGesture(event)
                 }

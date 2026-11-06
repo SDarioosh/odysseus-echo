@@ -112,6 +112,7 @@ object ClockPage : HomePage {
                 WeatherBadge(it, Modifier.align(Alignment.TopStart).padding(start = 20.dp, top = 16.dp))
             }
             StatusLine(context, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
+            com.msp1974.vacompanion.odysseus.record.ClockRecordButton(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 12.dp))
         }
     }
 }

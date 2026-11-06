@@ -59,6 +59,17 @@ handshake, that it is the server the owner approved.
   `set_output_delay_adjustable`, `ControllerRole::send_command` returns `bool`. The source and
   visualizer roles are compiled out.
 
+**noise-c patch.** sendspin-cpp's noise-c (esphome-libs v0.1.13) is patched at fetch time
+(`src/main/cpp/patches/noise-c-pattern-expand-fortify.patch`, applied through our own
+`FetchContent_Declare(noise_c ...)` in `src/main/cpp/CMakeLists.txt`). Unpatched,
+`noise_pattern_expand()` calls `memchr()` with a 62-byte bound on a ~10-byte static pattern, and
+Android's fortified libc aborts the app (`FORTIFY: memchr: prevented 62-byte read from 10-byte
+buffer`) as soon as Music Assistant opens an encrypted connection. The configure step fails if the
+patch is missing. On-device regression test (32-bit ARM, like the Echo):
+`src/test/native/run_noise_fortify_test.sh <.cxx/.../_deps/noise_c-src> [serial]`. When bumping
+sendspin-cpp, keep our noise-c `GIT_TAG` in step with its `cmake/host.cmake`, and drop the patch once
+upstream has the fix.
+
 ## Goodbye reason when the app stops (Odysseus fork)
 
 `nativeDestroy(handle, restarting)`: when the app or its service stops (`SendspinManager`'s stop of the

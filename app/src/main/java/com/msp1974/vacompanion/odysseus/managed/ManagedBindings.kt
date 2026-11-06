@@ -5,6 +5,7 @@ package com.msp1974.vacompanion.odysseus.managed
 // the device. A setting built later registers its own keys the same way (docs/odysseus/managed-settings.md).
 
 import android.content.Context
+import com.msp1974.vacompanion.odysseus.followup.FollowUpSettings
 import com.msp1974.vacompanion.odysseus.home.HomeSettings
 import com.msp1974.vacompanion.odysseus.kiosk.KioskSettings
 import com.msp1974.vacompanion.odysseus.record.PrivacyButtonMode
@@ -17,6 +18,7 @@ object ManagedBindings {
         HomeSettings.init(context)
         KioskSettings.init(context)
         RecorderSettings.init(context)
+        FollowUpSettings.init(context)
 
         ManagedSettings.registerBool("home.enabled", { HomeSettings.enabled }) { HomeSettings.enabled = it }
         ManagedSettings.registerInt("home.idle_seconds", { HomeSettings.idleSeconds }) { HomeSettings.idleSeconds = it }
@@ -37,6 +39,7 @@ object ManagedBindings {
             RecorderSettings.privacyButton = PrivacyButtonMode.fromKey(it as String)
             RecordButton.refreshMute()
         }
-        // followup.enabled / followup.seconds: registered by the follow-up setting itself (E8).
+        ManagedSettings.registerBool(FollowUpSettings.KEY_ENABLED, { FollowUpSettings.enabled }) { FollowUpSettings.enabled = it }
+        ManagedSettings.registerInt(FollowUpSettings.KEY_SECONDS, { FollowUpSettings.seconds }) { FollowUpSettings.seconds = it }
     }
 }

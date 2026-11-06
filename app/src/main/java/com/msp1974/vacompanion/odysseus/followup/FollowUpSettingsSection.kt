@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.msp1974.vacompanion.odysseus.managed.ManagedNote
+import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -28,8 +30,11 @@ fun FollowUpSettingsSection() {
     // FollowUpSettings is Compose state, so this recomposes when it changes (here or from the hub).
     val enabled = FollowUpSettings.enabled
     val seconds = FollowUpSettings.seconds
+    // Set by Odysseus (odysseus/managed/): the control is shown but can't be changed here.
+    val enabledManaged = ManagedSettings.isManaged(FollowUpSettings.KEY_ENABLED)
+    val secondsManaged = ManagedSettings.isManaged(FollowUpSettings.KEY_SECONDS)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Switch(checked = enabled, onCheckedChange = { FollowUpSettings.enabled = it })
+        Switch(checked = enabled, onCheckedChange = { FollowUpSettings.enabled = it }, enabled = !enabledManaged)
         Column(Modifier.padding(start = 14.dp)) {
             Text("Answer without the wake word", fontSize = 16.sp, color = colors.onSurface)
             Text(
@@ -38,6 +43,7 @@ fun FollowUpSettingsSection() {
                     "recording, or with the screen blanked.",
                 fontSize = 13.sp, color = colors.onSurfaceVariant,
             )
+            ManagedNote(FollowUpSettings.KEY_ENABLED)
         }
     }
     Text("Listen for", fontSize = 16.sp, color = colors.onSurface)
@@ -49,8 +55,9 @@ fun FollowUpSettingsSection() {
                 selected = seconds == s,
                 onClick = { FollowUpSettings.seconds = s },
                 label = { Text("$s s") },
-                enabled = enabled,
+                enabled = enabled && !secondsManaged,
             )
         }
     }
+    ManagedNote(FollowUpSettings.KEY_SECONDS, "$seconds s")
 }

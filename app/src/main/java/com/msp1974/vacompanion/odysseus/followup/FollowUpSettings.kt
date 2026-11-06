@@ -2,11 +2,8 @@ package com.msp1974.vacompanion.odysseus.followup
 
 // Odysseus fork: the follow-up settings (Menu → Odysseus → Voice: "Answer without the wake word"
 // and how long it listens). Stored on the device in their own SharedPreferences file, not sent to
-// Home Assistant. The keys are those of the hub-managed settings (plan contract C6), so Odysseus
-// can set them through the same setters (odysseus/managed/, E9):
-//
-//   ManagedSettings.registerBool(FollowUpSettings.KEY_ENABLED, { FollowUpSettings.enabled }) { FollowUpSettings.enabled = it }
-//   ManagedSettings.registerInt(FollowUpSettings.KEY_SECONDS, { FollowUpSettings.seconds }) { FollowUpSettings.seconds = it }
+// Home Assistant. The keys are those of the hub-managed settings (plan contract C6), so Odysseus can
+// set them through the same setters (bound in odysseus/managed/ManagedBindings.kt).
 //
 // Backed by Compose state so the settings menu shows a change at once. See docs/odysseus/follow-up.md.
 

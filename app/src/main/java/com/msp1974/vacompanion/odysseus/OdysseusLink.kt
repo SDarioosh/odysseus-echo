@@ -10,6 +10,7 @@ package com.msp1974.vacompanion.odysseus
 //   GET <base>/turns/latest?since=<epoch ms>           -> {"turn": VoiceTurn | null}  (VoiceTurnApi.kt)
 //   POST <base>/satellite/turn (multipart)             -> device, area, wake word and the spoken command
 //   POST <base>/satellite/interrupt (form: device_id)  -> a barge-in: end this device's turn now (BargeIn.kt)
+//   GET <base>/app/latest, GET <base>/app/apk          -> updates from the hub (odysseus/update/, openGet)
 //
 
 // The token is the same `voice`-scope token Home Assistant uses (read-only plus voice actions).
@@ -197,6 +198,22 @@ object OdysseusLink {
             return Reply(code, text)
         } finally {
             conn.disconnect()
+        }
+    }
+
+    /**
+     * An authorised GET to the hub for a binary download (odysseus/update/), not yet connected:
+     * the caller adds headers (Range), reads the stream and disconnects. Throws when not linked.
+     */
+    fun openGet(path: String, readTimeoutMs: Int = 30_000): HttpURLConnection {
+        val base = baseUrl
+        val token = token()
+        if (!base.startsWith("http") || token.isNullOrEmpty()) throw IllegalStateException("not set up")
+        return (URL("$base$path").openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = readTimeoutMs
+            instanceFollowRedirects = false
+            setRequestProperty("Authorization", "Bearer $token")
         }
     }
 

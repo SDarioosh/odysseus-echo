@@ -122,6 +122,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
             HomeScreenSettings()
             com.msp1974.vacompanion.odysseus.home.today.TodaySettingsSection()
             KioskSettingsSection()
+            com.msp1974.vacompanion.odysseus.update.UpdateSettingsSection()
         }
     }
 }

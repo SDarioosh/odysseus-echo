@@ -20,6 +20,7 @@ echo "== permissions"
 a pm grant $P android.permission.RECORD_AUDIO
 a pm grant $P android.permission.POST_NOTIFICATIONS 2>/dev/null || true   # API 33+ only
 a appops set $P WRITE_SETTINGS allow
+a appops set $P REQUEST_INSTALL_PACKAGES allow   # updates from Odysseus (docs/odysseus/updates.md)
 a cmd notification allow_dnd $P
 
 echo "== keep running (Doze / background)"

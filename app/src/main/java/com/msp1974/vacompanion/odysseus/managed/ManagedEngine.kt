@@ -82,6 +82,19 @@ class ManagedEngine(private val store: ManagedStore, private val log: (String) -
         return diff
     }
 
+    /**
+     * The device was unlinked from Odysseus: every key goes back to the device (its own value is
+     * written back), as if the hub had dropped them all. A new link starts from its first answer.
+     */
+    fun releaseAll(): ManagedDiff {
+        val old = store.values
+        val diff = ManagedDiff.of(old, emptyMap())
+        store.version = null
+        store.values = emptyMap()
+        (old.keys + store.own.keys).forEach { reconcile(it) }
+        return diff
+    }
+
     private fun reconcile(key: String) {
         val binding = bindings[key]
         val managed = store.values[key]

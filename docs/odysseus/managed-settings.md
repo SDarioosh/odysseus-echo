@@ -68,6 +68,10 @@ Only these; any other key is ignored and logged.
   forgotten. While a key is managed its control is disabled, so the saved value can't go stale.
 - Everything is persisted in SharedPreferences `odysseus_managed` (`version`, `values`, `own`), so
   the managed settings hold offline and after a restart, and are applied again at start.
+- **Unlink** (Menu → Odysseus) gives every managed setting back to the device at once (its own
+  value is written back; `Managed settings (unlinked): back to the device: …`): no hub would ever
+  release them otherwise, and their controls would stay disabled. Offline, or with the token
+  refused, they hold.
 - The same answer again writes nothing. Changes are logged with the keys only
   (`Managed settings: version 8 (feed): now set: …; changed: …; back to the device: …`).
 - `version` is the hub's; the device keeps the last one it applied (logged) but always follows the

@@ -20,8 +20,9 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   -> {"ok": true}
   ```
 
-- **Feed.** Every 30 s, and at once when the screen comes on, it asks for announcements meant for
-  it (all devices, its area, or its id; the hub filters):
+- **Feed.** Every 30 s, and at once when the screen comes on (at most every 10 s, and not while
+  waiting after a refused token or on an older hub), it asks for announcements meant for it (all
+  devices, its area, or its id; the hub filters):
 
   ```
   GET <base>/announcements?device_id=<id>&since=<epoch ms>
@@ -35,12 +36,15 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   - `since` is the newest `at` seen. It's the hub's own clock, so the device clock doesn't matter.
     It survives a restart (SharedPreferences `odysseus_announce`). The first time, it is 15 min
     before now, so a new or reset Echo doesn't show a day of old messages.
-  - Skipped (but marked seen): expired ones (`expires_at` passed on the device clock), and ones
-    older than 2 h that have no `expires_at`, so an Echo that was off for a night doesn't show
-    them all when it comes back.
+  - Skipped (but marked seen): expired ones (`expires_at` passed), and ones older than 2 h that
+    have no `expires_at`, so an Echo that was off for a night doesn't show them all when it comes
+    back. Both are judged on the hub's clock: each answer's `Date` header gives the difference
+    between the hub's clock and the device's (`HubClock`), which also places the first `since`
+    and the card's end. A device clock that is off doesn't drop or keep cards (without a `Date`
+    header the device clock is used).
   - After a failed request it waits 30 s, 1, 2, 4, then 5 min. On a refused token (401/403) it
     waits 15 min. An older Odysseus without the feed (404) is asked again hourly. A changed link
-    in Menu → Odysseus starts again within a minute.
+    in Menu → Odysseus (a new token too) starts again within a minute.
   - Not linked to Odysseus: nothing is sent at all. It only checks the settings again every minute.
 
 - **Card.** A new announcement wakes the screen and shows a card at the top, over any screen

@@ -56,6 +56,15 @@ object Announcements : EventListener {
     private var lastHelloMs: Long? = null
     private var lastHelloSaid: String? = null
 
+    /** The hub's clock minus the device's (HubClock), from the last answer; 0 until one came. */
+    @Volatile private var clockOffsetMs = 0L
+
+    private fun hubNow() = System.currentTimeMillis() + clockOffsetMs
+
+    private fun noteClock(reply: OdysseusLink.HubReply) {
+        HubClock.offset(reply.dateMs, System.currentTimeMillis())?.let { clockOffsetMs = it }
+    }
+
     @Synchronized
     fun start(context: Context, config: APPConfig) {
         if (scope != null) return
@@ -96,35 +105,41 @@ object Announcements : EventListener {
         if (event.eventName == "screenOn" && event.newValue == true) pollNow()
     }
 
-    private fun linkSignature() = "${OdysseusLink.baseUrl}|${OdysseusLink.hasToken}"
+    private fun linkSignature() = AnnouncementPolling.linkSignature(OdysseusLink.baseUrl, OdysseusLink.tokenStamp)
 
     private suspend fun run() {
         var failures = 0
         var lastOutcome: AnnouncementPolling.Outcome? = null
         while (scope?.isActive == true) {
+            val requestedAt = System.currentTimeMillis()
             val outcome = try {
                 once()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Timber.w("Announcements: ${e.message ?: e.javaClass.simpleName}")
+                Timber.w("Announcements: ${AnnouncementPolling.describeError(e)}")
                 AnnouncementPolling.Outcome.FAILED
             }
             failures = if (outcome == AnnouncementPolling.Outcome.FAILED) failures + 1 else 0
             if (outcome != lastOutcome) Timber.i("Announcements: feed $outcome")
             lastOutcome = outcome
-            waitFor(AnnouncementPolling.nextDelay(outcome, failures))
+            waitFor(AnnouncementPolling.nextDelay(outcome, failures), outcome, requestedAt)
         }
     }
 
-    /** Waits [ms], or less when asked to poll now or the link was changed in the settings. */
-    private suspend fun waitFor(ms: Long) {
+    /**
+     * Waits [ms], or less when the link was changed in the settings, or when asked to poll now
+     * and [AnnouncementPolling.wakeHonored] allows it after [outcome] at [requestedAt].
+     */
+    private suspend fun waitFor(ms: Long, outcome: AnnouncementPolling.Outcome, requestedAt: Long) {
         val signature = linkSignature()
         val deadline = System.currentTimeMillis() + ms
         while (true) {
             val left = deadline - System.currentTimeMillis()
             if (left <= 0) return
-            if (withTimeoutOrNull(minOf(left, AnnouncementPolling.NOT_LINKED_MS)) { wake.receive() } != null) return
+            if (withTimeoutOrNull(minOf(left, AnnouncementPolling.NOT_LINKED_MS)) { wake.receive() } != null &&
+                AnnouncementPolling.wakeHonored(outcome, System.currentTimeMillis() - requestedAt)
+            ) return
             if (linkSignature() != signature) return
         }
     }
@@ -140,15 +155,16 @@ object Announcements : EventListener {
         val now = System.currentTimeMillis()
 
         val form = HelloForm.of(deviceId, OdysseusLink.deviceName, config.area, BuildConfig.VERSION_CODE)
-        val saying = "${OdysseusLink.baseUrl}|${form.fields()}"
+        val saying = "${linkSignature()}|${form.fields()}"
         if (AnnouncementPolling.helloDue(lastHelloMs, lastHelloSaid, saying, now)) {
             sayHello(form, saying, now)?.let { return it }
         }
 
-        val reply = OdysseusLink.hubRequest(AnnouncementApi.feedPath(deviceId, feed.sinceFor(now)))
+        val reply = OdysseusLink.hubRequest(AnnouncementApi.feedPath(deviceId, feed.sinceFor(hubNow())))
+        noteClock(reply)
         return when (reply.code) {
             200 -> {
-                val news = feed.acceptNews(AnnouncementApi.parseFeed(reply.body), System.currentTimeMillis())
+                val news = feed.acceptNews(AnnouncementApi.parseFeed(reply.body), hubNow())
                 if (news.settingsChanged) ManagedSettings.fetchNow("feed")
                 if (news.cards.isNotEmpty()) show(news.cards)
                 AnnouncementPolling.Outcome.OK
@@ -166,6 +182,7 @@ object Announcements : EventListener {
     private suspend fun sayHello(form: HelloForm, saying: String, now: Long): AnnouncementPolling.Outcome? {
         val body = AnnouncementApi.formBody(form.fields()).toByteArray()
         val reply = OdysseusLink.hubRequest(AnnouncementApi.HELLO_PATH, "application/x-www-form-urlencoded", body, readTimeoutMs = 4000)
+        noteClock(reply)
         when (reply.code) {
             in 200..299 -> {
                 if (!AnnouncementApi.parseHello(reply.body)) Timber.w("Announcements: hello not ok: ${reply.body.take(200)}")
@@ -187,7 +204,7 @@ object Announcements : EventListener {
 
     private fun show(fresh: List<Announcement>) {
         val now = System.currentTimeMillis()
-        _cards.update { it.prune(now).add(fresh, now) }
+        _cards.update { it.prune(now).add(fresh, now, clockOffsetMs) }
         // Ids and kinds only: the text is the owner's.
         Timber.i("Announcements: new ${fresh.joinToString { "${it.id} (${it.kind})" }}")
         config?.eventBroadcaster?.notifyEvent(Event(EVENT_NEW, "", fresh.last().id))

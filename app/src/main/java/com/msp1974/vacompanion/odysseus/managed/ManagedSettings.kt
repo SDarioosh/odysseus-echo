@@ -105,6 +105,17 @@ object ManagedSettings {
         wake.trySend(why)
     }
 
+    /**
+     * The owner unlinked this device (Menu → Odysseus → Unlink): no hub manages it any more, so
+     * every managed setting goes back to the device's own value and its control is enabled again.
+     */
+    fun releaseAll(why: String) = onMain {
+        val e = engine ?: return@onMain
+        val diff = e.releaseAll()
+        publish(e)
+        if (!diff.isEmpty) Timber.i("Managed settings ($why): $diff")
+    }
+
     private suspend fun run() {
         while (scope?.isActive == true) {
             var why = wake.receive()

@@ -111,4 +111,60 @@ class AnnouncementRulesTest {
         val settings = Announcement(id = "st_1", at = now, kind = Announcement.KIND_SETTINGS)
         assertTrue(AnnouncementCards().add(listOf(settings), now).items.isEmpty())
     }
+
+    @Test
+    fun aNewTokenIsALinkChange() {
+        val before = AnnouncementPolling.linkSignature("https://odysseus.example/api/chat/voice/v1", 1234)
+        // The token refused (401) is replaced in Menu → Odysseus: same hub, new token.
+        val after = AnnouncementPolling.linkSignature("https://odysseus.example/api/chat/voice/v1", 5678)
+        assertTrue(before != after)
+        // ...so the hello (and with it the managed settings) is sent again at once.
+        assertTrue(AnnouncementPolling.helloDue(now - 60_000, "$before|x", "$after|x", now))
+    }
+
+    @Test
+    fun screenOnPollsOnlyWhenItHelpsAndNotInAStorm() {
+        assertTrue(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.OK, 20_000))
+        assertTrue(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.FAILED, 20_000))
+        // The screen going on and off every few seconds doesn't poll every few seconds.
+        assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.OK, 2_000))
+        // A refused token, an older hub, no link: their long waits hold.
+        assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.UNAUTHORIZED, 60_000))
+        assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.NOT_SUPPORTED, 60_000))
+        assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.NOT_LINKED, 60_000))
+    }
+
+    @Test
+    fun aDeviceClockTwoHoursAheadStillShowsTheCard() {
+        val ahead = 2 * 3_600_000L
+        val deviceNow = now + ahead + 5_000
+        val offset = HubClock.offset(hubDateMs = now + 5_000, deviceNowMs = deviceNow)
+        assertEquals(-ahead, offset)
+        // The hub made it at `now` and it is worth showing for an hour, on the hub's clock.
+        val cards = AnnouncementCards().add(listOf(a("an_1", expiresAt = now + 3_600_000)), deviceNow, offset!!)
+        assertEquals(deviceNow + AnnouncementCards.SHOW_MS, cards.items.single().untilMs)
+        assertEquals(1, cards.prune(deviceNow + 1_000).items.size)
+        // Judged on the hub's clock, the feed keeps it too (the device's own clock would drop it).
+        val feed = AnnouncementFeed(object : AnnouncementFeedStore {
+            override var since: Long? = null
+            override var seen: Map<String, Long> = emptyMap()
+        })
+        assertEquals(1, feed.accept(listOf(a("an_1", expiresAt = now + 3_600_000)), deviceNow + offset).size)
+    }
+
+    @Test
+    fun noDateHeaderNoOffset() {
+        assertNull(HubClock.offset(null, now))
+        assertNull(HubClock.offset(0L, now))
+    }
+
+    @Test
+    fun anUnreadableFeedIsLoggedWithoutItsText() {
+        val body = """{"announcements": [{"id": "an_9", "at": "soon", "text": "Fictional secret: the spare key is under the mat"}]}"""
+        val e = runCatching { AnnouncementApi.parseFeed(body) }.exceptionOrNull()!!
+        val logged = AnnouncementPolling.describeError(e)
+        assertFalse(logged, logged.contains("spare key"))
+        assertTrue(logged.startsWith("unreadable answer"))
+        assertEquals("timeout", AnnouncementPolling.describeError(java.net.SocketTimeoutException("timeout")))
+    }
 }

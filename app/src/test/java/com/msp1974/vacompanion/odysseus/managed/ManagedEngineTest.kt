@@ -154,4 +154,26 @@ class ManagedEngineTest {
         assertEquals("now set: c; changed: a; back to the device: b", d.toString())
         assertTrue(ManagedDiff.of(mapOf("a" to 1), mapOf("a" to 1)).isEmpty)
     }
+
+    @Test
+    fun unlinkingGivesEverySettingBackToTheDevice() {
+        val store = MemoryStore()
+        val engine = ManagedEngine(store)
+        val record = FakeSetting(true)
+        val kiosk = FakeSetting(600)
+        engine.register(record.binding("record.enabled"))
+        engine.register(kiosk.binding("kiosk.return_seconds"))
+        engine.accept(reply(4, "record.enabled" to false, "kiosk.return_seconds" to 60))
+        assertEquals(false, record.value)
+
+        // Menu → Odysseus → Unlink: no hub will ever release them, so they go back now.
+        val diff = engine.releaseAll()
+        assertEquals(setOf("record.enabled", "kiosk.return_seconds"), diff.released)
+        assertEquals(true, record.value)
+        assertEquals(600, kiosk.value)
+        assertFalse(engine.isManaged("record.enabled"))
+        assertTrue(store.values.isEmpty())
+        assertTrue(store.own.isEmpty())
+        assertNull(store.version)
+    }
 }

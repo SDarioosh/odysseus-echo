@@ -100,4 +100,49 @@ class TodayStoreTest {
         assertEquals(LocalDate.of(2026, 11, 7), TodayStore.today(data, now, ZoneOffset.UTC))
         assertEquals(LocalDate.of(2026, 11, 6), TodayStore.today(null, now, ZoneId.of("America/New_York")))
     }
+
+    @Test
+    fun refreshIsDueAnIntervalAfterTheLastAttemptFailedOrNot() {
+        val s = TodayStore()
+        val interval = 15 * 60_000L
+        assertTrue(s.refreshDue(t0, today, interval))
+        s.onSuccess(data, t0)
+        assertFalse(s.refreshDue(t0 + interval - 1, today, interval))
+        assertTrue(s.refreshDue(t0 + interval, today, interval))
+        // A failure counts as an attempt: a hub that is down isn't asked every minute.
+        s.onFailure("down", t0 + interval)
+        assertFalse(s.refreshDue(t0 + interval + 60_000, today, interval))
+        assertTrue(s.refreshDue(t0 + 2 * interval, today, interval))
+        // A clock that went backwards.
+        assertTrue(s.refreshDue(t0 - 1, today, interval))
+    }
+
+    @Test
+    fun refreshIsDueSoonAfterMidnight() {
+        val s = TodayStore()
+        val interval = 15 * 60_000L
+        s.onSuccess(data, t0)
+        val tomorrow = today.plusDays(1)
+        assertFalse(s.refreshDue(t0 + 60_000, tomorrow, interval))
+        assertTrue(s.refreshDue(t0 + TodayStore.ROLLOVER_RETRY_MS, tomorrow, interval))
+        assertFalse(s.refreshDue(t0 + TodayStore.ROLLOVER_RETRY_MS, today, interval))
+    }
+
+    @Test
+    fun withoutANetworkTheResultIsStaleNotCurrent() {
+        // Offline nothing is fetched, so no failure is recorded: without this the page showed
+        // the last result as current, for as long as the network was down.
+        val s = TodayStore()
+        s.onSuccess(data, t0)
+        val v = s.view(t0 + hour, today, true)
+        assertEquals(
+            TodayView.Ready(data, t0, stale = true, error = TodayStore.OFFLINE_MESSAGE),
+            TodayStore.offline(v),
+        )
+        // Still dropped after 2 h (TodayRefresh re-applies the rules every minute).
+        assertEquals(TodayView.Unreachable(TodayStore.OFFLINE_MESSAGE), TodayStore.offline(s.view(t0 + 3 * hour, today, true)))
+        assertEquals(TodayView.NotLinked, TodayStore.offline(TodayView.NotLinked))
+        val failed = TodayView.Ready(data, t0, stale = true, error = "down")
+        assertEquals(failed, TodayStore.offline(failed))
+    }
 }

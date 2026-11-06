@@ -111,4 +111,14 @@ class AnnouncementRulesTest {
         val settings = Announcement(id = "st_1", at = now, kind = Announcement.KIND_SETTINGS)
         assertTrue(AnnouncementCards().add(listOf(settings), now).items.isEmpty())
     }
+
+    @Test
+    fun aNewTokenIsALinkChange() {
+        val before = AnnouncementPolling.linkSignature("https://odysseus.example/api/chat/voice/v1", 1234)
+        // The token refused (401) is replaced in Menu → Odysseus: same hub, new token.
+        val after = AnnouncementPolling.linkSignature("https://odysseus.example/api/chat/voice/v1", 5678)
+        assertTrue(before != after)
+        // ...so the hello (and with it the managed settings) is sent again at once.
+        assertTrue(AnnouncementPolling.helloDue(now - 60_000, "$before|x", "$after|x", now))
+    }
 }

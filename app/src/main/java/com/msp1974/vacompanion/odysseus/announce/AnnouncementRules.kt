@@ -92,6 +92,12 @@ object AnnouncementPolling {
         Outcome.NOT_LINKED -> NOT_LINKED_MS
     }
 
+    /**
+     * What a wait is cut short by, and what a hello is said again for: the hub and the saved token
+     * ([tokenStamp]: OdysseusLink.tokenStamp), so a token typed in after a 401 is tried at once.
+     */
+    fun linkSignature(baseUrl: String, tokenStamp: Int): String = "$baseUrl|$tokenStamp"
+
     /** A hello is due at start, hourly, and whenever what it says (or the hub) changed. */
     fun helloDue(lastHelloMs: Long?, lastSent: String?, nowSaying: String, nowMs: Long): Boolean =
         lastHelloMs == null || lastSent != nowSaying || nowMs - lastHelloMs >= HELLO_EVERY_MS

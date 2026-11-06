@@ -108,6 +108,9 @@ object OdysseusLink {
 
     val hasToken: Boolean get() = !prefs()?.getString(KEY_TOKEN, null).isNullOrEmpty()
 
+    /** Changes whenever a token is saved (a hash of the stored, encrypted form; never the token). */
+    val tokenStamp: Int get() = prefs()?.getString(KEY_TOKEN, null)?.hashCode() ?: 0
+
     val isConfigured: Boolean get() = baseUrl.startsWith("http") && hasToken
 
     fun setToken(token: String) {

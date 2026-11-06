@@ -96,7 +96,7 @@ object Announcements : EventListener {
         if (event.eventName == "screenOn" && event.newValue == true) pollNow()
     }
 
-    private fun linkSignature() = "${OdysseusLink.baseUrl}|${OdysseusLink.hasToken}"
+    private fun linkSignature() = AnnouncementPolling.linkSignature(OdysseusLink.baseUrl, OdysseusLink.tokenStamp)
 
     private suspend fun run() {
         var failures = 0
@@ -140,7 +140,7 @@ object Announcements : EventListener {
         val now = System.currentTimeMillis()
 
         val form = HelloForm.of(deviceId, OdysseusLink.deviceName, config.area, BuildConfig.VERSION_CODE)
-        val saying = "${OdysseusLink.baseUrl}|${form.fields()}"
+        val saying = "${linkSignature()}|${form.fields()}"
         if (AnnouncementPolling.helloDue(lastHelloMs, lastHelloSaid, saying, now)) {
             sayHello(form, saying, now)?.let { return it }
         }

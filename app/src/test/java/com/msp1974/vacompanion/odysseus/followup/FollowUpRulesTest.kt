@@ -106,4 +106,14 @@ class FollowUpRulesTest {
         assertFalse(FollowUpRules.isNothingHeard("stt-stream-failed"))
         assertFalse(FollowUpRules.isNothingHeard("intent-failed"))
     }
+
+    @Test
+    fun `a satellite that stopped meanwhile never starts the follow-up`() {
+        // HA reconnected while the answer played: the old satellite must not open a pipeline.
+        assertTrue(FollowUpRules.canStartListening(running = true, connected = true, responding = false, arbitrating = false))
+        assertFalse(FollowUpRules.canStartListening(running = false, connected = true, responding = false, arbitrating = false))
+        assertFalse(FollowUpRules.canStartListening(running = true, connected = false, responding = false, arbitrating = false))
+        assertFalse(FollowUpRules.canStartListening(running = true, connected = true, responding = true, arbitrating = false))
+        assertFalse(FollowUpRules.canStartListening(running = true, connected = true, responding = false, arbitrating = true))
+    }
 }

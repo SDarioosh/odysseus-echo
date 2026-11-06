@@ -11,6 +11,7 @@ package com.msp1974.vacompanion.odysseus.record
 //       000004.wav.rejected   the hub refused it: kept, skipped
 //       end                   the session is finished; its text is the number of chunks
 //       ended                 `/end` was delivered, only rejected chunks are left
+//       sent                  the highest sequence delivered (its files are gone), for finishAbandoned
 //
 // Sessions are worked through oldest first, chunks by sequence. Files are written to a .tmp name
 // and renamed, so a crash never leaves half a chunk that looks ready.
@@ -85,9 +86,13 @@ class ChunkQueue(private val root: File) {
         var n = 0
         for (dir in sessionDirs()) {
             if (dir in activeDirs || File(dir, END_FILE).exists()) continue
-            val highest = dir.listFiles().orEmpty()
+            val written = dir.listFiles().orEmpty()
                 .mapNotNull { f -> f.name.takeIf { it.endsWith(".json") && it != SESSION_FILE }?.substringBefore('.')?.toIntOrNull() }
                 .maxOrNull()
+            // Delivered chunks' files are gone: without "sent", a session whose chunks were all
+            // uploaded would count 0 and be deleted without its `/end`.
+            val sent = runCatching { File(dir, SENT_FILE).readText().trim().toInt() }.getOrNull()
+            val highest = listOfNotNull(written, sent).maxOrNull()
             finishSession(dir, (highest ?: -1) + 1)
             n++
         }
@@ -109,7 +114,9 @@ class ChunkQueue(private val root: File) {
             val finished = end.exists()
             val chunk = pendingChunks(dir).firstOrNull()
             if (chunk != null) {
-                val info = readChunk(chunk) ?: continue
+                // An unreadable sidecar (power lost before it reached the disk) is rebuilt from what
+                // is known; skipping it would leave the session stuck for good.
+                val info = readChunk(chunk) ?: rebuildChunkInfo(session, chunk) ?: continue
                 return QueueItem.Chunk(dir, session, info, chunk)
             }
             if (!finished || File(dir, ENDED_FILE).exists()) continue
@@ -126,6 +133,7 @@ class ChunkQueue(private val root: File) {
 
     /** The chunk was delivered: delete it and its sidecar. */
     fun uploaded(item: QueueItem.Chunk) {
+        runCatching { writeAtomic(File(item.dir, SENT_FILE), item.info.sequence.toString().toByteArray()) }
         item.wav.delete()
         File(item.dir, seqName(item.info.sequence) + ".json").delete()
     }
@@ -197,9 +205,23 @@ class ChunkQueue(private val root: File) {
         json.decodeFromString(ChunkInfo.serializer(), File(wav.parentFile, wav.name.removeSuffix(".wav") + ".json").readText())
     }.getOrNull()
 
+    /**
+     * A chunk's sidecar from its session and file name: every chunk but the last is 30 s
+     * (ChunkAssembler), and the session started at its created time, so chunk n starts n × 30 s in.
+     */
+    private fun rebuildChunkInfo(session: SessionInfo, wav: File): ChunkInfo? {
+        val sequence = wav.name.removeSuffix(".wav").toIntOrNull() ?: return null
+        val startMs = session.createdMs + sequence * ChunkAssembler.CHUNK_SAMPLES * 1000L / ChunkAssembler.SAMPLE_RATE
+        return ChunkInfo(session.sessionId, sequence, session.kind, ChunkAssembler.isoUtc(startMs))
+    }
+
     private fun writeAtomic(target: File, bytes: ByteArray) {
         val tmp = File(target.parentFile, target.name + ".tmp")
-        tmp.writeBytes(bytes)
+        // Synced before the rename, so a power cut can't leave an empty file under the real name.
+        java.io.FileOutputStream(tmp).use { out ->
+            out.write(bytes)
+            out.fd.sync()
+        }
         if (!tmp.renameTo(target)) {
             target.delete()
             if (!tmp.renameTo(target)) throw java.io.IOException("Could not write ${target.name}")
@@ -210,6 +232,7 @@ class ChunkQueue(private val root: File) {
         const val SESSION_FILE = "session.json"
         const val END_FILE = "end"
         const val ENDED_FILE = "ended"
+        const val SENT_FILE = "sent"
         const val REJECTED_SUFFIX = ".rejected"
 
         fun seqName(sequence: Int): String = "%06d".format(sequence)

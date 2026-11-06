@@ -13,6 +13,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.msp1974.vacompanion.device.DeviceManager
 import com.msp1974.vacompanion.odysseus.OdysseusLink
@@ -96,9 +97,11 @@ object RecorderController : EventListener {
         sounds = SoundEffectsPlayer(app, deviceManager.config)
         deviceManager.config.eventBroadcaster.addListener(this)
 
+        // Under install's lock, before any press can start a session: run later, it could mark a
+        // session that has just started as abandoned, and the uploader would end it early.
+        val n = runCatching { q.finishAbandoned() }.getOrDefault(0)
+        if (n > 0) Timber.i("Recorder: $n session(s) left from an earlier run will be sent as they are")
         scope.launch(Dispatchers.IO) {
-            val n = q.finishAbandoned()
-            if (n > 0) Timber.i("Recorder: $n session(s) left from an earlier run will be sent as they are")
             refreshQueue()
             uploadLoop()
         }
@@ -141,10 +144,17 @@ object RecorderController : EventListener {
 
     val isInstalled: Boolean get() = appContext != null
 
+    /**
+     * The clock of the gestures, the limits and [RecorderState]'s start times: time since boot,
+     * so a wall-clock change (network time after boot, the owner setting the date) can't stop a
+     * recording at once or let a note run past 5 min. The pill counts with it too.
+     */
+    fun clockMs(): Long = SystemClock.elapsedRealtime()
+
     private fun gesture(step: (Long, String?) -> List<RecorderEffect>) {
         // One lock for the step and its effects, so two quick gestures can't interleave.
         synchronized(this) {
-            val effects = step(System.currentTimeMillis(), refusal())
+            val effects = step(clockMs(), refusal())
             publishState()
             perform(effects)
         }
@@ -167,6 +177,8 @@ object RecorderController : EventListener {
     // Effects run in order, under the lock, on the calling thread; nothing here waits long.
     private fun perform(effects: List<RecorderEffect>) {
         for (e in effects) {
+            // A session that could not start leaves the recorder idle: no start sound after it.
+            if (e == RecorderEffect.PlayStartSound && machine.state == RecorderState.Idle) continue
             when (e) {
                 is RecorderEffect.StartSession -> try {
                     startSession(e.kind, e.quiet)
@@ -232,16 +244,17 @@ object RecorderController : EventListener {
     private suspend fun tick() {
         while (scope.isActive) {
             delay(1_000)
-            val now = System.currentTimeMillis()
+            val now = clockMs()
             synchronized(this) {
-                val effects = machine.tick(now)
+                // A note that interrupted a recording resumes it only if recording may start now.
+                val effects = machine.tick(now, refusal())
                 if (effects.isNotEmpty()) {
                     Timber.i("Recorder: maximum length reached")
                     publishState()
                     perform(effects)
                 }
             }
-            capture?.let { if (now - it.lastFrameAtMs > MIC_STALL_MS) it.resubscribe() }
+            capture?.let { if (System.currentTimeMillis() - it.lastFrameAtMs > MIC_STALL_MS) it.resubscribe() }
         }
     }
 

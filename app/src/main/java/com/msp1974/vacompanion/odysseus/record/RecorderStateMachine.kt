@@ -6,7 +6,8 @@ package com.msp1974.vacompanion.odysseus.record
 //
 //   press  idle       -> start a recording
 //          recording  -> stop it
-//          note       -> stop the note (and go back to recording if the note interrupted one)
+//          note       -> stop the note (and go back to recording if the note interrupted one,
+//                        unless a recording may not start now: unlinked, no permission)
 //   hold   idle       -> start a voice note (letting go does nothing)
 //          recording  -> end the recording session, start a note; a new recording starts after it
 //          note       -> stop the note (as press)
@@ -15,6 +16,7 @@ package com.msp1974.vacompanion.odysseus.record
 
 enum class RecordingKind { RECORDING, NOTE }
 
+/** Start times are on the caller's clock (RecorderController: time since boot, not the wall clock). */
 sealed interface RecorderState {
     data object Idle : RecorderState
     data class Recording(val startedAtMs: Long) : RecorderState
@@ -52,7 +54,7 @@ class RecorderStateMachine(
         return when (val s = state) {
             RecorderState.Idle -> startRecording(nowMs, refusal)
             is RecorderState.Recording -> accept(nowMs) { stopRecording() }
-            is RecorderState.Note -> accept(nowMs) { stopNote(nowMs, s) }
+            is RecorderState.Note -> accept(nowMs) { stopNote(nowMs, s, refusal) }
         }
     }
 
@@ -79,17 +81,20 @@ class RecorderStateMachine(
                     )
                 }
             }
-            is RecorderState.Note -> accept(nowMs) { stopNote(nowMs, s) }
+            is RecorderState.Note -> accept(nowMs) { stopNote(nowMs, s, refusal) }
         }
     }
 
-    /** Called about once a second while something runs: enforces the maximum lengths. */
-    fun tick(nowMs: Long): List<RecorderEffect> = when (val s = state) {
+    /**
+     * Called about once a second while something runs: enforces the maximum lengths. [refusal]:
+     * why a recording may not start now (a note that interrupted one then doesn't resume it).
+     */
+    fun tick(nowMs: Long, refusal: String? = null): List<RecorderEffect> = when (val s = state) {
         RecorderState.Idle -> emptyList()
         is RecorderState.Recording ->
             if (nowMs - s.startedAtMs >= maxRecordingMs) stopRecording() else emptyList()
         is RecorderState.Note ->
-            if (nowMs - s.startedAtMs >= maxNoteMs) stopNote(nowMs, s) else emptyList()
+            if (nowMs - s.startedAtMs >= maxNoteMs) stopNote(nowMs, s, refusal) else emptyList()
     }
 
     /**
@@ -118,9 +123,11 @@ class RecorderStateMachine(
         return listOf(RecorderEffect.EndSession(RecordingKind.RECORDING), RecorderEffect.PlayStopSound)
     }
 
-    private fun stopNote(nowMs: Long, s: RecorderState.Note): List<RecorderEffect> {
+    // [refusal]: the interrupted recording may not start again now (unlinked, no permission).
+    private fun stopNote(nowMs: Long, s: RecorderState.Note, refusal: String?): List<RecorderEffect> {
         val effects = mutableListOf<RecorderEffect>(RecorderEffect.EndSession(RecordingKind.NOTE), RecorderEffect.PlayStopSound)
-        state = if (s.resumeRecording) {
+        if (s.resumeRecording && refusal != null) effects += RecorderEffect.Refused(refusal)
+        state = if (s.resumeRecording && refusal == null) {
             effects += RecorderEffect.StartSession(RecordingKind.RECORDING, quiet = true)
             RecorderState.Recording(nowMs)
         } else {

@@ -12,7 +12,9 @@ transcribes and summarizes them like the T-Watch's recordings. The code is in
   go doesn't stop the note. A tap or another hold stops it. A note stops by itself after 5
   minutes.
 - **Hold during a recording**: the recording session ends and the note is recorded as its own
-  session. When the note stops, a new recording session starts by itself, with no sound.
+  session. When the note stops, a new recording session starts by itself, with no sound
+  (unless a recording may not start then, e.g. the Echo was unlinked meanwhile: the reason is
+  shown and nothing resumes).
 - A recording stops by itself after 4 hours.
 - A second tap within 1 s of the last one is ignored.
 - Nothing starts while the microphone is muted (the quick actions "Mic Mute", Home Assistant's
@@ -70,7 +72,8 @@ press/hold ──> RecorderController ──> RecorderStateMachine (pure)
   Assistant is connected, with the screen off and the activity in the background. The
   buttons and the pill only read `RecorderController.state` and call `press()`/`hold()`.
 - **RecorderStateMachine** is plain Kotlin and holds the gestures, limits and debounce
-  (`RecorderStateMachineTest`).
+  (`RecorderStateMachineTest`). The controller feeds it time since boot (`clockMs()`), not the
+  wall clock, so a clock change can't stop a recording or stretch a note.
 - **RecordingCapture** collects `SharedMicrophone.raw` undispatched into its own channel (as
   `audio/DetectionBuffer` does), so no frame is lost while the encoder works. See
   [shared-microphone.md](shared-microphone.md). The audio is raw: before the gate, WebRTC, the
@@ -84,7 +87,10 @@ press/hold ──> RecorderController ──> RecorderStateMachine (pure)
   under a temporary name and then renamed. When a session ends, an `end` file records its
   chunk count. A session folder is `<created ms>-<session id>`, with `session.json` inside.
   The queue survives restarts. When the app starts, any session left unfinished by a killed run
-  is marked finished and sent as it is.
+  is marked finished and sent as it is (a `sent` file keeps the highest sequence already
+  delivered, so a session whose chunks all went still gets its `/end`). Files are synced before
+  the rename; a sidecar that can't be read (power cut) is rebuilt from `session.json` and the
+  file name.
 - **Queue cap**: 500 MB. Past that, the oldest *finished* sessions are deleted first, and a
   warning shows on screen and in the settings. A session that is still recording is never
   deleted.
@@ -212,6 +218,7 @@ they work without Home Assistant.
   header the hub relay checks.
 - `UploadRulesTest`: contract C4's result table, the retry waits, the hub origin, session ids,
   and the queue cap.
+- `RecordingCaptureTest`: one capture against a fake microphone, and a resubscribe racing a stop.
 - `RecordingQueueTest`: the queue against a fake hub (order, `/end`, retry, auth, rejected,
   the 404 fallback, sessions left by a killed run, half-written files, the cap).
 - `RecordingTextTest`: the pill and status wording.

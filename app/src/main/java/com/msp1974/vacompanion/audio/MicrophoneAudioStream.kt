@@ -4,8 +4,8 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import com.msp1974.vacompanion.device.DeviceManager
+import com.msp1974.vacompanion.odysseus.audio.restartOnFailure // Odysseus fork
 import com.msp1974.vacompanion.utils.Permissions
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,15 +44,10 @@ class MicrophoneAudioStream(
     val suppressor = MicSuppressor()
 
     // Odysseus fork: each frame raw and processed, shared as two flows; either keeps the mic open (odysseus/audio/MicFrames.kt)
+    // Odysseus fork: failures counted in a row, not over the process-wide stream's life (odysseus/audio/MicFrames.kt)
     private val frames = com.msp1974.vacompanion.odysseus.audio.MicFrameSharing(capture()
-        .retryWhen { cause, attempt ->
-            if (cause is CancellationException || attempt >= MAX_RESTARTS) {
-                false
-            } else {
-                Timber.e(cause, "Microphone failed, restarting (attempt ${attempt + 1}/$MAX_RESTARTS)")
-                delay(RESTART_DELAY_MS.milliseconds)
-                true
-            }
+        .restartOnFailure(MAX_RESTARTS.toInt(), RESTART_DELAY_MS) { cause, n ->
+            Timber.e(cause, "Microphone failed, restarting (attempt $n/$MAX_RESTARTS in a row)")
         }
         .catch { Timber.e(it, "Microphone failed, giving up until the next subscriber") },
         scope, BUFFER_FRAMES)
@@ -81,9 +75,12 @@ class MicrophoneAudioStream(
             withContext(Dispatchers.IO) { microphone.start() }
             Timber.d("Microphone opened")
             launch(Dispatchers.IO) {
+                // Odysseus fork: a recorder that only fails to read is reopened (odysseus/audio/MicFrames.kt)
+                val emptyReads = com.msp1974.vacompanion.odysseus.audio.EmptyReads(DEAD_AFTER_EMPTY_READS)
                 while (isActive) {
                     raw = null
                     val frame = microphone.readShort()
+                    if (emptyReads.dead(frame.isEmpty())) throw java.io.IOException("Microphone gives no audio")
                     if (frame.isNotEmpty()) trySend(com.msp1974.vacompanion.odysseus.audio.MicFrame(raw ?: frame.copyOf(), frame)) else delay(EMPTY_READ_DELAY_MS.milliseconds)
                 }
             }
@@ -102,5 +99,6 @@ class MicrophoneAudioStream(
         const val MAX_RESTARTS = 5L
         const val RESTART_DELAY_MS = 1000L
         const val EMPTY_READ_DELAY_MS = 10L
+        const val DEAD_AFTER_EMPTY_READS = 200 // Odysseus fork: at least 2 s without audio
     }
 }

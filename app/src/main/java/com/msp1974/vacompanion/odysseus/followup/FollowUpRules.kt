@@ -100,6 +100,14 @@ object FollowUpRules {
         else -> null
     }
 
+    /**
+     * Whether the satellite may start the follow-up's pipeline now: still [running] (Home
+     * Assistant may have reconnected, and a new satellite replaced this one, while the answer
+     * played), [connected], not [responding] and not handling a wake word ([arbitrating]).
+     */
+    fun canStartListening(running: Boolean, connected: Boolean, responding: Boolean, arbitrating: Boolean): Boolean =
+        running && connected && !responding && !arbitrating
+
     /** A follow-up pipeline that heard nothing ends quietly: no error sound, no toast. */
     fun isNothingHeard(errorCode: String): Boolean = errorCode == NOTHING_HEARD_CODE
 

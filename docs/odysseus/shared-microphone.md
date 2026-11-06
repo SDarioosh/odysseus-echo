@@ -51,6 +51,10 @@ job.cancel()                                              // stop listening; the
   shared 16-frame buffer.
 - Frames are fresh arrays that nothing else holds: keep them as they are.
 - Without RECORD_AUDIO the microphone isn't opened and the flows stay empty (no error).
+- A microphone that fails is reopened after 1 s. A recorder that only returns read errors
+  (`ERROR_DEAD_OBJECT` after the audio server restarted: no exception, just empty reads) counts
+  as failed after 200 empty reads in a row (2 s or more). Failures are counted in a row: a frame
+  read resets the count (`restartOnFailure`, `EmptyReads` in `MicFrames.kt`, `MicRestartTest`).
 - If the microphone fails five times in a row the stream gives up until every subscriber of
   both flows has left (as upstream did per satellite). A recorder that sees no frames for a
   few seconds should cancel and collect again, but only once the wake word has also let go

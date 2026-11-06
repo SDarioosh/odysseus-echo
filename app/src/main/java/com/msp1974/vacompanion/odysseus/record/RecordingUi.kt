@@ -94,10 +94,10 @@ fun RecordingPill(modifier: Modifier = Modifier) {
         onDispose { if (active) view.keepScreenOn = false }
     }
 
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var now by remember { mutableLongStateOf(RecorderController.clockMs()) }
     LaunchedEffect(active) {
         while (active) {
-            now = System.currentTimeMillis()
+            now = RecorderController.clockMs()
             delay(1_000 - now % 1_000)
         }
     }

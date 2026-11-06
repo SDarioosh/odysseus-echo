@@ -5,6 +5,7 @@ import com.msp1974.vacompanion.odysseus.BargeIn // Odysseus fork
 import com.msp1974.vacompanion.odysseus.OdysseusTurn // Odysseus fork
 import com.msp1974.vacompanion.odysseus.VoiceActivity // Odysseus fork
 import com.msp1974.vacompanion.odysseus.followup.FollowUp // Odysseus fork
+import com.msp1974.vacompanion.odysseus.followup.FollowUpRules // Odysseus fork
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -803,11 +804,11 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
     // arbitration report (it ducks the others as a manual wake does); the listening sound instead of
     // the wake sound; audio kept from the end of that sound (odysseus/followup/FollowUp.kt).
     private suspend fun startFollowUpListening(listenLimitMs: Long): Boolean {
-        if (clientId.isEmpty() || isResponding() || arbitratingWakeWord) return false
+        if (!FollowUpRules.canStartListening(state == SatelliteState.RUNNING, clientId.isNotEmpty(), isResponding(), arbitratingWakeWord)) return false
         arbitratingWakeWord = true
         try {
             FollowUp.playSound(mediaManager)
-            if (isResponding()) return false
+            if (state != SatelliteState.RUNNING || isResponding()) return false
             VacaUdpBroadcast.instance?.arbitrateWakeWord(1.0f, contest = false)
             val buffer = DetectionBuffer(microphone.audio, scope).also { detectionBuffer = it }
             if (!HaRunGate.awaitIdle()) { cancelDetectionBuffer(); return false }

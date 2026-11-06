@@ -21,8 +21,9 @@ object LinkDoneHttp : DoneHttp {
 
 class DoneClient(private val http: DoneHttp = LinkDoneHttp) {
 
-    suspend fun done(target: DoneTarget, deviceId: String): DoneOutcome =
-        send(DoneApi.donePath(target), DoneApi.body(target, deviceId))
+    /** [title]: the row's text as shown, sent for a line named by its index (DoneApi.sendsTitle). */
+    suspend fun done(target: DoneTarget, deviceId: String, title: String? = null): DoneOutcome =
+        send(DoneApi.donePath(target), DoneApi.body(target, deviceId, title))
 
     suspend fun undo(target: DoneTarget, deviceId: String): DoneOutcome {
         val path = DoneApi.undoPath(target)

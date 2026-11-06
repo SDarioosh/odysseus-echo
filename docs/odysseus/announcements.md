@@ -51,10 +51,12 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   - A reminder of a to-do (one with a `ref`) also has **Done**, beside Dismiss: it calls
     `POST <voice base>/reminders/done {"ref", "device_id"}` (contract C5 in
     [plans/2026-11-done-followup-settings-verify.md](plans/2026-11-done-followup-settings-verify.md);
-    `device_id` is the hub id from the hello). The tap is the confirmation: no spoken "yes".
+    `device_id` is the hub id from the hello; a `ref` with an item index, `todo:41:3`, also
+    carries the card's `title`). The tap is the confirmation: no spoken "yes".
     Done (or already done): the card goes and the Today page is refreshed. Failed: the card
     stays with a short reason under the buttons ("Can't reach Odysseus", "Not found in
-    Odysseus", "Odysseus can't do this yet" for a hub without the route), and Done can be tapped
+    Odysseus", "Odysseus busy, try again", "Changed in Odysseus" (the Today page is refreshed
+    too), "Odysseus can't do this yet" for a hub without the route), and Done can be tapped
     again. There is no undo for a reminder (the hub has no undo route for it). The buttons are
     52 dp tall, to hit from arm's length.
   - It stays 10 min, or until its `expires_at` if that's sooner. With several at once, the oldest

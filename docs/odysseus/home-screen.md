@@ -94,7 +94,8 @@ confirmation: no spoken "yes" (contract C5 in
 [plans/2026-11-done-followup-settings-verify.md](plans/2026-11-done-followup-settings-verify.md)).
 
 - **At once** the ring fills with a tick and the title is struck through (optimistic), and the
-  device sends `POST <voice base>/todos/done {"ref", "device_id"}` or
+  device sends `POST <voice base>/todos/done {"ref", "device_id", "title"}` (`title`: the
+  row's text, so a hub whose line moved since finds it by its text) or
   `/action-items/done {"id", "device_id"}`; `device_id` is the device's id (`config.uuid`, as in
   the announcements' hello).
 - **Done**: the row shows "Done · Undo" for 10 s. A tap on the row undoes it
@@ -105,7 +106,10 @@ confirmation: no spoken "yes" (contract C5 in
 - **Already done** (`"already": true`): "Already done" for 5 s, no Undo.
 - **Failure**: the row comes back open, with a short reason in place of its due tag for 5 s
   ("Can't reach Odysseus", "Not found in Odysseus", "Athena unavailable", "Token refused",
-  "Odysseus can't do this yet" for a hub without the routes), and the Today data is refreshed.
+  "Odysseus busy, try again" for a 503 `busy`, "Changed in Odysseus" for a 409 `changed`: the
+  line was edited or removed in Odysseus since Today was fetched, "Odysseus can't do this yet"
+  for a hub without the routes), and the Today data is refreshed. "Changed in Odysseus" is a
+  done's answer; "Too late to undo" is the undo's (both 409, told apart by `error`).
   Tap again to retry.
 - A row the hub sent without a `ref` or `id` has a dimmed ring and can't be tapped.
 - Logcat: `Today: done todo:41:2 -> ok`, `Today: undo ai_17 -> TOO_LATE (Too late to undo)`

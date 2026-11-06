@@ -124,7 +124,8 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
     // The only owner of the microphone. The wake word engine and any listening audio pipeline
     // subscribe to it; it is open only while at least one of them is.
-    private val microphone = MicrophoneAudioStream(context, deviceManager, scope)
+    // Odysseus fork: one microphone for the whole process (odysseus/audio/SharedMicrophone.kt)
+    private val microphone: MicrophoneAudioStream = com.msp1974.vacompanion.odysseus.audio.SharedMicrophone.get(context, deviceManager)
 
     private var soundEffectFinishTime: Long = 0
     private var currentWakeWordSoundUri: android.net.Uri? = null

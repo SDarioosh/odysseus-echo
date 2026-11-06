@@ -115,6 +115,10 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
+        <!-- Odysseus fork: answers to an update install session (odysseus/update/UpdateInstaller.kt) -->
+        <receiver
+            android:name=".odysseus.update.UpdateInstallReceiver"
+            android:exported="false" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

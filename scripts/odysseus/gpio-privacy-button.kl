@@ -1,9 +1,22 @@
 # Odysseus fork (odysseus-echo): key layout for the Echo Show 5 (2nd gen) privacy button.
 #
 # On LineageOS 18.1 (cronos) the microphone/camera privacy button is two input devices:
-#   gpio-privacy-state   SW_MUTE_DEVICE  -> Android mutes the microphone (wanted)
-#   gpio-privacy-button  KEY_POWER (116) -> Android goes to sleep (not wanted)
-# This file is installed as /data/system/devices/keylayout/gpio-privacy-button.kl (not /system;
-# InputReader checks /data/system/devices after /odm, /vendor and /system, which have no file for
-# this device, before falling back to Generic.kl). It maps no keys, so the button's power key is
-# ignored and only the mute switch takes effect. Loaded at boot. Undo: delete the file, reboot.
+#   gpio-privacy-state   SW_MUTE_DEVICE  -> Android sets its microphone-mute flag (on this device
+#                                           the microphone keeps working; the app ignores the flag
+#                                           while the button is set to Record)
+#   gpio-privacy-button  KEY_POWER (116) -> upstream: Android goes to sleep (not wanted)
+# Here scancode 116 is MEDIA_RECORD instead of POWER, so the button never puts the device to sleep,
+# and the app (MainActivity.dispatchKeyEvent -> odysseus/record/RecordButton.kt) turns its down and
+# up into a press (record / stop) or a 1 s hold (voice note). Menu -> Odysseus -> Recording ->
+# Privacy button: Mute makes the app swallow the key, so the button only mutes, as before.
+#
+# WAKE asks Android to wake the device on this key; Android 11 doesn't wake on media keys and
+# doesn't pass any key to the app while the display is off. With the display off the app sees the
+# press through the mute switch instead (no hold). See docs/odysseus/echo-show-5.md.
+#
+# Installed as /data/system/devices/keylayout/gpio-privacy-button.kl by setup_device.sh (not
+# /system; InputReader checks /data/system/devices after /odm, /vendor and /system, which have no
+# file for this device, before falling back to Generic.kl). Loaded at boot.
+# Undo: delete the file, reboot (the button then puts the device to sleep again).
+
+key 116   MEDIA_RECORD   WAKE

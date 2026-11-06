@@ -120,7 +120,10 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
             }
             Text(status, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             HomeScreenSettings()
+            com.msp1974.vacompanion.odysseus.home.today.TodaySettingsSection()
             KioskSettingsSection()
+            com.msp1974.vacompanion.odysseus.update.UpdateSettingsSection()
+            com.msp1974.vacompanion.odysseus.record.RecordingSettingsSection() // Menu → Odysseus → Recording (odysseus/record/)
         }
     }
 }

@@ -10,6 +10,8 @@ package com.msp1974.vacompanion.odysseus
 //   GET <base>/turns/latest?since=<epoch ms>           -> {"turn": VoiceTurn | null}  (VoiceTurnApi.kt)
 //   POST <base>/satellite/turn (multipart)             -> device, area, wake word and the spoken command
 //   POST <base>/satellite/interrupt (form: device_id)  -> a barge-in: end this device's turn now (BargeIn.kt)
+//   GET <base>/today                                   -> the home screen's Today page (home/today/)
+//   GET <base>/app/latest, GET <base>/app/apk          -> updates from the hub (odysseus/update/, openGet)
 //
 
 // The token is the same `voice`-scope token Home Assistant uses (read-only plus voice actions).
@@ -114,6 +116,9 @@ object OdysseusLink {
         prefs()?.edit()?.putString(KEY_TOKEN, encrypt(t))?.apply()
     }
 
+    /** The voice token, for the recorder's uploads to the same hub (odysseus/record/HubRelayTransport.kt). */
+    internal fun bearerToken(): String? = token()
+
     private fun token(): String? = prefs()?.getString(KEY_TOKEN, null)?.let {
         runCatching { decrypt(it) }.onFailure { e -> Timber.w(e, "Odysseus token unreadable") }.getOrNull()
     }
@@ -197,6 +202,29 @@ object OdysseusLink {
             return Reply(code, text)
         } finally {
             conn.disconnect()
+        }
+    }
+
+    /**
+     * A plain GET of [path] under the base URL with the voice token: (HTTP code, body; "" unless
+     * 2xx). Blocking, on the caller's dispatcher. Throws when not linked or on network errors.
+     */
+    fun get(path: String, readTimeoutMs: Int = 6000): HaResponse =
+        request(path, readTimeoutMs = readTimeoutMs).let { HaResponse(it.code, it.body) }
+
+    /**
+     * An authorised GET to the hub for a binary download (odysseus/update/), not yet connected:
+     * the caller adds headers (Range), reads the stream and disconnects. Throws when not linked.
+     */
+    fun openGet(path: String, readTimeoutMs: Int = 30_000): HttpURLConnection {
+        val base = baseUrl
+        val token = token()
+        if (!base.startsWith("http") || token.isNullOrEmpty()) throw IllegalStateException("not set up")
+        return (URL("$base$path").openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = readTimeoutMs
+            instanceFollowRedirects = false
+            setRequestProperty("Authorization", "Bearer $token")
         }
     }
 
@@ -287,6 +315,16 @@ object OdysseusLink {
             TimingResult.Failed(e.message ?: e.javaClass.simpleName)
         }
     }
+
+    /** A hub answer for callers that shape their own requests: the HTTP code and, for 2xx, the body. */
+    data class HubReply(val code: Int, val body: String)
+
+    /**
+     * One request to `<base><path>` with the voice token (a GET without [body]), for features in
+     * their own packages (announcements: odysseus/announce/). Throws when not linked or unreachable.
+     */
+    suspend fun hubRequest(path: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000): HubReply =
+        withContext(Dispatchers.IO) { request(path, contentType, body, readTimeoutMs).let { HubReply(it.code, it.body) } }
 
     /** Tests the saved link: (ok, message to show). An older hub without the turn feed is tested with /actions. */
     suspend fun testLink(): Pair<Boolean, String> {

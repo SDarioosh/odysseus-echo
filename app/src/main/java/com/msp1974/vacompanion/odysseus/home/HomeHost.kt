@@ -49,6 +49,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.msp1974.vacompanion.odysseus.home.today.TodayRefresh
+import com.msp1974.vacompanion.odysseus.home.today.TodayRepository
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherRepository
 import com.msp1974.vacompanion.ui.VAViewModel
 import kotlinx.coroutines.delay
@@ -114,6 +116,9 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
             }
         }
 
+        // The Today page's data from Odysseus (today/).
+        TodayRefresh(vaUiState.isNetworkConnected)
+
         if (HomeSettings.enabled && HomePages.all.isNotEmpty()) {
             val context = HomePageContext(
                 nowPlaying = vaUiState.sendspinNowPlaying,
@@ -121,6 +126,7 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
                 isServerConnected = vaUiState.isServerConnected,
                 isDND = vaUiState.isDND,
                 weather = if (weatherOn) WeatherRepository.weather else null,
+                today = TodayRepository.view,
                 onSendspinCommand = vaViewModel::onSendspinCommand,
             )
             PageLayer(context, onOpenMenu = { vaViewModel.onOpenSettingsAction() })

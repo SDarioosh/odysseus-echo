@@ -36,6 +36,8 @@ internal class BackgroundTaskController (private val context: Context, val devic
         sendspinManager.start()
         bluetoothProxyManager.start()
         vacaUdpBroadcast.start()
+        // Odysseus fork: hello to Odysseus and its announcements feed (odysseus/announce/Announcements.kt)
+        com.msp1974.vacompanion.odysseus.announce.Announcements.start(context, config)
 
         server = object: WyomingTCPServer(context, deviceManager) {
             override fun onEvent(event: String, data: JsonObject) {
@@ -97,5 +99,6 @@ internal class BackgroundTaskController (private val context: Context, val devic
         sendspinManager.shutdown()
         bluetoothProxyManager.shutdown()
         vacaUdpBroadcast.shutdown()
+        com.msp1974.vacompanion.odysseus.announce.Announcements.stop() // Odysseus fork
     }
 }

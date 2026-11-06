@@ -1,4 +1,4 @@
-# Home screen: clock, now playing, dashboard one swipe away
+# Home screen: clock, today, now playing, dashboard one swipe away
 
 The Echo shows a clock when nobody is using it. The Home Assistant dashboard is one swipe
 away, and the Echo goes back to the clock by itself.
@@ -12,7 +12,10 @@ away, and the Echo goes back to the clock by itself.
   Sendspin player (Configuration → Sendspin). With nothing playing, the line is hidden.
 - **Swipe right** (finger moves right) on the clock: the Home Assistant dashboard.
 - **Swipe left** on the dashboard: back to the clock.
-- **Idle**: after 2 minutes without a touch, the dashboard goes back to the clock by itself.
+- **Swipe left** on the clock: the **Today page** (see below), when the device is linked to
+  Odysseus. Swipe right to go back to the clock.
+- **Idle**: after 2 minutes without a touch, the dashboard (or the Today page) goes back to the
+  clock by itself.
 - **Menu from the clock**: two-finger swipe up.
 - The listening indicator and the turn card show over the clock as they do over the dashboard.
 
@@ -26,6 +29,7 @@ Menu → Odysseus → **Home screen**. Stored on the Echo only, not sent to Home
 | Back to the clock after | 1, 2, 5, 10 min, Never | 2 min |
 | Weather | on / off | on |
 | Weather entity | Auto, or one of Home Assistant's `weather.*` entities | Auto |
+| Today page | on / off (shown only while linked to Odysseus) | on |
 
 ## Weather
 
@@ -47,6 +51,32 @@ under it.
   Home Assistant.
 - **Failures** hide nothing else: a failed refresh keeps the last reading for up to an hour, then
   the badge disappears. Logcat shows `Weather: ...` lines.
+
+## Today page
+
+Page 1, right of the clock. Read-only, from Odysseus (`GET <voice base>/today`, the same base
+URL and voice token as Menu → Odysseus; contract C1 in
+[plans/2026-11-today-updates-announce-record.md](plans/2026-11-today-updates-announce-record.md)).
+
+- **Top**: "Today", the date, and the headline of Odysseus's Today insight (without a headline,
+  its first focus item; with neither, nothing).
+- **Left, Calendar**: today's events, time (in the device's time zone) or "All day", title and
+  place. Events that have ended are dimmed.
+- **Right, To-do**: to-dos due today or overdue (an "Overdue" or "Today" tag), then pinned
+  undated ones. **From conversations**: Athena's open action items.
+- **"and N more"** where a section doesn't fit, from the hub's open counts. How many rows fit is
+  worked out from the screen height (rows of about 40 dp, titleLarge text, readable from across a
+  kitchen on the Echo Show 5's 960×480 screen); action items keep at least one row.
+- **Empty sections** say so ("Nothing on the calendar", "Nothing due", "No open action items").
+- **Refresh**: when the home screen comes up, every 15 minutes while it's on, when the network
+  comes back, and when the page comes into view (unless the data is under a minute old). Stops
+  while the screen is blank.
+- **Failures**: the last result stays for up to 2 hours, with "Odysseus unreachable · Updated
+  8:15" at the bottom; after that, or with nothing fetched yet, the page says "Can't reach
+  Odysseus" and why (a refused token says to link again; a hub without the route says 404). A
+  result from before midnight is dropped. Logcat shows `Today: ...` lines.
+- **Not linked**, or the setting off: the page isn't in the list, so the clock is the last page.
+  Linking or unlinking in Menu → Odysseus takes effect when the menu closes.
 
 ## How it works
 
@@ -86,7 +116,8 @@ home screen when the swipe is long. Turn the home screen off if a dashboard need
 
 1. Write an `object` implementing `HomePage` in `odysseus/home/` (an `id` and a
    `Content(context, modifier)` composable that fills the screen).
-2. Add it to `HomePages.all`. Its place in the list is its place on screen.
+2. Add it to `HomePages.all` (a getter, so a page can depend on a setting, as Today does). Its
+   place in the list is its place on screen.
 3. If it needs data the pages don't have yet, add a field to `HomePageContext` and fill it in
    `HomeHost`. Pages never read the view model directly.
 
@@ -107,8 +138,16 @@ animation need no change.
 | `odysseus/home/weather/WeatherRepository.kt` | the process-wide weather state and refresh |
 | `odysseus/home/weather/WeatherBadge.kt` | the badge in the clock's top left |
 | `res/drawable/odysseus_mdi_*.xml` | weather icons from @mdi/js 7.4.47 (`assets/licenses/MDI-LICENSE.txt`) |
+| `odysseus/home/today/TodayClient.kt` | contract C1: the call (testable `TodayHttp`) and lenient parsing |
+| `odysseus/home/today/TodayStore.kt` | what the page shows: not linked, loading, unreachable, ready/stale; the 2 h rule. Plain Kotlin |
+| `odysseus/home/today/TodayFormat.kt` | times in the device's zone, due tags, "and N more", what fits. Plain Kotlin |
+| `odysseus/home/today/TodayRepository.kt` | the process-wide state and refresh; `OdysseusLink.get` for the call |
+| `odysseus/home/today/TodayRefresh.kt` | the refresh timer, composed by `HomeHost` |
+| `odysseus/home/today/TodayPage.kt` | the page |
+| `odysseus/home/today/TodaySettingsSection.kt` | the "Today page" setting |
 | `odysseus/home/HomeHost.kt` | draws the layers, swipes, animation, idle timer |
 | `odysseus/OdysseusSettingsLayout.kt` | the Home screen settings |
 | `MainActivity.kt`, `ui/layouts/WebViewLayout.kt` | hooks (marked `Odysseus fork`) |
 | `app/src/test/.../odysseus/home/HomeNavigatorTest.kt` | tests of the rules |
 | `app/src/test/.../odysseus/home/weather/WeatherClientTest.kt` | tests of the weather calls and rules |
+| `app/src/test/.../odysseus/home/today/Today{Client,Store,Format}Test.kt` | tests of the Today parsing, staleness and layout rules |

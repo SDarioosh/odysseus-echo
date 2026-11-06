@@ -105,4 +105,10 @@ class AnnouncementRulesTest {
         assertTrue(AnnouncementPolling.helloDue(now, "x", "x", now + 60 * 60_000L))
         assertTrue(AnnouncementPolling.helloDue(now, "x", "kitchen", now + 1_000))
     }
+
+    @Test
+    fun aSettingsItemNeverBecomesACard() {
+        val settings = Announcement(id = "st_1", at = now, kind = Announcement.KIND_SETTINGS)
+        assertTrue(AnnouncementCards().add(listOf(settings), now).items.isEmpty())
+    }
 }

@@ -43,6 +43,8 @@ import com.msp1974.vacompanion.odysseus.kiosk.KioskSettings
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherClient
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherEntity
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherRepository
+import com.msp1974.vacompanion.odysseus.managed.ManagedNote
+import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.ui.components.MenuLayout
 import kotlinx.coroutines.launch
@@ -129,12 +131,17 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
 }
 
 @Composable
-private fun Setting(checked: Boolean, title: String, detail: String, onChange: (Boolean) -> Unit) {
+private fun Setting(
+    checked: Boolean, title: String, detail: String,
+    managedKey: String? = null, // Odysseus fork: set by the hub = disabled + "Set by Odysseus" (odysseus/managed/)
+    onChange: (Boolean) -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(checked = checked, onCheckedChange = onChange, enabled = managedKey == null || !ManagedSettings.isManaged(managedKey))
         Column(Modifier.padding(start = 14.dp)) {
             Text(title, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
             Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (managedKey != null) ManagedNote(managedKey)
         }
     }
 }
@@ -154,6 +161,7 @@ private fun HomeScreenSettings() {
     Setting(
         enabled, "Clock home screen",
         "A clock and the playing song over the dashboard. Swipe right for the dashboard, left for the clock.",
+        managedKey = "home.enabled",
     ) { HomeSettings.enabled = it }
     Text("Back to the clock after", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -162,10 +170,11 @@ private fun HomeScreenSettings() {
                 selected = idle == seconds,
                 onClick = { HomeSettings.idleSeconds = seconds },
                 label = { Text(HomeSettings.idleLabel(seconds)) },
-                enabled = enabled,
+                enabled = enabled && !ManagedSettings.isManaged("home.idle_seconds"),
             )
         }
     }
+    ManagedNote("home.idle_seconds", HomeSettings.idleLabel(idle))
 
     // Weather in the clock's top left (odysseus/home/weather/).
     val weatherOn = HomeSettings.weatherEnabled
@@ -174,6 +183,7 @@ private fun HomeScreenSettings() {
     Setting(
         weatherOn, "Weather",
         "Icon, temperature and today's high and low in the clock's top left, from a Home Assistant weather entity.",
+        managedKey = "home.weather_enabled",
     ) { HomeSettings.weatherEnabled = it }
     Text("Weather entity", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
     val auto = WeatherClient.autoPick(entities)
@@ -218,6 +228,7 @@ private fun KioskSettingsSection() {
     Setting(
         KioskSettings.autoReload, "Reload a dashboard that failed to load",
         "Tries again after 5 s, then waits longer each time, up to every 5 minutes. Soon after Wi-Fi comes back.",
+        managedKey = "kiosk.auto_reload",
     ) { KioskSettings.autoReload = it }
     Text("Back from other apps after", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -226,9 +237,11 @@ private fun KioskSettingsSection() {
                 selected = returnSeconds == seconds,
                 onClick = { KioskSettings.returnSeconds = seconds },
                 label = { Text(KioskSettings.returnLabel(seconds)) },
+                enabled = !ManagedSettings.isManaged("kiosk.return_seconds"),
             )
         }
     }
+    ManagedNote("kiosk.return_seconds", KioskSettings.returnLabel(returnSeconds))
     Text(
         "When another app has been in front this long, this app comes back. Not while the screen is off.",
         fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,

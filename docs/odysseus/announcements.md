@@ -30,6 +30,8 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   ```
 
   - Each `id` is shown once. Seen ids are kept for 26 h (the hub keeps announcements 24 h).
+  - An item with `"kind": "settings"` is never a card: it says this device's settings changed in
+    Odysseus, and the device fetches them ([managed-settings.md](managed-settings.md)).
   - `since` is the newest `at` seen. It's the hub's own clock, so the device clock doesn't matter.
     It survives a restart (SharedPreferences `odysseus_announce`). The first time, it is 15 min
     before now, so a new or reset Echo doesn't show a day of old messages.

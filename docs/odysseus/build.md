@@ -36,6 +36,12 @@ python3 scripts/odysseus/check_apk_privacy.py <apk>   # must pass before install
 every build of a commit gets the same code (`./gradlew printVersionCode` shows it). Upstream's
 `version.properties` counter is gone.
 
+Release builds are minified by R8; debug builds aren't. Every module whose native code looks up
+Kotlin classes, methods or fields by name (JNI) needs a keep rule in its `consumer-rules.pro`
+(`microfeatures`, `sendspin`, `webrtc-apm`), or the release build fails at runtime with
+`NoSuchMethodError` where the debug build works. A new JNI module gets one too, and a change
+that only touches native code should be checked on a release build before it goes to devices.
+
 ## Install over adb
 
 ```bash

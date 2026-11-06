@@ -16,6 +16,7 @@ object HomeSettings {
     private const val KEY_IDLE_SECONDS = "home_idle_seconds"
     private const val KEY_WEATHER_ENABLED = "home_weather_enabled"
     private const val KEY_WEATHER_ENTITY = "home_weather_entity"
+    private const val KEY_TODAY_ENABLED = "home_today_enabled"
 
     const val DEFAULT_IDLE_SECONDS = 120
 
@@ -28,6 +29,7 @@ object HomeSettings {
     private var idleSecondsState by mutableIntStateOf(DEFAULT_IDLE_SECONDS)
     private var weatherEnabledState by mutableStateOf(true)
     private var weatherEntityState by mutableStateOf("")
+    private var todayEnabledState by mutableStateOf(true)
 
     /** Loads the stored values. Safe to call more than once. */
     fun init(context: Context) {
@@ -38,6 +40,7 @@ object HomeSettings {
         idleSecondsState = p.getInt(KEY_IDLE_SECONDS, DEFAULT_IDLE_SECONDS).coerceAtLeast(0)
         weatherEnabledState = p.getBoolean(KEY_WEATHER_ENABLED, true)
         weatherEntityState = p.getString(KEY_WEATHER_ENTITY, "") ?: ""
+        todayEnabledState = p.getBoolean(KEY_TODAY_ENABLED, true)
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -72,6 +75,14 @@ object HomeSettings {
         set(value) {
             weatherEntityState = value.trim()
             prefs()?.edit()?.putString(KEY_WEATHER_ENTITY, weatherEntityState)?.apply()
+        }
+
+    /** The Today page (odysseus/home/today/), right of the clock, while linked to Odysseus. */
+    var todayEnabled: Boolean
+        get() = todayEnabledState
+        set(value) {
+            todayEnabledState = value
+            prefs()?.edit()?.putBoolean(KEY_TODAY_ENABLED, value)?.apply()
         }
 
     fun idleLabel(seconds: Int): String = when {

@@ -300,6 +300,32 @@ itself; check below.
 10. Another app in front (e.g. Settings): a press starts a recording (switch path; the pill shows
     once the app is back in front); a hold is only a press.
 
+## Checking a device
+
+`scripts/odysseus/verify_device.sh [--no-button] [--root] [serial]` checks an Echo over adb and
+changes nothing on it. It prints:
+
+- the app's version (and whether the build is debuggable), and whether it is running;
+- the Odysseus settings: every `odysseus_*` SharedPreferences file (read with `run-as` on a
+  debuggable build, else only with `--root`, which uses `adb root` like `setup_device.sh` and
+  `adb unroot` afterwards; values of keys named like token, secret, password or key are shown as
+  `<hidden>`), and the device id the hub knows it by (`uuid`, for the hub's
+  `scripts/echo_verify.py --device-id`);
+- the privacy button's key layout (`dumpsys input`: `KeyLayoutFile` of `gpio-privacy-button`);
+- a guided `getevent` capture: "press once now…", then "hold for 2 s…" (8 s each,
+  `VERIFY_WAIT` to change). It reports whether DOWN and UP came, how long the hold was as the
+  kernel saw it (≥ 1 s: holds work), and whether `gpio-privacy-state` sent `SW_MUTE_DEVICE`.
+  The app reacts to the presses as usual (in Record mode a recording and a voice note start):
+  stop them afterwards. `--no-button` skips it;
+- the last 60 log lines matching `Recorder|Kiosk|Today|Update|Announce|Privacy button`;
+- a summary, one line per check, `PASS` or `CHECK` (look at it): app installed and running,
+  linked to Odysseus, key layout loaded, press and hold seen, the mute switch reports, no
+  `Going to sleep due to power_button`, the app logged the button, hello sent, the last
+  announcements feed outcome `OK`, no update or recorder failure in the log.
+
+It is the device half of the check; the hub half is the hub's `scripts/echo_verify.py`
+(odysseus-expanded `docs/fork/voice-assistant.md#checking-a-server-for-the-echos`).
+
 ## Wake word threshold rounding
 
 VACA turned the HA threshold into a cutoff by truncating (`Float.round` used `toInt`), so 9.2 became 0.91. It rounds to the nearest value now, so 9.2 means 0.92. The scores come in steps of 1/255, so 0.92 rejects the two false wakes seen in testing (a cough and background speech), which both scored just under 0.92.

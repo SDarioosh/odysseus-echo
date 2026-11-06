@@ -9,6 +9,8 @@ package com.msp1974.vacompanion.odysseus.home
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
+import com.msp1974.vacompanion.odysseus.home.today.TodayPage
+import com.msp1974.vacompanion.odysseus.home.today.TodayView
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherNow
 import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
 
@@ -22,6 +24,8 @@ data class HomePageContext(
     val isDND: Boolean = false,
     /** Current weather from Home Assistant; null = don't show any. */
     val weather: WeatherNow? = null,
+    /** The Today page's data from Odysseus (today/TodayRepository). */
+    val today: TodayView = TodayView.NotLinked,
     /** Sends a Sendspin transport command ("play", "pause", "next", …). */
     val onSendspinCommand: (String) -> Unit = {},
 )
@@ -39,6 +43,10 @@ interface HomePage {
 }
 
 object HomePages {
-    /** Left to right. Index 0 is where the idle timer returns to. */
-    val all: List<HomePage> by lazy { listOf(ClockPage) }
+    /**
+     * Left to right. Index 0 is where the idle timer returns to. A getter, not a fixed list: a page
+     * can come and go with its setting (reads Compose state, so readers recompose).
+     */
+    val all: List<HomePage>
+        get() = if (TodayPage.available) listOf(ClockPage, TodayPage) else listOf(ClockPage)
 }

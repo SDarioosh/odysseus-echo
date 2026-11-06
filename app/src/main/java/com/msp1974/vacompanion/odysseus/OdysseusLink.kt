@@ -10,6 +10,7 @@ package com.msp1974.vacompanion.odysseus
 //   GET <base>/turns/latest?since=<epoch ms>           -> {"turn": VoiceTurn | null}  (VoiceTurnApi.kt)
 //   POST <base>/satellite/turn (multipart)             -> device, area, wake word and the spoken command
 //   POST <base>/satellite/interrupt (form: device_id)  -> a barge-in: end this device's turn now (BargeIn.kt)
+//   GET <base>/today                                   -> the home screen's Today page (home/today/)
 //
 
 // The token is the same `voice`-scope token Home Assistant uses (read-only plus voice actions).
@@ -199,6 +200,13 @@ object OdysseusLink {
             conn.disconnect()
         }
     }
+
+    /**
+     * A plain GET of [path] under the base URL with the voice token: (HTTP code, body; "" unless
+     * 2xx). Blocking, on the caller's dispatcher. Throws when not linked or on network errors.
+     */
+    fun get(path: String, readTimeoutMs: Int = 6000): HaResponse =
+        request(path, readTimeoutMs = readTimeoutMs).let { HaResponse(it.code, it.body) }
 
     suspend fun fetchActions(sinceEpochMs: Long, limit: Int = 8): Result = withContext(Dispatchers.IO) {
         try {

@@ -11,12 +11,15 @@ package com.msp1974.vacompanion.odysseus.announce
 //     screen comes on. New ones become cards (AnnouncementCards) and wake the screen through the
 //     "odysseusAnnouncement" event (MainActivity applies the screen mode, as for the Sendspin
 //     pairing prompt).
+//   - Settings managed by Odysseus (odysseus/managed/ManagedSettings.kt): started with this, asked
+//     for again after each hello and when the feed has a "settings" item (never a card).
 // Nothing is requested while the device isn't linked to Odysseus.
 
 import android.content.Context
 import androidx.core.content.edit
 import com.msp1974.vacompanion.BuildConfig
 import com.msp1974.vacompanion.odysseus.OdysseusLink
+import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
@@ -63,6 +66,7 @@ object Announcements : EventListener {
         val s = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = s
         s.launch { run() }
+        ManagedSettings.start(context) { config.uuid }
         Timber.i("Announcements: started")
     }
 
@@ -72,10 +76,14 @@ object Announcements : EventListener {
         config?.eventBroadcaster?.removeListener(this)
         s.cancel()
         scope = null
+        ManagedSettings.stop()
         lastHelloMs = null
         lastHelloSaid = null
         Timber.i("Announcements: stopped")
     }
+
+    /** This device's id (config.uuid), as sent in the hello; null before start. */
+    val deviceId: String? get() = config?.uuid
 
     /** Ask the feed now (the screen came on). */
     fun pollNow() { wake.trySend(Unit) }
@@ -140,8 +148,9 @@ object Announcements : EventListener {
         val reply = OdysseusLink.hubRequest(AnnouncementApi.feedPath(deviceId, feed.sinceFor(now)))
         return when (reply.code) {
             200 -> {
-                val fresh = feed.accept(AnnouncementApi.parseFeed(reply.body), System.currentTimeMillis())
-                if (fresh.isNotEmpty()) show(fresh)
+                val news = feed.acceptNews(AnnouncementApi.parseFeed(reply.body), System.currentTimeMillis())
+                if (news.settingsChanged) ManagedSettings.fetchNow("feed")
+                if (news.cards.isNotEmpty()) show(news.cards)
                 AnnouncementPolling.Outcome.OK
             }
             401, 403 -> AnnouncementPolling.Outcome.UNAUTHORIZED
@@ -172,6 +181,7 @@ object Announcements : EventListener {
         }
         lastHelloMs = now
         lastHelloSaid = saying
+        ManagedSettings.fetchNow("hello")
         return null
     }
 

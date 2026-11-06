@@ -99,4 +99,28 @@ class AnnouncementFeedTest {
         val feed = AnnouncementFeed(MemoryStore())
         assertTrue(feed.accept(listOf(a("")), now).isEmpty())
     }
+
+    @Test
+    fun aSettingsItemIsNoCardButAsksForTheSettings() {
+        val feed = AnnouncementFeed(MemoryStore())
+        val news = feed.acceptNews(listOf(a("an_1"), a("st_1", kind = "settings")), now)
+        assertEquals(listOf("an_1"), news.cards.map { it.id })
+        assertTrue(news.settingsChanged)
+        // Seen once: the same item again asks for nothing.
+        assertEquals(AnnouncementFeed.News(emptyList(), false), feed.acceptNews(listOf(a("st_1", kind = "settings")), now + 30_000))
+    }
+
+    @Test
+    fun anOldSettingsItemStillAsksForTheSettings() {
+        val feed = AnnouncementFeed(MemoryStore())
+        val news = feed.acceptNews(listOf(a("st_1", at = now - 3 * 3_600_000L, kind = "settings")), now)
+        assertTrue(news.cards.isEmpty())
+        assertTrue(news.settingsChanged)
+    }
+
+    @Test
+    fun noSettingsItemNoRequest() {
+        val feed = AnnouncementFeed(MemoryStore())
+        assertEquals(false, feed.acceptNews(listOf(a("an_1")), now).settingsChanged)
+    }
 }

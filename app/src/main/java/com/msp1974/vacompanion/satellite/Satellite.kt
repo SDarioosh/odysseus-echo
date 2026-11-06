@@ -4,6 +4,7 @@ import com.msp1974.vacompanion.odysseus.HaRunGate // Odysseus fork
 import com.msp1974.vacompanion.odysseus.BargeIn // Odysseus fork
 import com.msp1974.vacompanion.odysseus.OdysseusTurn // Odysseus fork
 import com.msp1974.vacompanion.odysseus.VoiceActivity // Odysseus fork
+import com.msp1974.vacompanion.odysseus.followup.FollowUp // Odysseus fork
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -712,6 +713,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
         eventId: Long = System.currentTimeMillis(),
         // Audio kept since the wake word was heard; the pipeline streams it, then live audio.
         buffer: DetectionBuffer? = null,
+        followUpListenMs: Long? = null, // Odysseus fork: a follow-up's listening limit (odysseus/followup/FollowUp.kt)
     ) {
         if (audioPipeline != null) {
             audioPipeline?.stop()
@@ -762,6 +764,9 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             override fun onFinish(reason: PipelineEndReason, continueConversation: Boolean) {
                 Timber.i("Pipeline ended.  Restarting: $continueConversation")
                 cancelDetectionBuffer()
+                // Odysseus fork: listen for a "yes" without the wake word when Odysseus waits on one (odysseus/followup/FollowUp.kt).
+                FollowUp.afterTurn(context, config, mediaManager, startStage, reason, continueConversation,
+                    busy = { isResponding() || arbitratingWakeWord }) { startFollowUpListening(it) }
                 // A continuing conversation keeps other devices ducked until it really finishes.
                 // This device ducked the others when it won arbitration, so it always unducks them.
                 if (!(reason == PipelineEndReason.END_OF_PIPELINE && continueConversation)) {
@@ -789,7 +794,27 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             }
 
         }.also {
+            it.followUpListenMs = followUpListenMs // Odysseus fork
             it.run(startStage)
+        }
+    }
+
+    // Odysseus fork: the follow-up's pipeline, started the manual-wake way: only this device, no
+    // arbitration report (it ducks the others as a manual wake does); the listening sound instead of
+    // the wake sound; audio kept from the end of that sound (odysseus/followup/FollowUp.kt).
+    private suspend fun startFollowUpListening(listenLimitMs: Long): Boolean {
+        if (clientId.isEmpty() || isResponding() || arbitratingWakeWord) return false
+        arbitratingWakeWord = true
+        try {
+            FollowUp.playSound(mediaManager)
+            if (isResponding()) return false
+            VacaUdpBroadcast.instance?.arbitrateWakeWord(1.0f, contest = false)
+            val buffer = DetectionBuffer(microphone.audio, scope).also { detectionBuffer = it }
+            if (!HaRunGate.awaitIdle()) { cancelDetectionBuffer(); return false }
+            startAudioPipeline(PipelineStartMode.CONTINUE_CONVERSATION, buffer = buffer, followUpListenMs = listenLimitMs)
+            return true
+        } finally {
+            arbitratingWakeWord = false
         }
     }
 

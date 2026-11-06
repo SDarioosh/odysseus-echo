@@ -20,7 +20,7 @@ data class Announcement(
     val id: String = "",
     /** Epoch ms the hub made it (the hub's clock). */
     val at: Long = 0L,
-    /** "reminder" or "announcement". */
+    /** "reminder", "announcement" or "settings" (this device's settings changed: no card, see isSettings). */
     val kind: String = KIND_ANNOUNCEMENT,
     val title: String = "",
     val text: String = "",
@@ -33,8 +33,14 @@ data class Announcement(
 ) {
     val isReminder: Boolean get() = kind == KIND_REMINDER
 
+    /** Odysseus changed this device's settings (C6): fetch them, show nothing (odysseus/managed/). */
+    val isSettings: Boolean get() = kind == KIND_SETTINGS
+
     /** What the card shows as its heading: the title, else the text. */
     val heading: String get() = title.ifBlank { text }
+
+    /** A reminder of a to-do: its card has a Done button (reminders/done, ReminderDone.kt). */
+    val canMarkDone: Boolean get() = isReminder && !ref.isNullOrBlank()
 
     /** The card's second line, unless it only repeats the heading. */
     val body: String? get() = text.takeIf { it.isNotBlank() && it.trim() != heading.trim() }
@@ -42,6 +48,7 @@ data class Announcement(
     companion object {
         const val KIND_REMINDER = "reminder"
         const val KIND_ANNOUNCEMENT = "announcement"
+        const val KIND_SETTINGS = "settings"
     }
 }
 

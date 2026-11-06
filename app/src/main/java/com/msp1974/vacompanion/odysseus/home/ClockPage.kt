@@ -40,6 +40,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.msp1974.vacompanion.odysseus.home.clock.ClockElement
+import com.msp1974.vacompanion.odysseus.home.clock.ClockPresets
+import com.msp1974.vacompanion.odysseus.home.clock.ClockStyle
+import com.msp1974.vacompanion.odysseus.home.clock.NightMode
 import com.msp1974.vacompanion.odysseus.home.clock.ClockBackground
 import com.msp1974.vacompanion.odysseus.home.clock.ClockElementView
 import com.msp1974.vacompanion.odysseus.home.clock.ClockFrame
@@ -59,7 +62,14 @@ object ClockPage : HomePage {
 
     @Composable
     override fun Content(context: HomePageContext, modifier: Modifier) {
-        val style = HomeSettings.clockStyle
+        // The night look (clock/NightMode) while the room is dark, if turned on.
+        val night = HomeSettings.nightAuto && NightMode.active
+        val style = if (night) {
+            remember(HomeSettings.nightPreset) { ClockStyle.normalized(ClockPresets.byId(HomeSettings.nightPreset) ?: ClockPresets.nightstand) }
+        } else {
+            HomeSettings.clockStyle
+        }
+        if (night && HomeSettings.nightDim) NightMode.DimBacklight()
         val theme = style.theme
         val now = rememberMinuteClock()
         val is24h = DateFormat.is24HourFormat(LocalContext.current)

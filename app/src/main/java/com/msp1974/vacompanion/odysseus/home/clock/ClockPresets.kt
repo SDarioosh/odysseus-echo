@@ -173,19 +173,17 @@ object ClockPresets {
         ),
     )
 
+    /** The Classic layout and font in dim red on black, for a dark bedroom (the night look's default). */
     val nightstand = ClockStyle(
         preset = NIGHTSTAND,
         theme = ClockTheme(
-            background = "#000000", text = "#B3261E", muted = "#5A1310", accent = "#B3261E",
+            // Classic's secondary text is its text at 65 % over the background; same here.
+            background = "#000000", text = "#B3261E", muted = "#741914", accent = "#B3261E",
             panel = "#140303", alert = "#B3261E",
-            timeFont = ClockFonts.INTER, timeWeight = 200, timeSpacing = -0.03f, textFont = ClockFonts.INTER,
-            dim = 0.8f,
+            timeFont = ClockFonts.FIRA, timeWeight = 300, textFont = ClockFonts.FIRA,
+            dim = 0.85f,
         ),
-        elements = listOf(
-            e(TIME, CENTER, scale = 1.3f),
-            e(DATE, BOTTOM_CENTER, Variants.DATE_CAPS),
-            e(STATUS, BOTTOM_CENTER),
-        ),
+        elements = classic.elements,
     )
 
     val all: List<ClockStyle> = listOf(classic, midnight, paper, sunset, terminal, bold, album, nightstand)

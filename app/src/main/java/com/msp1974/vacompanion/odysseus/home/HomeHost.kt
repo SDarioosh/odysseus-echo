@@ -120,6 +120,9 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
         // The Today page's data from Odysseus (today/).
         TodayRefresh(vaUiState.isNetworkConnected)
 
+        // The clock's night look reads the light sensor while it's turned on (clock/NightMode).
+        com.msp1974.vacompanion.odysseus.home.clock.NightMode.Driver(HomeSettings.enabled && HomeSettings.nightAuto)
+
         val todayDone by TodayDone.marks.collectAsState()
 
         if (HomeSettings.enabled && HomePages.all.isNotEmpty()) {

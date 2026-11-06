@@ -143,6 +143,8 @@ fun ClockStyleSettingsSection(enabled: Boolean) {
         }
     }
 
+    NightSettings(enabled)
+
     Text("Elements", fontSize = 16.sp, color = colors.onSurface, modifier = Modifier.padding(top = 8.dp))
     Text(
         "Turn each one on or off and pick where it goes. Elements in the same place stack; ↑ moves one above the one before it.",
@@ -281,3 +283,55 @@ private fun AnchorPicker(selected: Anchor, enabled: Boolean, name: String, onPic
 
 private fun canMoveUp(style: ClockStyle, el: ClockElement): Boolean =
     style.elements.takeWhile { it.type != el.type }.any { it.visible && it.anchor == el.anchor }
+
+/** The automatic night look (NightMode): on/off, how dark, which preset, dimming. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun NightSettings(enabled: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    val on = HomeSettings.nightAuto
+    Text("Night look", fontSize = 16.sp, color = colors.onSurface, modifier = Modifier.padding(top = 8.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(checked = on, enabled = enabled, onCheckedChange = { HomeSettings.nightAuto = it })
+        Column(Modifier.padding(start = 14.dp)) {
+            Text("Switch to a night look when the room is dark", fontSize = 15.sp, color = colors.onSurface)
+            Text(
+                "From the light sensor: after a minute of dark it changes, about 10 s after the light comes back it changes back.",
+                fontSize = 13.sp, color = colors.onSurfaceVariant,
+            )
+        }
+    }
+    // A live reading, to choose the level: read while this menu is open.
+    NightMode.LightReadings()
+    val lux = NightMode.lux
+    Text(
+        (if (lux >= 0f) "Light here now: ${"%.0f".format(lux)} lux" else "Light here now: no reading yet") +
+            if (on && NightMode.active) " · night look on" else "",
+        fontSize = 13.sp, color = colors.onSurfaceVariant,
+    )
+    if (!on) return
+    Label("Dark means")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        NightRules.DARK_CHOICES.forEach { l ->
+            FilterChip(
+                selected = HomeSettings.nightDarkLux == l, enabled = enabled,
+                onClick = { HomeSettings.nightDarkLux = l },
+                label = { Text("${NightRules.darkLabel(l)} (${l.toInt()} lux)") },
+            )
+        }
+    }
+    Label("Night style")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ClockPresets.all.forEach { p ->
+            FilterChip(
+                selected = HomeSettings.nightPreset == p.preset, enabled = enabled,
+                onClick = { HomeSettings.nightPreset = p.preset },
+                label = { Text(ClockPresets.label(p.preset)) },
+            )
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(checked = HomeSettings.nightDim, enabled = enabled, onCheckedChange = { HomeSettings.nightDim = it })
+        Text("Lowest screen brightness at night", fontSize = 15.sp, color = colors.onSurface, modifier = Modifier.padding(start = 14.dp))
+    }
+}

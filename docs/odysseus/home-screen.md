@@ -48,7 +48,7 @@ Menu → Odysseus → Home screen → **Clock style**. Stored on the Echo only (
 | Terminal | Fira Code green on black: `$ date`, `$ next`, `$ today --todo` (to-dos as `[ ]`), and a status bar along the bottom with now playing and the open counts |
 | Bold split | a giant Bebas Neue time on the left, a Today card on the right (headline, events, to-dos, Athena's action items), now playing mini bottom left |
 | Album | while music plays the blurred cover art is the background and a big player fills the bottom (with progress); DM Serif time top left |
-| Nightstand | black, the time in dim red, the date under it, nothing else |
+| Nightstand | Classic's layout and font (weather, time, date, now playing) in dim red on black; the night look's default |
 
 "Undo my changes to …" goes back to the picked preset. "(changed)" shows when the style differs from it.
 
@@ -75,6 +75,22 @@ bottom; ↑ moves one above the one before it.
 | Status line | Wi-Fi / Home Assistant problems and do not disturb, only when there is one |
 | Record button | the recorder's clock button (when turned on under Recording) |
 | Update notice | a downloaded Odysseus update |
+
+**Night look** (off by default; Clock style → Night look): the clock switches to a night preset
+(Nightstand unless another is picked) while the room is dark, read from the Echo's ambient light
+sensor, and back when the light returns.
+
+- **Dark means**: at or below 2, 5 (default), 10 or 20 lux. The menu shows the live reading to pick from.
+- **When**: after 60 s at or below that level it turns on; after 10 s at or above three times the
+  level (and at least 8 lux more) it turns off. In between nothing changes, so a passing shadow or the
+  screen's own glow doesn't flip it. The rules are `home/clock/NightRules.kt` (plain Kotlin, tested).
+- **Lowest screen brightness at night** (on by default once the night look is on): a window
+  brightness override while the night look shows on the clock; it goes back when the clock leaves
+  the screen (e.g. a swipe to the dashboard) or the night look ends. Home Assistant's brightness and
+  auto-brightness settings aren't touched.
+- Your own style is kept; the night preset is used as it ships. Logcat: `Night: on (3.0 lux, dark at 5)`.
+- `home/clock/NightMode.kt` reads the sensor (only while the feature is on, or the menu is open) and
+  holds the state; `HomeHost` composes its driver.
 
 The Odysseus elements use the Today page's data (`TodayRepository`), so they show only while the
 device is linked to Odysseus and the Today page is on; nothing extra is fetched. The next event is
@@ -240,6 +256,7 @@ animation need no change.
 | `odysseus/home/clock/ClockToday.kt` | next event, open counts, headline for the clock. Plain Kotlin |
 | `odysseus/home/clock/ClockTheming.kt` | fonts, colours handed to Material, the background |
 | `odysseus/home/clock/ClockElements.kt` | one composable per element and look |
+| `odysseus/home/clock/NightRules.kt`, `NightMode.kt` | the night look: when (plain Kotlin), light sensor, backlight |
 | `odysseus/home/clock/ClockStyleSettingsSection.kt` | Menu → Odysseus → Home screen → Clock style |
 | `res/font/clock_*.ttf` | the clock fonts (SIL OFL, `assets/licenses/*-OFL.txt`) |
 | `odysseus/home/weather/WeatherClient.kt` | the Home Assistant calls for the weather (testable `HaHttp`) |
@@ -262,7 +279,7 @@ animation need no change.
 | `odysseus/OdysseusSettingsLayout.kt` | the Home screen settings |
 | `MainActivity.kt`, `ui/layouts/WebViewLayout.kt` | hooks (marked `Odysseus fork`) |
 | `app/src/test/.../odysseus/home/HomeNavigatorTest.kt` | tests of the rules |
-| `app/src/test/.../odysseus/home/clock/Clock{Style,Today}Test.kt` | tests of the style model, presets, JSON and the clock's Today labels |
+| `app/src/test/.../odysseus/home/clock/{ClockStyle,ClockToday,NightRules}Test.kt` | tests of the style model, presets, JSON and the clock's Today labels |
 | `app/src/test/.../odysseus/home/weather/WeatherClientTest.kt` | tests of the weather calls and rules |
 | `app/src/test/.../odysseus/home/today/Today{Client,Store,Format}Test.kt` | tests of the Today parsing, staleness and layout rules |
 | `app/src/test/.../odysseus/done/Done{Api,Marks}Test.kt` | tests of the Done requests, answers and row states |

@@ -9,7 +9,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableFloatStateOf
+import com.msp1974.vacompanion.odysseus.home.clock.ClockPresets
 import com.msp1974.vacompanion.odysseus.home.clock.ClockStyle
+import com.msp1974.vacompanion.odysseus.home.clock.NightRules
 import com.msp1974.vacompanion.odysseus.home.clock.ClockStyleCodec
 
 object HomeSettings {
@@ -20,6 +23,10 @@ object HomeSettings {
     private const val KEY_WEATHER_ENTITY = "home_weather_entity"
     private const val KEY_TODAY_ENABLED = "home_today_enabled"
     private const val KEY_CLOCK_STYLE = "home_clock_style"
+    private const val KEY_NIGHT_AUTO = "home_night_auto"
+    private const val KEY_NIGHT_DARK_LUX = "home_night_dark_lux"
+    private const val KEY_NIGHT_PRESET = "home_night_preset"
+    private const val KEY_NIGHT_DIM = "home_night_dim"
 
     const val DEFAULT_IDLE_SECONDS = 120
 
@@ -34,6 +41,10 @@ object HomeSettings {
     private var weatherEntityState by mutableStateOf("")
     private var todayEnabledState by mutableStateOf(true)
     private var clockStyleState by mutableStateOf(ClockStyleCodec.decode(null))
+    private var nightAutoState by mutableStateOf(false)
+    private var nightDarkLuxState by mutableFloatStateOf(NightRules.DEFAULT_DARK_LUX)
+    private var nightPresetState by mutableStateOf(ClockPresets.NIGHTSTAND)
+    private var nightDimState by mutableStateOf(true)
 
     /** Loads the stored values. Safe to call more than once. */
     fun init(context: Context) {
@@ -46,6 +57,10 @@ object HomeSettings {
         weatherEntityState = p.getString(KEY_WEATHER_ENTITY, "") ?: ""
         todayEnabledState = p.getBoolean(KEY_TODAY_ENABLED, true)
         clockStyleState = ClockStyleCodec.decode(p.getString(KEY_CLOCK_STYLE, null))
+        nightAutoState = p.getBoolean(KEY_NIGHT_AUTO, false)
+        nightDarkLuxState = p.getFloat(KEY_NIGHT_DARK_LUX, NightRules.DEFAULT_DARK_LUX).coerceIn(0f, 1000f)
+        nightPresetState = p.getString(KEY_NIGHT_PRESET, null)?.takeIf { ClockPresets.byId(it) != null } ?: ClockPresets.NIGHTSTAND
+        nightDimState = p.getBoolean(KEY_NIGHT_DIM, true)
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -96,6 +111,38 @@ object HomeSettings {
         set(value) {
             clockStyleState = ClockStyle.normalized(value)
             prefs()?.edit()?.putString(KEY_CLOCK_STYLE, ClockStyleCodec.encode(clockStyleState))?.apply()
+        }
+
+    /** Night look: the clock switches to [nightPreset] while the room is dark. Off by default. */
+    var nightAuto: Boolean
+        get() = nightAutoState
+        set(value) {
+            nightAutoState = value
+            prefs()?.edit()?.putBoolean(KEY_NIGHT_AUTO, value)?.apply()
+        }
+
+    /** At or below this many lux the room counts as dark (NightRules). */
+    var nightDarkLux: Float
+        get() = nightDarkLuxState
+        set(value) {
+            nightDarkLuxState = value.coerceIn(0f, 1000f)
+            prefs()?.edit()?.putFloat(KEY_NIGHT_DARK_LUX, nightDarkLuxState)?.apply()
+        }
+
+    /** The preset shown at night. */
+    var nightPreset: String
+        get() = nightPresetState
+        set(value) {
+            nightPresetState = value.takeIf { ClockPresets.byId(it) != null } ?: ClockPresets.NIGHTSTAND
+            prefs()?.edit()?.putString(KEY_NIGHT_PRESET, nightPresetState)?.apply()
+        }
+
+    /** Lower the backlight while the night look shows. */
+    var nightDim: Boolean
+        get() = nightDimState
+        set(value) {
+            nightDimState = value
+            prefs()?.edit()?.putBoolean(KEY_NIGHT_DIM, value)?.apply()
         }
 
     fun idleLabel(seconds: Int): String = when {

@@ -44,6 +44,7 @@ fun LockSettingsSection() {
     // The PIN was typed in this visit to the menu; forgotten when the menu closes.
     var authorized by remember { mutableStateOf(false) }
     val canChange = !hasPin || authorized
+    var switchNote by remember { mutableStateOf("") }
 
     Text(
         "Lock outside work hours", fontSize = 18.sp, color = colors.primary,
@@ -52,8 +53,12 @@ fun LockSettingsSection() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Switch(
             checked = enabled,
-            onCheckedChange = { LockMode.setEnabled(it) },
-            enabled = hasPin && canChange,
+            // Tappable without a PIN too, so it can say why it doesn't turn on.
+            onCheckedChange = {
+                if (!LockSettings.hasPin) switchNote = "Set a PIN first, just below."
+                else { switchNote = ""; LockMode.setEnabled(it) }
+            },
+            enabled = canChange,
         )
         Column(Modifier.padding(start = 14.dp)) {
             Text("Lock mode", fontSize = 16.sp, color = colors.onSurface)
@@ -72,15 +77,19 @@ fun LockSettingsSection() {
                 },
                 fontSize = 13.sp, color = colors.onSurfaceVariant,
             )
+            if (switchNote.isNotEmpty()) Text(switchNote, fontSize = 13.sp, color = colors.error)
         }
     }
 
     if (!canChange) {
         PinGate(onOk = { authorized = true })
     } else {
+        // No PIN yet: its fields come first, right under the switch. A PIN saved here counts as
+        // typed for this visit, so the switch works at once.
+        if (!hasPin) PinSetter(false) { authorized = true; switchNote = "" }
         TimeRow("Opens at", open) { m -> LockSettings.setTimes(m, close); LockMode.evaluate("times changed") }
         TimeRow("Locks at", close) { m -> LockSettings.setTimes(open, m); LockMode.evaluate("times changed") }
-        PinSetter(hasPin)
+        if (hasPin) PinSetter(true) { authorized = true }
     }
 
     if (enabled) {
@@ -127,7 +136,7 @@ private fun PinGate(onOk: () -> Unit) {
 }
 
 @Composable
-private fun PinSetter(hasPin: Boolean) {
+private fun PinSetter(hasPin: Boolean, onSaved: () -> Unit) {
     var first by remember { mutableStateOf("") }
     var second by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
@@ -139,7 +148,7 @@ private fun PinSetter(hasPin: Boolean) {
             message = when {
                 !LockRules.validPin(first) -> "Use 4 to 8 digits"
                 first != second -> "The two PINs differ"
-                LockSettings.setPin(first) -> "PIN saved"
+                LockSettings.setPin(first) -> { onSaved(); if (hasPin) "PIN saved" else "PIN saved. Now turn Lock mode on above." }
                 else -> "Couldn't save the PIN"
             }
             first = ""; second = ""

@@ -117,7 +117,7 @@ object Announcements : EventListener {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Timber.w("Announcements: ${e.message ?: e.javaClass.simpleName}")
+                Timber.w("Announcements: ${AnnouncementPolling.describeError(e)}")
                 AnnouncementPolling.Outcome.FAILED
             }
             failures = if (outcome == AnnouncementPolling.Outcome.FAILED) failures + 1 else 0

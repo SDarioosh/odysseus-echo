@@ -157,4 +157,14 @@ class AnnouncementRulesTest {
         assertNull(HubClock.offset(null, now))
         assertNull(HubClock.offset(0L, now))
     }
+
+    @Test
+    fun anUnreadableFeedIsLoggedWithoutItsText() {
+        val body = """{"announcements": [{"id": "an_9", "at": "soon", "text": "Fictional secret: the spare key is under the mat"}]}"""
+        val e = runCatching { AnnouncementApi.parseFeed(body) }.exceptionOrNull()!!
+        val logged = AnnouncementPolling.describeError(e)
+        assertFalse(logged, logged.contains("spare key"))
+        assertTrue(logged.startsWith("unreadable answer"))
+        assertEquals("timeout", AnnouncementPolling.describeError(java.net.SocketTimeoutException("timeout")))
+    }
 }

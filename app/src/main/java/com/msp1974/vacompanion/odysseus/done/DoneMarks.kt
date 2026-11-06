@@ -145,6 +145,14 @@ data class DoneMarks(val marks: Map<DoneTarget, DoneMark> = emptyMap()) {
     fun hiddenIn(inList: (DoneTarget) -> Boolean): Int =
         marks.values.count { it.phase == DoneMark.Phase.HIDDEN && inList(it.target) }
 
+    /**
+     * How many of [listed] (the targets the current data still lists) are hidden: the ones the
+     * hub's open count still includes. A hidden row the data no longer lists is already out of
+     * that count, so it isn't taken off twice.
+     */
+    fun hiddenAmong(listed: Collection<DoneTarget>): Int =
+        listed.toSet().count { marks[it]?.phase == DoneMark.Phase.HIDDEN }
+
     private fun put(m: DoneMark) = DoneMarks(marks + (m.target to m))
 
     companion object {

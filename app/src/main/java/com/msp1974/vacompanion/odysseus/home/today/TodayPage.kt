@@ -170,13 +170,13 @@ private fun Body(data: TodayData, context: HomePageContext, now: Long, is24h: Bo
             Column(Modifier.weight(1f)) {
                 Todos(todos, todoShown, today, context)
                 if (todos.isNotEmpty()) {
-                    More(TodayFormat.more(data.counts.todosOpen?.minus(marks.hiddenIn { it is DoneTarget.Todo }), todos.size, todoShown))
+                    More(TodayFormat.more(data.counts.todosOpen?.minus(marks.hiddenAmong(data.todos.map(TodayDone::todoTarget))), todos.size, todoShown))
                 }
                 ActionItems(actionItems, aiShown, context)
                 if (actionItems.isNotEmpty()) {
                     More(
                         TodayFormat.more(
-                            data.counts.actionItemsOpen?.minus(marks.hiddenIn { it is DoneTarget.ActionItem }),
+                            data.counts.actionItemsOpen?.minus(marks.hiddenAmong(data.actionItems.map(TodayDone::actionItemTarget))),
                             actionItems.size, aiShown,
                         )
                     )

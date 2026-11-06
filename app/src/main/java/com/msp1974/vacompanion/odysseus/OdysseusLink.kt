@@ -106,7 +106,12 @@ object OdysseusLink {
         get() = prefs()?.getString(KEY_DEVICE_NAME, "") ?: ""
         set(value) { prefs()?.edit()?.putString(KEY_DEVICE_NAME, value.trim())?.apply() }
 
-    val hasToken: Boolean get() = !prefs()?.getString(KEY_TOKEN, null).isNullOrEmpty()
+    /**
+     * A token is saved and can be read. One that can't be decrypted (its Keystore key is gone, e.g.
+     * after the app's data was moved to another device) counts as none: the device shows "Not
+     * linked" and sends nothing until a token is typed in again.
+     */
+    val hasToken: Boolean get() = token() != null
 
     /** Changes whenever a token is saved (a hash of the stored, encrypted form; never the token). */
     val tokenStamp: Int get() = prefs()?.getString(KEY_TOKEN, null)?.hashCode() ?: 0
@@ -124,9 +129,9 @@ object OdysseusLink {
     /** The voice token, for the recorder's uploads to the same hub (odysseus/record/HubRelayTransport.kt). */
     internal fun bearerToken(): String? = token()
 
-    private fun token(): String? = prefs()?.getString(KEY_TOKEN, null)?.let {
-        runCatching { decrypt(it) }.onFailure { e -> Timber.w(e, "Odysseus token unreadable") }.getOrNull()
-    }
+    private val tokenMemo = TokenMemo({ decrypt(it) }) { e -> Timber.w(e, "Odysseus token unreadable; link again in Menu → Odysseus") }
+
+    private fun token(): String? = tokenMemo.read(prefs()?.getString(KEY_TOKEN, null))
 
     // --- Keystore ---------------------------------------------------------------------------
 
@@ -387,5 +392,33 @@ object OdysseusLink {
                 is Result.Failed -> false to "Saved, but the test failed: ${r.message}"
             }
         }
+    }
+}
+
+/**
+ * The decrypted token, kept for the stored (encrypted) value it came from, so the Keystore is
+ * asked once per saved token, not on every request and every `hasToken`. A value that can't be
+ * decrypted is tried again only after [retryMs] (or at once when a new one is saved), so it
+ * doesn't log a stack trace on every request.
+ */
+internal class TokenMemo(
+    private val decrypt: (String) -> String,
+    private val retryMs: Long = 10 * 60_000L,
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val onFailure: (Throwable) -> Unit = {},
+) {
+    private var stored: String? = null
+    private var plain: String? = null
+    private var failedAt: Long? = null
+
+    @Synchronized
+    fun read(enc: String?): String? {
+        if (enc.isNullOrEmpty()) return null
+        val failed = failedAt
+        if (enc == stored && (failed == null || clock() - failed < retryMs)) return plain
+        stored = enc
+        plain = runCatching { decrypt(enc) }.onFailure(onFailure).getOrNull()
+        failedAt = if (plain == null) clock() else null
+        return plain
     }
 }

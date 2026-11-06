@@ -30,6 +30,66 @@ Menu → Odysseus → **Home screen**. Stored on the Echo only, not sent to Home
 | Weather | on / off | on |
 | Weather entity | Auto, or one of Home Assistant's `weather.*` entities | Auto |
 | Today page | on / off (shown only while linked to Odysseus) | on |
+| Clock style | a preset, then fonts, colours and elements (below) | Classic |
+
+## Clock style
+
+Menu → Odysseus → Home screen → **Clock style**. Stored on the Echo only (`home_clock_style` in
+`odysseus_home`, JSON), not sent to Home Assistant. A change shows as soon as the menu closes.
+
+**Presets** (each a complete style; pick one, then change anything):
+
+| Preset | Look |
+|---|---|
+| Classic (default) | the clock as it was: the app's colours, Fira Code, time and date in the middle, the now-playing row under them |
+| Midnight | near-black, thin Inter, blue accent; next event top right, Today headline under the date, now playing as a pill bottom right |
+| Paper | warm off-white, Playfair Display time, weekday above and the date in italics; a Today column on the right (headline, next two events, to-dos to tick off); now playing as one text line |
+| Sunset | purple-to-orange gradient, Outfit; time bottom left, a "next up" card top right (the Today headline when nothing timed is left), now playing as a pill top left, large weather bottom right |
+| Terminal | Fira Code green on black: `$ date`, `$ next`, `$ today --todo` (to-dos as `[ ]`), and a status bar along the bottom with now playing and the open counts |
+| Bold split | a giant Bebas Neue time on the left, a Today card on the right (headline, events, to-dos, Athena's action items), now playing mini bottom left |
+| Album | while music plays the blurred cover art is the background and a big player fills the bottom (with progress); DM Serif time top left |
+| Nightstand | black, the time in dim red, the date under it, nothing else |
+
+"Undo my changes to …" goes back to the picked preset. "(changed)" shows when the style differs from it.
+
+**Theme**: clock font (Fira Code, Inter, Manrope, Outfit, Playfair Display, DM Serif Display,
+Bebas Neue; all SIL OFL, licences in `assets/licenses/`), clock weight (thin to medium), text font,
+colours (background, an optional gradient end, text, secondary text, accent, cards; picking any
+colour switches off the app's own colours), cover art as the background while music plays, and
+dimming (off, 80, 60, 40 %).
+
+**Elements**, each on/off, at one of nine places (a 3×3 grid: top/middle/bottom × left/centre/right),
+with a size (S, M, L, XL) and a look where it has several. Elements at the same place stack top to
+bottom; ↑ moves one above the one before it.
+
+| Element | Looks |
+|---|---|
+| Time | plain; weekday above |
+| Date | Friday, November 6; FRIDAY · NOVEMBER 6; FRIDAY; November 6; italic (in the clock font); Fri 2026-11-06 |
+| Weather | badge (as before); one line; large; in words |
+| Now playing | row (as before); pill; mini; text line; bottom bar (full width, along the edge); big player |
+| Today's headline | plain (accent); italic (clock font). The Today insight's headline, else its first focus item |
+| Next event | compact ("IN 29 MIN / Dentist · 3:30"); card (with the event after it and the open counts); one line |
+| Today panel | card; column (with a rule on its left); terminal. Headline, the next two events, up to 3–4 to-dos (tap to mark done, as on the Today page), "and N more", the action items count |
+| To-do summary | lines ("Dentist in 29 min", "3 to-dos · 2 action items"); chip |
+| Status line | Wi-Fi / Home Assistant problems and do not disturb, only when there is one |
+| Record button | the recorder's clock button (when turned on under Recording) |
+| Update notice | a downloaded Odysseus update |
+
+The Odysseus elements use the Today page's data (`TodayRepository`), so they show only while the
+device is linked to Odysseus and the Today page is on; nothing extra is fetched. The next event is
+one going on now, else the next timed event today (all-day events are skipped).
+
+How it works: `home/clock/ClockStyle.kt` (the model, JSON, `normalized()`: every element type once,
+values clamped, unknown fonts and variants fall back), `ClockPresets.kt`, `ClockToday.kt` (next
+event, counts; plain Kotlin), `ClockTheming.kt` (hands the style's colours and text font to
+`MaterialTheme`, so shared pieces like the weather badge and the Done rows follow it; the
+background, with the cover art blurred by drawing a 12×12 copy scaled up, since Android 11 has no
+blur effect), `ClockElements.kt` (one composable per element) and `ClockStyleSettingsSection.kt`.
+`ClockPage` lays the elements out in three full-height columns (left, middle, right): each
+column's top elements, then its middle ones centred in the space left, then its bottom ones, so
+elements on the same side never overlap (a column that is too full pushes its bottom ones off the
+screen); the bottom bar is drawn outside the padding.
 
 ## Weather
 
@@ -174,7 +234,14 @@ animation need no change.
 | `odysseus/home/HomeScreenController.kt` | the process-wide state; hook target for the dashboard's gestures |
 | `odysseus/home/HomeSettings.kt` | on/off and idle time (SharedPreferences `odysseus_home`) |
 | `odysseus/home/HomePage.kt` | `HomePage`, `HomePageContext`, the page list `HomePages` |
-| `odysseus/home/ClockPage.kt` | the clock page |
+| `odysseus/home/ClockPage.kt` | the clock page: lays out the style's elements |
+| `odysseus/home/clock/ClockStyle.kt` | the clock style model, JSON and `normalized()`. Plain Kotlin |
+| `odysseus/home/clock/ClockPresets.kt` | the eight presets |
+| `odysseus/home/clock/ClockToday.kt` | next event, open counts, headline for the clock. Plain Kotlin |
+| `odysseus/home/clock/ClockTheming.kt` | fonts, colours handed to Material, the background |
+| `odysseus/home/clock/ClockElements.kt` | one composable per element and look |
+| `odysseus/home/clock/ClockStyleSettingsSection.kt` | Menu → Odysseus → Home screen → Clock style |
+| `res/font/clock_*.ttf` | the clock fonts (SIL OFL, `assets/licenses/*-OFL.txt`) |
 | `odysseus/home/weather/WeatherClient.kt` | the Home Assistant calls for the weather (testable `HaHttp`) |
 | `odysseus/home/weather/WeatherForecasts.kt` | today's high/low and condition → icon, plain Kotlin |
 | `odysseus/home/weather/WeatherRepository.kt` | the process-wide weather state and refresh |
@@ -195,6 +262,7 @@ animation need no change.
 | `odysseus/OdysseusSettingsLayout.kt` | the Home screen settings |
 | `MainActivity.kt`, `ui/layouts/WebViewLayout.kt` | hooks (marked `Odysseus fork`) |
 | `app/src/test/.../odysseus/home/HomeNavigatorTest.kt` | tests of the rules |
+| `app/src/test/.../odysseus/home/clock/Clock{Style,Today}Test.kt` | tests of the style model, presets, JSON and the clock's Today labels |
 | `app/src/test/.../odysseus/home/weather/WeatherClientTest.kt` | tests of the weather calls and rules |
 | `app/src/test/.../odysseus/home/today/Today{Client,Store,Format}Test.kt` | tests of the Today parsing, staleness and layout rules |
 | `app/src/test/.../odysseus/done/Done{Api,Marks}Test.kt` | tests of the Done requests, answers and row states |

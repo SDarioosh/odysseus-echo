@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
@@ -299,7 +300,7 @@ private fun ActionItems(rows: List<ShownRow<TodayActionItem>>, shown: Int, conte
 }
 
 @Composable
-private fun Tag(text: String, color: Color) {
+internal fun Tag(text: String, color: Color) {
     Text(
         text, style = MaterialTheme.typography.labelLarge, color = color, maxLines = 1,
         modifier = Modifier
@@ -315,11 +316,16 @@ private fun Tag(text: String, color: Color) {
  * or a short reason. Tapping anywhere on the row counts. A row without a ref or id can't be done.
  */
 @Composable
-private fun DoneRow(
+internal fun DoneRow( // Odysseus fork: also used by the clock page's Today panel (home/clock/)
     row: ShownRow<*>,
     index: Int,
     ringColor: Color,
     context: HomePageContext,
+    titleStyle: TextStyle = MaterialTheme.typography.titleLarge,
+    rowHeight: Dp = TAP_ROW_HEIGHT,
+    checkSize: Dp = CHECK_SIZE,
+    /** "[ ]" / "[x]" as text in place of the ring (the clock's Terminal look). */
+    textCheck: Boolean = false,
     tag: @Composable RowScope.() -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -338,7 +344,7 @@ private fun DoneRow(
     }
     Row(
         modifier = Modifier
-            .height(TAP_ROW_HEIGHT)
+            .height(rowHeight)
             .fillMaxWidth()
             .then(
                 if (onTap != null) Modifier.clickable(
@@ -349,20 +355,27 @@ private fun DoneRow(
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .padding(end = 12.dp)
-                .size(CHECK_SIZE)
-                .then(
-                    if (ticked) Modifier.background(colors.primary, CircleShape)
-                    else Modifier.border(2.dp, if (doable) ringColor else ringColor.copy(alpha = 0.4f), CircleShape)
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (ticked) Icon(Icons.Filled.Check, contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size(22.dp))
+        if (textCheck) {
+            Text(
+                if (ticked) "[x] " else "[ ] ", style = titleStyle,
+                color = if (doable) ringColor else ringColor.copy(alpha = 0.4f), maxLines = 1,
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .padding(end = 12.dp)
+                    .size(checkSize)
+                    .then(
+                        if (ticked) Modifier.background(colors.primary, CircleShape)
+                        else Modifier.border(2.dp, if (doable) ringColor else ringColor.copy(alpha = 0.4f), CircleShape)
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (ticked) Icon(Icons.Filled.Check, contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size(checkSize * 0.72f))
+            }
         }
         Text(
-            row.title, style = MaterialTheme.typography.titleLarge,
+            row.title, style = titleStyle,
             color = if (ticked) colors.onSurfaceVariant else colors.onBackground,
             textDecoration = if (ticked) TextDecoration.LineThrough else null,
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),

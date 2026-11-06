@@ -215,6 +215,7 @@ private fun HomeScreenSettings() {
             fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    com.msp1974.vacompanion.odysseus.home.clock.ClockStyleSettingsSection(enabled) // fonts, colours, elements (home/clock/)
 }
 
 /** Menu → Odysseus → Kiosk: coming back from other apps, reloading a failed dashboard (odysseus/kiosk/). */

@@ -9,6 +9,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.msp1974.vacompanion.odysseus.home.clock.ClockStyle
+import com.msp1974.vacompanion.odysseus.home.clock.ClockStyleCodec
 
 object HomeSettings {
     private const val PREFS = "odysseus_home"
@@ -17,6 +19,7 @@ object HomeSettings {
     private const val KEY_WEATHER_ENABLED = "home_weather_enabled"
     private const val KEY_WEATHER_ENTITY = "home_weather_entity"
     private const val KEY_TODAY_ENABLED = "home_today_enabled"
+    private const val KEY_CLOCK_STYLE = "home_clock_style"
 
     const val DEFAULT_IDLE_SECONDS = 120
 
@@ -30,6 +33,7 @@ object HomeSettings {
     private var weatherEnabledState by mutableStateOf(true)
     private var weatherEntityState by mutableStateOf("")
     private var todayEnabledState by mutableStateOf(true)
+    private var clockStyleState by mutableStateOf(ClockStyleCodec.decode(null))
 
     /** Loads the stored values. Safe to call more than once. */
     fun init(context: Context) {
@@ -41,6 +45,7 @@ object HomeSettings {
         weatherEnabledState = p.getBoolean(KEY_WEATHER_ENABLED, true)
         weatherEntityState = p.getString(KEY_WEATHER_ENTITY, "") ?: ""
         todayEnabledState = p.getBoolean(KEY_TODAY_ENABLED, true)
+        clockStyleState = ClockStyleCodec.decode(p.getString(KEY_CLOCK_STYLE, null))
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -83,6 +88,14 @@ object HomeSettings {
         set(value) {
             todayEnabledState = value
             prefs()?.edit()?.putBoolean(KEY_TODAY_ENABLED, value)?.apply()
+        }
+
+    /** How the clock page looks (home/clock/): a preset, then whatever was changed. Default: Classic. */
+    var clockStyle: ClockStyle
+        get() = clockStyleState
+        set(value) {
+            clockStyleState = ClockStyle.normalized(value)
+            prefs()?.edit()?.putString(KEY_CLOCK_STYLE, ClockStyleCodec.encode(clockStyleState))?.apply()
         }
 
     fun idleLabel(seconds: Int): String = when {

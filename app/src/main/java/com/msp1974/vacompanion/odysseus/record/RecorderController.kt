@@ -97,9 +97,11 @@ object RecorderController : EventListener {
         sounds = SoundEffectsPlayer(app, deviceManager.config)
         deviceManager.config.eventBroadcaster.addListener(this)
 
+        // Under install's lock, before any press can start a session: run later, it could mark a
+        // session that has just started as abandoned, and the uploader would end it early.
+        val n = runCatching { q.finishAbandoned() }.getOrDefault(0)
+        if (n > 0) Timber.i("Recorder: $n session(s) left from an earlier run will be sent as they are")
         scope.launch(Dispatchers.IO) {
-            val n = q.finishAbandoned()
-            if (n > 0) Timber.i("Recorder: $n session(s) left from an earlier run will be sent as they are")
             refreshQueue()
             uploadLoop()
         }

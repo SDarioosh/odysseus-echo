@@ -15,6 +15,11 @@ enum class UploadClass {
     AUTH,
     /** The hub refused this chunk: keep the file, skip it, log it. */
     REJECTED,
+    /**
+     * The hub has no recording relay (404 on both /api/codex/athena and /api/codex/sound): a hub
+     * problem, not this chunk's. Stop uploads, keep every chunk, try again hourly.
+     */
+    RELAY_MISSING,
 }
 
 object UploadRules {
@@ -32,6 +37,10 @@ object UploadRules {
         code in 400..499 -> UploadClass.REJECTED
         else -> UploadClass.RETRY   // 5xx, and anything odd (1xx, 3xx)
     }
+
+    /** How long uploads wait after [UploadClass.RELAY_MISSING] ("Upload now" tries at once). */
+    const val RELAY_MISSING_RETRY_MS = 60 * 60_000L
+    const val RELAY_MISSING_MESSAGE = "Odysseus can't take recordings (relay missing)"
 
     /** Waits after the 1st, 2nd, … failure in a row: 1, 2, 5, 10, then every 15 minutes. */
     private val RETRY_MINUTES = longArrayOf(1, 2, 5, 10, 15)

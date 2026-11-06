@@ -37,11 +37,17 @@ class HomeNavigator(
 
     private val active: Boolean get() = enabled() && pageCount() > 0
 
-    /** What should be shown now: [destination], corrected for settings changed meanwhile. */
+    /**
+     * What should be shown now: [destination], corrected for settings changed meanwhile. A page
+     * index past the end (its page went) is moved to the last page for good, so the page coming
+     * back later doesn't pull the screen back to it.
+     */
     fun current(): HomeDestination {
         if (!active) return HomeDestination.Dashboard
         val d = destination
-        if (d is HomeDestination.Page && d.index >= pageCount()) return HomeDestination.Page(pageCount() - 1)
+        if (d is HomeDestination.Page && d.index >= pageCount()) {
+            return HomeDestination.Page(pageCount() - 1).also { destination = it }
+        }
         return d
     }
 

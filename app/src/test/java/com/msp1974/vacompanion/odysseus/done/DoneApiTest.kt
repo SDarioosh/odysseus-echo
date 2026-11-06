@@ -49,6 +49,41 @@ class DoneApiTest {
     }
 
     @Test
+    fun aDoneOfALineByIndexCarriesTheRowsTitle() {
+        val todo = parse(DoneApi.body(DoneTarget.Todo("todo:41:2"), "dev-1", "Call the plumber"))
+        assertEquals("Call the plumber", todo["title"]!!.jsonPrimitive.content)
+        val indexed = parse(DoneApi.body(DoneTarget.Reminder("todo:41:2"), "dev-1", "Bins"))
+        assertEquals("Bins", indexed["title"]!!.jsonPrimitive.content)
+        // A whole-note reminder, an action item, a blank or no title: no title key.
+        assertNull(parse(DoneApi.body(DoneTarget.Reminder("todo:41"), "dev-1", "Bins"))["title"])
+        assertNull(parse(DoneApi.body(DoneTarget.ActionItem("ai_17"), "dev-1", "Photos"))["title"])
+        assertNull(parse(DoneApi.body(DoneTarget.Todo("todo:41:2"), "dev-1", "  "))["title"])
+        assertNull(parse(DoneApi.body(DoneTarget.Todo("todo:41:2"), "dev-1"))["title"])
+    }
+
+    @Test
+    fun aChangedLineIsNotTooLate() {
+        val changed = DoneApi.classify(409, """{"error": "changed"}""") as DoneOutcome.Failed
+        assertEquals(DoneOutcome.Kind.CHANGED, changed.kind)
+        assertEquals("Changed in Odysseus", changed.reason)
+        assertEquals(DoneOutcome.Kind.TOO_LATE, kind(409, """{"error": "too late to undo"}"""))
+        assertEquals(DoneOutcome.Kind.TOO_LATE, kind(409, ""))
+    }
+
+    @Test
+    fun aBusyHubIsATemporaryFailure() {
+        val busy = DoneApi.classify(503, """{"error": "busy"}""") as DoneOutcome.Failed
+        assertEquals(DoneOutcome.Kind.BUSY, busy.kind)
+        assertEquals("Odysseus busy, try again", busy.reason)
+        // After an undo, busy keeps Undo offered (not final), changed doesn't.
+        val t = DoneTarget.Todo("todo:41:2")
+        val undoing = DoneMarks().tap(t, "Call the plumber", 0, 0)
+            .doneAnswered(t, DoneOutcome.Ok(), 1).undoTapped(t, 2)
+        assertTrue(undoing.undoAnswered(t, busy, 3).canUndo(t))
+        assertFalse(undoing.undoAnswered(t, DoneOutcome.Failed(DoneOutcome.Kind.CHANGED, "x"), 3).canUndo(t))
+    }
+
+    @Test
     fun okAnswers() {
         assertEquals(
             DoneOutcome.Ok(already = false, title = "Call the plumber"),
@@ -107,6 +142,17 @@ class DoneApiTest {
         assertEquals(DoneOutcome.Ok(), c.undo(DoneTarget.ActionItem("ai_17"), "dev-1"))
         assertEquals(listOf("/todos/done", "/action-items/undo"), hub.sent.map { it.first })
         assertEquals("ai_17", parse(hub.sent[1].second)["id"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun clientSendsTheTitleWithADoneOnly() = runBlocking {
+        val hub = FakeHub { OdysseusLink.HubReply(409, """{"error": "changed"}""") }
+        val c = DoneClient(hub)
+        val r = c.done(DoneTarget.Todo("todo:41:2"), "dev-1", "Call the plumber")
+        assertTrue(r is DoneOutcome.Failed && r.kind == DoneOutcome.Kind.CHANGED)
+        assertEquals("Call the plumber", parse(hub.sent[0].second)["title"]!!.jsonPrimitive.content)
+        c.undo(DoneTarget.Todo("todo:41:2"), "dev-1")
+        assertNull(parse(hub.sent[1].second)["title"])
     }
 
     @Test

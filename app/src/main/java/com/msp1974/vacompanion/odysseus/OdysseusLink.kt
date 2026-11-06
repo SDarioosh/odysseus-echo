@@ -106,7 +106,15 @@ object OdysseusLink {
         get() = prefs()?.getString(KEY_DEVICE_NAME, "") ?: ""
         set(value) { prefs()?.edit()?.putString(KEY_DEVICE_NAME, value.trim())?.apply() }
 
-    val hasToken: Boolean get() = !prefs()?.getString(KEY_TOKEN, null).isNullOrEmpty()
+    /**
+     * A token is saved and can be read. One that can't be decrypted (its Keystore key is gone, e.g.
+     * after the app's data was moved to another device) counts as none: the device shows "Not
+     * linked" and sends nothing until a token is typed in again.
+     */
+    val hasToken: Boolean get() = token() != null
+
+    /** Changes whenever a token is saved (a hash of the stored, encrypted form; never the token). */
+    val tokenStamp: Int get() = prefs()?.getString(KEY_TOKEN, null)?.hashCode() ?: 0
 
     val isConfigured: Boolean get() = baseUrl.startsWith("http") && hasToken
 
@@ -121,9 +129,9 @@ object OdysseusLink {
     /** The voice token, for the recorder's uploads to the same hub (odysseus/record/HubRelayTransport.kt). */
     internal fun bearerToken(): String? = token()
 
-    private fun token(): String? = prefs()?.getString(KEY_TOKEN, null)?.let {
-        runCatching { decrypt(it) }.onFailure { e -> Timber.w(e, "Odysseus token unreadable") }.getOrNull()
-    }
+    private val tokenMemo = TokenMemo({ decrypt(it) }) { e -> Timber.w(e, "Odysseus token unreadable; link again in Menu → Odysseus") }
+
+    private fun token(): String? = tokenMemo.read(prefs()?.getString(KEY_TOKEN, null))
 
     // --- Keystore ---------------------------------------------------------------------------
 
@@ -155,6 +163,17 @@ object OdysseusLink {
 
     // --- API --------------------------------------------------------------------------------
 
+    /**
+     * A failed request for logs and the settings screen. An answer that can't be read says only
+     * so: the JSON parser's message quotes the answer, which holds the owner's words (turn
+     * titles, spoken answers, announcements), never logged.
+     */
+    fun failureText(e: Throwable): String = when (e) {
+        is kotlinx.serialization.SerializationException, is IllegalArgumentException ->
+            "unreadable answer (${e.javaClass.simpleName})"
+        else -> e.message ?: e.javaClass.simpleName
+    }
+
     sealed interface Result {
         data class Ok(val actions: List<VoiceAction>) : Result
         data class Failed(val message: String) : Result
@@ -173,7 +192,8 @@ object OdysseusLink {
         data class Failed(val message: String) : PostResult
     }
 
-    private class Reply(val code: Int, val body: String)
+    /** [dateMs]: the answer's Date header (the hub's clock), or null without one. */
+    internal class Reply(val code: Int, val body: String, val dateMs: Long? = null)
 
     private fun describe(code: Int, what: String) = when (code) {
         401, 403 -> "token refused ($code)"
@@ -193,10 +213,20 @@ object OdysseusLink {
         val base = baseUrl
         val token = token()
         if (!base.startsWith("http") || token.isNullOrEmpty()) throw IllegalStateException("not set up")
-        val conn = URL("$base$path").openConnection() as HttpURLConnection
+        return send("$base$path", token, contentType, body, readTimeoutMs, errorBody)
+    }
+
+    /** [request] to a full [url]; split out so it is unit-tested against a local server. */
+    internal fun send(
+        url: String, token: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000,
+        errorBody: Boolean = false,
+    ): Reply {
+        val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 4000
             conn.readTimeout = readTimeoutMs
+            // A redirect is answered as it is: following it would send the token to wherever it points.
+            conn.instanceFollowRedirects = false
             conn.setRequestProperty("Authorization", "Bearer $token")
             conn.setRequestProperty("Accept", "application/json")
             if (body != null) {
@@ -209,13 +239,28 @@ object OdysseusLink {
             val code = conn.responseCode
             val text = when {
                 code in 200..299 -> conn.inputStream.bufferedReader().use { it.readText() }
-                errorBody -> runCatching { conn.errorStream?.bufferedReader()?.use { it.readText().take(2000) } }.getOrNull().orEmpty()
+                errorBody -> runCatching { conn.errorStream?.bufferedReader()?.use { readAtMost(it, ERROR_BODY_MAX) } }.getOrNull().orEmpty()
                 else -> ""
             }
-            return Reply(code, text)
+            return Reply(code, text, conn.date.takeIf { it > 0 })
         } finally {
             conn.disconnect()
         }
+    }
+
+    /** How much of an error answer [request] keeps (errorBody). */
+    internal const val ERROR_BODY_MAX = 2000
+
+    /** The first [max] chars of [reader], without reading (or waiting for) the rest. */
+    private fun readAtMost(reader: java.io.Reader, max: Int): String {
+        val buf = CharArray(max)
+        var n = 0
+        while (n < max) {
+            val r = reader.read(buf, n, max - n)
+            if (r < 0) break
+            n += r
+        }
+        return String(buf, 0, n)
     }
 
     /**
@@ -247,7 +292,7 @@ object OdysseusLink {
             if (r.code != 200) return@withContext Result.Failed(describe(r.code, "actions feed"))
             Result.Ok(json.decodeFromString<VoiceActionsResponse>(r.body).actions)
         } catch (e: Exception) {
-            Result.Failed(e.message ?: e.javaClass.simpleName)
+            Result.Failed(failureText(e))
         }
     }
 
@@ -261,7 +306,7 @@ object OdysseusLink {
                 else -> TurnResult.Failed(describe(r.code, "turn feed"))
             }
         } catch (e: Exception) {
-            TurnResult.Failed(e.message ?: e.javaClass.simpleName)
+            TurnResult.Failed(failureText(e))
         }
     }
 
@@ -278,7 +323,7 @@ object OdysseusLink {
             if (r.code !in 200..299) return@withContext PostResult.Failed(describe(r.code, "satellite route"))
             PostResult.Ok(VoiceTurnApi.parseSatelliteTurnResponse(r.body))
         } catch (e: Exception) {
-            PostResult.Failed(e.message ?: e.javaClass.simpleName)
+            PostResult.Failed(failureText(e))
         }
     }
 
@@ -304,7 +349,7 @@ object OdysseusLink {
                 else -> InterruptResult.Failed(describe(r.code, "interrupt route"))
             }
         } catch (e: Exception) {
-            InterruptResult.Failed(e.message ?: e.javaClass.simpleName)
+            InterruptResult.Failed(failureText(e))
         }
     }
 
@@ -325,15 +370,16 @@ object OdysseusLink {
                 else -> TimingResult.Failed(describe(r.code, "timing route"))
             }
         } catch (e: Exception) {
-            TimingResult.Failed(e.message ?: e.javaClass.simpleName)
+            TimingResult.Failed(failureText(e))
         }
     }
 
     /**
      * A hub answer for callers that shape their own requests: the HTTP code and, for 2xx, the body
-     * (asked with errorBody, also the start of an error answer).
+     * (asked with errorBody, also the start of an error answer), and its Date header ([dateMs],
+     * the hub's clock, for comparing the hub's times with the device's).
      */
-    data class HubReply(val code: Int, val body: String)
+    data class HubReply(val code: Int, val body: String, val dateMs: Long? = null)
 
     /**
      * One request to `<base><path>` with the voice token (a GET without [body]), for features in
@@ -344,7 +390,7 @@ object OdysseusLink {
         path: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000,
         errorBody: Boolean = false,
     ): HubReply =
-        withContext(Dispatchers.IO) { request(path, contentType, body, readTimeoutMs, errorBody).let { HubReply(it.code, it.body) } }
+        withContext(Dispatchers.IO) { request(path, contentType, body, readTimeoutMs, errorBody).let { HubReply(it.code, it.body, it.dateMs) } }
 
     /** Tests the saved link: (ok, message to show). An older hub without the turn feed is tested with /actions. */
     suspend fun testLink(): Pair<Boolean, String> {
@@ -357,5 +403,33 @@ object OdysseusLink {
                 is Result.Failed -> false to "Saved, but the test failed: ${r.message}"
             }
         }
+    }
+}
+
+/**
+ * The decrypted token, kept for the stored (encrypted) value it came from, so the Keystore is
+ * asked once per saved token, not on every request and every `hasToken`. A value that can't be
+ * decrypted is tried again only after [retryMs] (or at once when a new one is saved), so it
+ * doesn't log a stack trace on every request.
+ */
+internal class TokenMemo(
+    private val decrypt: (String) -> String,
+    private val retryMs: Long = 10 * 60_000L,
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val onFailure: (Throwable) -> Unit = {},
+) {
+    private var stored: String? = null
+    private var plain: String? = null
+    private var failedAt: Long? = null
+
+    @Synchronized
+    fun read(enc: String?): String? {
+        if (enc.isNullOrEmpty()) return null
+        val failed = failedAt
+        if (enc == stored && (failed == null || clock() - failed < retryMs)) return plain
+        stored = enc
+        plain = runCatching { decrypt(enc) }.onFailure(onFailure).getOrNull()
+        failedAt = if (plain == null) clock() else null
+        return plain
     }
 }

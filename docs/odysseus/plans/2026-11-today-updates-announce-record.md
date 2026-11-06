@@ -129,8 +129,12 @@ Scope `voice`.
 | 5xx, 408, 429, network error, 200 without ok | retry | retry later in order: 1, 2, 5, 10, 15 min |
 | 401 / 403 | auth | stop uploads until relinked |
 | other 4xx | rejected | keep the file, skip it, log it |
+| 404 on both relay names for a chunk | relay missing | stop uploads, keep every chunk (none rejected), say "Odysseus can't take recordings (relay missing)", retry hourly and on "Upload now" |
+| 3xx (redirects aren't followed: the token stays with the hub) | retry | as retry |
 
-- On a 404 for `/api/codex/athena/*`, retry once on `/api/codex/sound/*` (older hub).
+- On a 404 for `/api/codex/athena/*`, retry once on `/api/codex/sound/*` (older hub). A 404 on
+  both for a chunk is the hub's problem (row above); a 404 on both for
+  `/sessions/{id}/end` (session not found) is that end's refusal, as for other 4xx.
 
 ---
 

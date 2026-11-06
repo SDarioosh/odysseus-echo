@@ -183,13 +183,33 @@ class RecordingQueueTest {
     }
 
     @Test
-    fun a404OnBothNamesRejectsTheChunk() {
-        session("aaaaaaaaaaaaaaaa", chunks = 1)
+    fun a404OnBothNamesIsAMissingRelayNotARejectedChunk() {
+        session("aaaaaaaaaaaaaaaa", chunks = 2)
         val hub = FakeHub { path, _ -> if (path.endsWith("/chunk")) RelayReply(404, null) else ok }
         val uploader = RecordingUploader(queue, hub)
-        uploader.runPass()
-        assertEquals(1, queue.status().rejected)
+        assertEquals(PassResult.RELAY_MISSING, uploader.runPass())
+        assertEquals(listOf("/api/codex/athena/chunk", "/api/codex/sound/chunk"), hub.paths())
+        val status = queue.status()
+        assertEquals(0, status.rejected)
+        assertEquals(2, status.chunksWaiting)
         assertEquals(UploadRules.ATHENA_PREFIX, uploader.prefix)
+        // The hub gets its relay back: the same chunks go, in order.
+        val fixed = FakeHub { _, _ -> ok }
+        assertEquals(PassResult.DONE, RecordingUploader(queue, fixed).runPass())
+        assertTrue(fixed.sent[0].second.contains("name=\"sequence\"\r\n\r\n0"))
+        assertEquals(0, queue.status().chunksWaiting)
+    }
+
+    @Test
+    fun a404OnBothNamesForAnEndStillEndsTheSession() {
+        session("aaaaaaaaaaaaaaaa", chunks = 1)
+        val hub = FakeHub { path, _ -> if (path.endsWith("/end")) RelayReply(404, """{"detail": "session not found"}""") else ok }
+        assertEquals(PassResult.DONE, RecordingUploader(queue, hub).runPass())
+        assertEquals(0, queue.status().chunksWaiting)
+        // The end was refused, as before: nothing more is sent for the session.
+        val again = FakeHub { _, _ -> ok }
+        assertEquals(PassResult.DONE, RecordingUploader(queue, again).runPass())
+        assertEquals(0, again.sent.size)
     }
 
     @Test
@@ -208,6 +228,33 @@ class RecordingQueueTest {
         val dir = session("aaaaaaaaaaaaaaaa", chunks = 1, finish = false)
         assertEquals(0, queue.finishAbandoned(setOf(dir)))
         assertFalse(File(dir, ChunkQueue.END_FILE).exists())
+    }
+
+    @Test
+    fun aSessionKilledAfterAllItsChunksWereSentStillGetsItsEnd() {
+        // Chunks 0 and 1 were uploaded (files deleted), then the app was killed before chunk 2.
+        session("aaaaaaaaaaaaaaaa", chunks = 2, finish = false)
+        val hub = FakeHub { _, _ -> ok }
+        assertEquals(PassResult.DONE, RecordingUploader(queue, hub).runPass())
+        assertEquals(2, hub.sent.size)
+        assertEquals(1, queue.finishAbandoned())
+        RecordingUploader(queue, hub).runPass()
+        assertEquals("/api/codex/athena/sessions/aaaaaaaaaaaaaaaa/end", hub.paths().last())
+        assertEquals(3, hub.sent.size)
+        assertNull(queue.next())
+    }
+
+    @Test
+    fun anUnreadableSidecarIsRebuiltNotStuck() {
+        // Power lost after the rename but before the data reached the disk: an empty sidecar.
+        val dir = session("aaaaaaaaaaaaaaaa", created = 5_000L, chunks = 2)
+        File(dir, "000001.json").writeBytes(ByteArray(0))
+        val hub = FakeHub { _, _ -> ok }
+        assertEquals(PassResult.DONE, RecordingUploader(queue, hub).runPass())
+        assertEquals(3, hub.sent.size)
+        assertTrue(hub.sent[1].second.contains("1970-01-01T00:00:35.000Z"))
+        assertTrue(hub.sent[1].second.contains("name=\"sequence\"\r\n\r\n1\r\n"))
+        assertEquals("/api/codex/athena/sessions/aaaaaaaaaaaaaaaa/end", hub.paths().last())
     }
 
     @Test

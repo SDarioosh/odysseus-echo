@@ -70,13 +70,19 @@ To-dos and action items can be marked done from it (below); everything else is r
   48 dp because they can be tapped; titleLarge text, readable from across a kitchen on the Echo
   Show 5's 960×480 screen); action items keep at least one row.
 - **Empty sections** say so ("Nothing on the calendar", "Nothing due", "No open action items").
-- **Refresh**: when the home screen comes up, every 15 minutes while it's on, when the network
-  comes back, and when the page comes into view (unless the data is under a minute old). Stops
-  while the screen is blank.
+- **Refresh**: when the home screen comes up, every 15 minutes while it's on (counted from the
+  last try, failed or not), within 5 minutes after midnight, when the network comes back, and
+  when the page comes into view (unless the data is under a minute old). Stops while the screen
+  is blank.
 - **Failures**: the last result stays for up to 2 hours, with "Odysseus unreachable · Updated
-  8:15" at the bottom; after that, or with nothing fetched yet, the page says "Can't reach
-  Odysseus" and why (a refused token says to link again; a hub without the route says 404). A
-  result from before midnight is dropped. Logcat shows `Today: ...` lines.
+  8:15" at the bottom (also while the device has no network); after that, or with nothing
+  fetched yet, the page says "Can't reach Odysseus" and why (a refused token says to link again;
+  a hub without the route says 404). A result from before midnight is dropped; midnight and
+  "Today"/"Overdue" follow the hub's day (the offset of its `generated` time and its `date`), so
+  a device left on another time zone still shows the current result. Logcat shows `Today: ...`
+  lines.
+- **Events over midnight**: one that began yesterday shows when it ends ("–6:00"), or "All day"
+  when it doesn't end today either.
 - **Not linked**, or the setting off: the page isn't in the list, so the clock is the last page.
   Linking or unlinking in Menu → Odysseus takes effect when the menu closes.
 
@@ -88,7 +94,8 @@ confirmation: no spoken "yes" (contract C5 in
 [plans/2026-11-done-followup-settings-verify.md](plans/2026-11-done-followup-settings-verify.md)).
 
 - **At once** the ring fills with a tick and the title is struck through (optimistic), and the
-  device sends `POST <voice base>/todos/done {"ref", "device_id"}` or
+  device sends `POST <voice base>/todos/done {"ref", "device_id", "title"}` (`title`: the
+  row's text, so a hub whose line moved since finds it by its text) or
   `/action-items/done {"id", "device_id"}`; `device_id` is the device's id (`config.uuid`, as in
   the announcements' hello).
 - **Done**: the row shows "Done · Undo" for 10 s. A tap on the row undoes it
@@ -99,7 +106,10 @@ confirmation: no spoken "yes" (contract C5 in
 - **Already done** (`"already": true`): "Already done" for 5 s, no Undo.
 - **Failure**: the row comes back open, with a short reason in place of its due tag for 5 s
   ("Can't reach Odysseus", "Not found in Odysseus", "Athena unavailable", "Token refused",
-  "Odysseus can't do this yet" for a hub without the routes), and the Today data is refreshed.
+  "Odysseus busy, try again" for a 503 `busy`, "Changed in Odysseus" for a 409 `changed`: the
+  line was edited or removed in Odysseus since Today was fetched, "Odysseus can't do this yet"
+  for a hub without the routes), and the Today data is refreshed. "Changed in Odysseus" is a
+  done's answer; "Too late to undo" is the undo's (both 409, told apart by `error`).
   Tap again to retry.
 - A row the hub sent without a `ref` or `id` has a dimmed ring and can't be tapped.
 - Logcat: `Today: done todo:41:2 -> ok`, `Today: undo ai_17 -> TOO_LATE (Too late to undo)`

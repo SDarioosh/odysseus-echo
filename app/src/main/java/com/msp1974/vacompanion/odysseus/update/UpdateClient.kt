@@ -18,6 +18,8 @@ class UpdateResponse(
     val text: String = "",
     val contentLength: Long = -1,
     val body: InputStream? = null,
+    /** The `Content-Range` header of a 206 ("bytes 1000-1999/2000"), or null. */
+    val contentRange: String? = null,
     private val onClose: () -> Unit = {},
 ) : AutoCloseable {
     override fun close() {
@@ -88,7 +90,15 @@ class UpdateClient(private val http: UpdateHttp) {
             if (from == 0L) part.delete()
             http.getStream(APK_PATH, from).use { r ->
                 when (r.code) {
-                    206 -> Unit
+                    206 -> when (val start = rangeStart(r.contentRange)) {
+                        null, from -> Unit
+                        // Answered from the start after all: the same as a 200.
+                        0L -> { from = 0; part.delete() }
+                        else -> {
+                            part.delete()
+                            return DownloadResult.Failed("the hub answered bytes from $start, not $from")
+                        }
+                    }
                     200 -> if (from > 0) { from = 0; part.delete() } // the hub ignored the range
                     401, 403 -> return DownloadResult.Failed("token refused (${r.code})")
                     404 -> return DownloadResult.Failed("the hub has no APK (404)")
@@ -132,6 +142,11 @@ class UpdateClient(private val http: UpdateHttp) {
         const val APK_PATH = "/app/apk"
 
         fun fileName(release: AppRelease) = "${release.versionCode}-${release.sha}"
+
+        /** The first byte of a `Content-Range: bytes START-END/TOTAL`, or null when unreadable. */
+        fun rangeStart(header: String?): Long? =
+            header?.trim()?.let { Regex("""bytes\s+(\d+)-\d+/(\d+|\*)""", RegexOption.IGNORE_CASE).matchEntire(it) }
+                ?.groupValues?.get(1)?.toLongOrNull()
 
         fun matches(file: File, release: AppRelease): Boolean =
             file.length() == release.size && sha256(file) == release.sha

@@ -24,7 +24,7 @@ Scope `voice`. A tap on the device's own screen is the confirmation, so these ne
 source. All are idempotent: already done → 200 with `"already": true`.
 
 ```
-POST /api/chat/voice/v1/todos/done        {"ref": "todo:41:2", "device_id": "..."}   -> {"ok": true, "already": false, "title": "Call the plumber"}
+POST /api/chat/voice/v1/todos/done        {"ref": "todo:41:2", "device_id": "...", "title"?: "Call the plumber"}   -> {"ok": true, "already": false, "title": "Call the plumber"}
 POST /api/chat/voice/v1/reminders/done    {"ref": "todo:41", "device_id": "..."}     -> {"ok": true, "already": false}
 POST /api/chat/voice/v1/action-items/done {"id": "ai_17", "device_id": "..."}        -> {"ok": true, "already": false}
 ```
@@ -36,8 +36,19 @@ POST /api/chat/voice/v1/action-items/done {"id": "ai_17", "device_id": "..."}   
 - `action-items/done`: through the hub's Athena link, `update_action_item` with status done.
   503 with `{"error": "athena unavailable"}` when Athena can't be reached.
 - 404 `{"error": "not found"}` for an unknown ref or id; 400 for a malformed one.
+- **A stale index** (added after round 2, additive): `todos/done`, and `reminders/done` with a
+  ref that has an item index, take an optional `"title"`, the row's text the device showed.
+  When the line at the index doesn't read it (compared as `/today` titles a line: whitespace
+  collapsed, the first 200 characters, any case), the hub ticks the line that does (an
+  unticked one first); when no line does, 409 `{"error": "changed"}` and nothing changes. The
+  device shows "Changed in Odysseus", the row comes back and Today is refreshed. Without
+  `title` (older devices) the index alone counts. A reminder card's title that is the note's
+  own title is ignored the same way.
 - **Undo** (same scope): `POST /api/chat/voice/v1/todos/undo {"ref"}` and
-  `/action-items/undo {"id"}` reopen within 10 minutes of a done by a device; 409 after that.
+  `/action-items/undo {"id"}` reopen within 10 minutes of a done by a device; 409
+  `{"error": "too late to undo"}` after that. The device tells the two 409s apart by `error`.
+- 503 `{"error": "busy"}` on a database error in any of these routes (SQLite locked, …): a
+  temporary failure, the device says "Odysseus busy, try again".
 
 ## C6. Device settings managed by the hub
 

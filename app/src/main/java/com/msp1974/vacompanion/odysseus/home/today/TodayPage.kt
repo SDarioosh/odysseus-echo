@@ -152,7 +152,10 @@ private fun Header(now: Long, data: TodayData?) {
 @Composable
 private fun Body(data: TodayData, context: HomePageContext, now: Long, is24h: Boolean, modifier: Modifier) {
     val zone = ZoneId.systemDefault()
+    // The device's day for event times (shown in its zone); the hub's day (the data's date) for
+    // what is due today or overdue, as the hub chose the to-dos by it.
     val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val hubToday = runCatching { LocalDate.parse(data.date.take(10)) }.getOrNull() ?: today
     val marks = context.todayDone
     // The rows as shown: done ones stay in place for their undo window, then leave.
     val todos = marks.rows(data.todos, TodayDone::todoTarget, { it.title }, { it is DoneTarget.Todo })
@@ -165,18 +168,18 @@ private fun Body(data: TodayData, context: HomePageContext, now: Long, is24h: Bo
         val (todoShown, aiShown) = TodayFormat.fitColumn(rightRows, todos.size, actionItems.size)
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Column(Modifier.weight(1.15f)) {
-                Events(data.events, TodayFormat.fitEvents(leftRows, data.events.size), now, zone, is24h)
+                Events(data.events, TodayFormat.fitEvents(leftRows, data.events.size), now, zone, is24h, today)
             }
             Column(Modifier.weight(1f)) {
-                Todos(todos, todoShown, today, context)
+                Todos(todos, todoShown, hubToday, context)
                 if (todos.isNotEmpty()) {
-                    More(TodayFormat.more(data.counts.todosOpen?.minus(marks.hiddenIn { it is DoneTarget.Todo }), todos.size, todoShown))
+                    More(TodayFormat.more(data.counts.todosOpen?.minus(marks.hiddenAmong(data.todos.map(TodayDone::todoTarget))), todos.size, todoShown))
                 }
                 ActionItems(actionItems, aiShown, context)
                 if (actionItems.isNotEmpty()) {
                     More(
                         TodayFormat.more(
-                            data.counts.actionItemsOpen?.minus(marks.hiddenIn { it is DoneTarget.ActionItem }),
+                            data.counts.actionItemsOpen?.minus(marks.hiddenAmong(data.actionItems.map(TodayDone::actionItemTarget))),
                             actionItems.size, aiShown,
                         )
                     )
@@ -236,7 +239,7 @@ private fun Title(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun Events(events: List<TodayEvent>, shown: Int, now: Long, zone: ZoneId, is24h: Boolean) {
+private fun Events(events: List<TodayEvent>, shown: Int, now: Long, zone: ZoneId, is24h: Boolean, today: LocalDate) {
     val colors = MaterialTheme.colorScheme
     SectionLabel("Calendar")
     if (events.isEmpty()) {
@@ -249,7 +252,7 @@ private fun Events(events: List<TodayEvent>, shown: Int, now: Long, zone: ZoneId
         val past = TodayFormat.isPast(e, now)
         ItemRow(Modifier.alpha(if (past) 0.45f else 1f)) {
             Text(
-                TodayFormat.eventTime(e, zone, is24h),
+                TodayFormat.eventTime(e, zone, is24h, today = today),
                 style = MaterialTheme.typography.titleLarge,
                 color = colors.primary, maxLines = 1,
                 modifier = Modifier.width(timeWidth),

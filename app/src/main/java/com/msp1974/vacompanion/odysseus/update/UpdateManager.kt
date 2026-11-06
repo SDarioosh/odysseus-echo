@@ -226,6 +226,11 @@ object UpdateManager {
             if (problem != null) {
                 Timber.w("Update: install of %s refused: %s", ready.release.versionName, problem)
                 installMessage = "Can't install: $problem"
+                if (!ready.file.exists()) {
+                    // The file was deleted (it no longer matched): don't keep offering it until
+                    // tomorrow's check, download it again now.
+                    check(manual = true)
+                }
             } else {
                 store?.installingCode = ready.release.versionCode
                 installMessage = "Confirm the install on the screen."

@@ -50,6 +50,9 @@ object ReturnToDashboard : Application.ActivityLifecycleCallbacks {
 
     override fun onActivityDestroyed(activity: Activity) {
         if (activity !is MainActivity) return
+        // Only a close on purpose ends the timer. When Android destroys a stopped MainActivity
+        // to save memory, the app should still come back to the front (bringToFront recreates it).
+        if (!activity.isFinishing) return
         hiddenSinceMs = null
         handler.removeCallbacks(check)
     }

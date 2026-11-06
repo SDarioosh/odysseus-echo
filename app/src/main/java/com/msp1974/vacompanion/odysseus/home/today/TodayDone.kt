@@ -48,7 +48,9 @@ object TodayDone {
     fun markDone(target: DoneTarget, title: String, index: Int, deviceId: String) {
         if (!change { it.tap(target, title, index, now()) }) return
         scope.launch {
-            val outcome = client.done(target, deviceId)
+            // The row's title: a line that moved in Odysseus since is found by it (409 "changed"
+            // when it is gone: the row comes back with "Changed in Odysseus" and Today refreshes).
+            val outcome = client.done(target, deviceId, title)
             Timber.i("Today: done %s -> %s", target.label, describe(outcome))
             change { it.doneAnswered(target, outcome, now()) }
             if (outcome is DoneOutcome.Failed) refreshToday()

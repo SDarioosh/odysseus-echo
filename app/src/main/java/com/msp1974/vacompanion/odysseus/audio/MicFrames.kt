@@ -1,11 +1,17 @@
 package com.msp1974.vacompanion.odysseus.audio
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 
@@ -53,4 +59,46 @@ class MicFrameSharing(source: Flow<MicFrame>, scope: CoroutineScope, bufferFrame
         frames.map(pick)
             .buffer(bufferFrames, BufferOverflow.DROP_OLDEST)
             .shareIn(scope, SharingStarted.WhileSubscribed(), replay = 0)
+}
+
+/**
+ * Collects this flow again after it failed, waiting [delayMs], until it has failed [maxInARow]
+ * times **in a row**: an item delivered resets the count, so failures spread over days of
+ * listening never add up (the shared microphone is collected for as long as the wake word runs).
+ * Then it fails with that last failure. [onRestart] is told the cause and the count before each restart.
+ */
+fun <T> Flow<T>.restartOnFailure(
+    maxInARow: Int,
+    delayMs: Long,
+    onRestart: (Throwable, Int) -> Unit = { _, _ -> },
+): Flow<T> = flow {
+    var failures = 0
+    emitAll(
+        this@restartOnFailure
+            .onEach { failures = 0 }
+            .retryWhen { cause, _ ->
+                if (cause is CancellationException || failures >= maxInARow) {
+                    false
+                } else {
+                    failures++
+                    onRestart(cause, failures)
+                    delay(delayMs)
+                    true
+                }
+            },
+    )
+}
+
+/**
+ * Tells a dead microphone from a slow one: [dead] is true after [limit] empty reads in a row.
+ * AudioRecord.read reports a lost recorder (ERROR_DEAD_OBJECT, the audio server restarted) by
+ * returning an error, never by throwing, so without this the stream would read nothing for good.
+ */
+class EmptyReads(private val limit: Int) {
+    private var inARow = 0
+
+    fun dead(empty: Boolean): Boolean {
+        inARow = if (empty) inARow + 1 else 0
+        return inARow >= limit
+    }
 }

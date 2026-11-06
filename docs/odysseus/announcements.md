@@ -20,8 +20,9 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   -> {"ok": true}
   ```
 
-- **Feed.** Every 30 s, and at once when the screen comes on, it asks for announcements meant for
-  it (all devices, its area, or its id; the hub filters):
+- **Feed.** Every 30 s, and at once when the screen comes on (at most every 10 s, and not while
+  waiting after a refused token or on an older hub), it asks for announcements meant for it (all
+  devices, its area, or its id; the hub filters):
 
   ```
   GET <base>/announcements?device_id=<id>&since=<epoch ms>
@@ -35,12 +36,15 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   - `since` is the newest `at` seen. It's the hub's own clock, so the device clock doesn't matter.
     It survives a restart (SharedPreferences `odysseus_announce`). The first time, it is 15 min
     before now, so a new or reset Echo doesn't show a day of old messages.
-  - Skipped (but marked seen): expired ones (`expires_at` passed on the device clock), and ones
-    older than 2 h that have no `expires_at`, so an Echo that was off for a night doesn't show
-    them all when it comes back.
+  - Skipped (but marked seen): expired ones (`expires_at` passed), and ones older than 2 h that
+    have no `expires_at`, so an Echo that was off for a night doesn't show them all when it comes
+    back. Both are judged on the hub's clock: each answer's `Date` header gives the difference
+    between the hub's clock and the device's (`HubClock`), which also places the first `since`
+    and the card's end. A device clock that is off doesn't drop or keep cards (without a `Date`
+    header the device clock is used).
   - After a failed request it waits 30 s, 1, 2, 4, then 5 min. On a refused token (401/403) it
     waits 15 min. An older Odysseus without the feed (404) is asked again hourly. A changed link
-    in Menu → Odysseus starts again within a minute.
+    in Menu → Odysseus (a new token too) starts again within a minute.
   - Not linked to Odysseus: nothing is sent at all. It only checks the settings again every minute.
 
 - **Card.** A new announcement wakes the screen and shows a card at the top, over any screen
@@ -51,10 +55,12 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   - A reminder of a to-do (one with a `ref`) also has **Done**, beside Dismiss: it calls
     `POST <voice base>/reminders/done {"ref", "device_id"}` (contract C5 in
     [plans/2026-11-done-followup-settings-verify.md](plans/2026-11-done-followup-settings-verify.md);
-    `device_id` is the hub id from the hello). The tap is the confirmation: no spoken "yes".
+    `device_id` is the hub id from the hello; a `ref` with an item index, `todo:41:3`, also
+    carries the card's `title`). The tap is the confirmation: no spoken "yes".
     Done (or already done): the card goes and the Today page is refreshed. Failed: the card
     stays with a short reason under the buttons ("Can't reach Odysseus", "Not found in
-    Odysseus", "Odysseus can't do this yet" for a hub without the route), and Done can be tapped
+    Odysseus", "Odysseus busy, try again", "Changed in Odysseus" (the Today page is refreshed
+    too), "Odysseus can't do this yet" for a hub without the route), and Done can be tapped
     again. There is no undo for a reminder (the hub has no undo route for it). The buttons are
     52 dp tall, to hit from arm's length.
   - It stays 10 min, or until its `expires_at` if that's sooner. With several at once, the oldest

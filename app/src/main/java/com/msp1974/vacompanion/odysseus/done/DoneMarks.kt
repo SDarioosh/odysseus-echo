@@ -79,7 +79,7 @@ data class DoneMarks(val marks: Map<DoneTarget, DoneMark> = emptyMap()) {
             is DoneOutcome.Ok -> copy(marks = marks - target)
             is DoneOutcome.Failed -> {
                 val final = outcome.kind == DoneOutcome.Kind.TOO_LATE || outcome.kind == DoneOutcome.Kind.NOT_FOUND ||
-                    outcome.kind == DoneOutcome.Kind.NOT_SUPPORTED
+                    outcome.kind == DoneOutcome.Kind.NOT_SUPPORTED || outcome.kind == DoneOutcome.Kind.CHANGED
                 put(
                     m.copy(
                         phase = DoneMark.Phase.DONE,
@@ -144,6 +144,14 @@ data class DoneMarks(val marks: Map<DoneTarget, DoneMark> = emptyMap()) {
     /** How many rows of a list are hidden (to take off the hub's open count). */
     fun hiddenIn(inList: (DoneTarget) -> Boolean): Int =
         marks.values.count { it.phase == DoneMark.Phase.HIDDEN && inList(it.target) }
+
+    /**
+     * How many of [listed] (the targets the current data still lists) are hidden: the ones the
+     * hub's open count still includes. A hidden row the data no longer lists is already out of
+     * that count, so it isn't taken off twice.
+     */
+    fun hiddenAmong(listed: Collection<DoneTarget>): Int =
+        listed.toSet().count { marks[it]?.phase == DoneMark.Phase.HIDDEN }
 
     private fun put(m: DoneMark) = DoneMarks(marks + (m.target to m))
 

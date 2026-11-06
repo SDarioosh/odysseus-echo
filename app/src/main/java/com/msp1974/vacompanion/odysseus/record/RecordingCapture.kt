@@ -67,8 +67,11 @@ abstract class RecordingCapture(
 
     /**
      * Listens again: the shared microphone gives up after repeated failures until all its
-     * listeners have left (docs/odysseus/shared-microphone.md).
+     * listeners have left (docs/odysseus/shared-microphone.md). Synchronized with [finish]: the
+     * ticker calls it outside the recorder's lock, and a listener started after finish() would
+     * keep the microphone open for good.
      */
+    @Synchronized
     fun resubscribe() {
         if (finished) return
         Timber.w("Recorder: no microphone audio for a while; listening again")
@@ -78,6 +81,7 @@ abstract class RecordingCapture(
     }
 
     /** Stops listening; what was heard is still written. */
+    @Synchronized
     fun finish() {
         if (finished) return
         finished = true

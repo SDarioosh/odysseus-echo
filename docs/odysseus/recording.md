@@ -12,7 +12,9 @@ transcribes and summarizes them like the T-Watch's recordings. The code is in
   go doesn't stop the note. A tap or another hold stops it. A note stops by itself after 5
   minutes.
 - **Hold during a recording**: the recording session ends and the note is recorded as its own
-  session. When the note stops, a new recording session starts by itself, with no sound.
+  session. When the note stops, a new recording session starts by itself, with no sound
+  (unless a recording may not start then, e.g. the Echo was unlinked meanwhile: the reason is
+  shown and nothing resumes).
 - A recording stops by itself after 4 hours.
 - A second tap within 1 s of the last one is ignored.
 - Nothing starts while the microphone is muted (the quick actions "Mic Mute", Home Assistant's
@@ -70,7 +72,8 @@ press/hold ──> RecorderController ──> RecorderStateMachine (pure)
   Assistant is connected, with the screen off and the activity in the background. The
   buttons and the pill only read `RecorderController.state` and call `press()`/`hold()`.
 - **RecorderStateMachine** is plain Kotlin and holds the gestures, limits and debounce
-  (`RecorderStateMachineTest`).
+  (`RecorderStateMachineTest`). The controller feeds it time since boot (`clockMs()`), not the
+  wall clock, so a clock change can't stop a recording or stretch a note.
 - **RecordingCapture** collects `SharedMicrophone.raw` undispatched into its own channel (as
   `audio/DetectionBuffer` does), so no frame is lost while the encoder works. See
   [shared-microphone.md](shared-microphone.md). The audio is raw: before the gate, WebRTC, the
@@ -84,7 +87,10 @@ press/hold ──> RecorderController ──> RecorderStateMachine (pure)
   under a temporary name and then renamed. When a session ends, an `end` file records its
   chunk count. A session folder is `<created ms>-<session id>`, with `session.json` inside.
   The queue survives restarts. When the app starts, any session left unfinished by a killed run
-  is marked finished and sent as it is.
+  is marked finished and sent as it is (a `sent` file keeps the highest sequence already
+  delivered, so a session whose chunks all went still gets its `/end`). Files are synced before
+  the rename; a sidecar that can't be read (power cut) is rebuilt from `session.json` and the
+  file name.
 - **Queue cap**: 500 MB. Past that, the oldest *finished* sessions are deleted first, and a
   warning shows on screen and in the settings. A session that is still recording is never
   deleted.
@@ -99,7 +105,11 @@ voice base URL (`https://<hub>/api/chat/voice/v1` → `https://<hub>`), with the
   `sequence` (from 0), `timestamp`, `codec=wav`, and `kind=note` for voice notes only.
 - `POST <hub>/api/codex/athena/sessions/<session_id>/end` after the session's last chunk.
 - A 404 on `/api/codex/athena/*` is tried once on `/api/codex/sound/*` (an older hub). If
-  that works, the older name is used until the app restarts.
+  that works, the older name is used until the app restarts. A chunk answered 404 on both is
+  "relay missing" (table below). A 404 on both for `/sessions/<id>/end` (session not found)
+  is that end's refusal, as before.
+- Redirects are not followed (`HubRelayTransport`): the token would go to wherever a redirect
+  points. A 3xx is a retry. At most 16 KB of an answer's body is read.
 - Chunks of a session still recording are uploaded as they come. Sessions go oldest first,
   and chunks by sequence.
 
@@ -109,6 +119,8 @@ voice base URL (`https://<hub>/api/chat/voice/v1` → `https://<hub>`), with the
 | 5xx, 408, 429, network error, 200 without ok | retry | stops the pass and tries again after 1, 2, 5, 10, then every 15 min. New chunks don't cut the wait short; "Upload now" does |
 | 401 / 403 | auth | stops uploads and shows **"Relink this Echo with Odysseus to upload recordings"**. They start again once the token changes (relink) or on "Upload now" |
 | other 4xx | rejected | keeps the file as `NNNNNN.wav.rejected`, skips it, logs it |
+| 404 on both `/api/codex/athena/chunk` and `/api/codex/sound/chunk` | relay missing | a hub problem (no relay, or a misconfigured proxy), not the chunk's: stops uploads, marks nothing rejected and shows **"Odysseus can't take recordings (relay missing)"**; tries again hourly and on "Upload now" |
+| 3xx | retry | as retry (redirects aren't followed) |
 
 The token needs the `athena:ingest` scope. Echo tokens made by the hub's `/echo/link` have it
 (hub change H4). An Echo linked before H4 has a voice-only token and gets 403: relink it from
@@ -212,8 +224,12 @@ they work without Home Assistant.
   header the hub relay checks.
 - `UploadRulesTest`: contract C4's result table, the retry waits, the hub origin, session ids,
   and the queue cap.
+- `RecordingCaptureTest`: one capture against a fake microphone, and a resubscribe racing a stop.
 - `RecordingQueueTest`: the queue against a fake hub (order, `/end`, retry, auth, rejected,
-  the 404 fallback, sessions left by a killed run, half-written files, the cap).
+  the 404 fallback, a missing relay, sessions left by a killed run, half-written files, the
+  cap).
+- `HubRelayTransportTest`: a local HTTP server: a redirect isn't followed (the token doesn't
+  go to its target), a long body is cut at 16 KB.
 - `RecordingTextTest`: the pill and status wording.
 - `RecordButtonGesturesTest`: the privacy button's press and hold from key down/up, repeats,
   stale timers, the mute-switch fallback and how a key covers it, and the Record/Mute rules.

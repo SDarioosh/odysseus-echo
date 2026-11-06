@@ -106,6 +106,19 @@ class HomeNavigatorTest {
     }
 
     @Test
+    fun aPageThatComesBackDoesNotPullTheScreenToIt() {
+        // On the Today page; it goes (unlinked), the clock shows; later it comes back (linked
+        // again): the screen stays where it is rather than jumping to it.
+        pages = 2
+        nav.onSwipe(SwipeDirection.LEFT, 0)
+        assertEquals(page(1), nav.current())
+        pages = 1
+        assertEquals(page(0), nav.current())
+        pages = 2
+        assertEquals(page(0), nav.current())
+    }
+
+    @Test
     fun noIdleDeadlineOnTheClock() {
         nav.onUserActivity(1_000)
         assertNull(nav.idleDeadlineMs())

@@ -152,7 +152,10 @@ private fun Header(now: Long, data: TodayData?) {
 @Composable
 private fun Body(data: TodayData, context: HomePageContext, now: Long, is24h: Boolean, modifier: Modifier) {
     val zone = ZoneId.systemDefault()
+    // The device's day for event times (shown in its zone); the hub's day (the data's date) for
+    // what is due today or overdue, as the hub chose the to-dos by it.
     val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val hubToday = runCatching { LocalDate.parse(data.date.take(10)) }.getOrNull() ?: today
     val marks = context.todayDone
     // The rows as shown: done ones stay in place for their undo window, then leave.
     val todos = marks.rows(data.todos, TodayDone::todoTarget, { it.title }, { it is DoneTarget.Todo })
@@ -168,7 +171,7 @@ private fun Body(data: TodayData, context: HomePageContext, now: Long, is24h: Bo
                 Events(data.events, TodayFormat.fitEvents(leftRows, data.events.size), now, zone, is24h, today)
             }
             Column(Modifier.weight(1f)) {
-                Todos(todos, todoShown, today, context)
+                Todos(todos, todoShown, hubToday, context)
                 if (todos.isNotEmpty()) {
                     More(TodayFormat.more(data.counts.todosOpen?.minus(marks.hiddenAmong(data.todos.map(TodayDone::todoTarget))), todos.size, todoShown))
                 }

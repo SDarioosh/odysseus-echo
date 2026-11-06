@@ -6,9 +6,14 @@ package com.msp1974.vacompanion.odysseus.home.today
 // - Not linked to Odysseus: NotLinked (the page isn't in the list then, but says so anyway).
 // - Nothing fetched yet: Loading, or Unreachable once a fetch has failed.
 // - A result is kept for KEEP_MS (2 h) after the last successful fetch, also while later fetches
-//   fail (then marked stale), and dropped once it is for a day before today.
+//   fail (then marked stale), and dropped once it is for a day before today. "Today" is the
+//   hub's day (the offset of its `generated` time), so a device whose own time zone differs
+//   doesn't drop a current result in the evening.
 
+import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
 
 sealed interface TodayView {
     data object NotLinked : TodayView
@@ -64,6 +69,16 @@ class TodayStore(private val keepMs: Long = KEEP_MS) {
 
     companion object {
         const val KEEP_MS = 2 * 60 * 60_000L
+
+        /**
+         * Today's date for [data]: at [nowMs] in the hub's offset (that of its `generated` time),
+         * or in [fallback] (the device's zone) without one. The hub's `date` is its own day.
+         */
+        fun today(data: TodayData?, nowMs: Long, fallback: ZoneId): LocalDate {
+            val offset = data?.generated?.let { runCatching { OffsetDateTime.parse(it).offset }.getOrNull() }
+            val instant = Instant.ofEpochMilli(nowMs)
+            return if (offset != null) instant.atOffset(offset).toLocalDate() else instant.atZone(fallback).toLocalDate()
+        }
 
         /** The result is for a day before [today] (fetched before midnight). Unparsable: keep it. */
         fun isForEarlierDay(data: TodayData, today: LocalDate): Boolean {

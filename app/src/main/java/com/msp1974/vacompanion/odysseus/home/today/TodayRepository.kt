@@ -14,7 +14,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.time.LocalDate
+import java.time.ZoneId
 
 object TodayRepository {
     const val REFRESH_MS = 15 * 60_000L
@@ -40,7 +40,8 @@ object TodayRepository {
     }
 
     private fun publish() {
-        view = store.view(System.currentTimeMillis(), LocalDate.now(), linked)
+        val now = System.currentTimeMillis()
+        view = store.view(now, TodayStore.today(store.data, now, ZoneId.systemDefault()), linked)
     }
 
     /** Fetches /today unless the last successful fetch is younger than [minAgeMs]. Never throws. */

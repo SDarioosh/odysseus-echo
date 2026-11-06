@@ -4,7 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 class TodayStoreTest {
     private val today: LocalDate = LocalDate.of(2026, 11, 6)
@@ -81,5 +84,20 @@ class TodayStoreTest {
         s.onSuccess(data, t0)
         s.clear()
         assertEquals(TodayView.Loading, s.view(t0, today, true))
+    }
+
+    @Test
+    fun todayIsTheHubsDayNotTheDevicesZone() {
+        // 20:00 in New York on Nov 6 is already Nov 7 in UTC. A device left on UTC must not drop
+        // the hub's current result (and show "Loading today…" all evening).
+        val now = Instant.parse("2026-11-07T01:00:00Z").toEpochMilli()
+        val hub = data.copy(generated = "2026-11-06T19:45:00-05:00")
+        assertEquals(LocalDate.of(2026, 11, 6), TodayStore.today(hub, now, ZoneOffset.UTC))
+        val s = TodayStore()
+        s.onSuccess(hub, now)
+        assertEquals(TodayView.Ready(hub, now, stale = false), s.view(now, TodayStore.today(hub, now, ZoneOffset.UTC), true))
+        // Without `generated`, the device's zone.
+        assertEquals(LocalDate.of(2026, 11, 7), TodayStore.today(data, now, ZoneOffset.UTC))
+        assertEquals(LocalDate.of(2026, 11, 6), TodayStore.today(null, now, ZoneId.of("America/New_York")))
     }
 }

@@ -54,9 +54,10 @@ under it.
 
 ## Today page
 
-Page 1, right of the clock. Read-only, from Odysseus (`GET <voice base>/today`, the same base
-URL and voice token as Menu → Odysseus; contract C1 in
+Page 1, right of the clock. From Odysseus (`GET <voice base>/today`, the same base URL and
+voice token as Menu → Odysseus; contract C1 in
 [plans/2026-11-today-updates-announce-record.md](plans/2026-11-today-updates-announce-record.md)).
+To-dos and action items can be marked done from it (below); everything else is read-only.
 
 - **Top**: "Today", the date, and the headline of Odysseus's Today insight (without a headline,
   its first focus item; with neither, nothing).
@@ -65,8 +66,9 @@ URL and voice token as Menu → Odysseus; contract C1 in
 - **Right, To-do**: to-dos due today or overdue (an "Overdue" or "Today" tag), then pinned
   undated ones. **From conversations**: Athena's open action items.
 - **"and N more"** where a section doesn't fit, from the hub's open counts. How many rows fit is
-  worked out from the screen height (rows of about 40 dp, titleLarge text, readable from across a
-  kitchen on the Echo Show 5's 960×480 screen); action items keep at least one row.
+  worked out from the screen height (calendar rows of about 40 dp, to-do and action item rows
+  48 dp because they can be tapped; titleLarge text, readable from across a kitchen on the Echo
+  Show 5's 960×480 screen); action items keep at least one row.
 - **Empty sections** say so ("Nothing on the calendar", "Nothing due", "No open action items").
 - **Refresh**: when the home screen comes up, every 15 minutes while it's on, when the network
   comes back, and when the page comes into view (unless the data is under a minute old). Stops
@@ -77,6 +79,36 @@ URL and voice token as Menu → Odysseus; contract C1 in
   result from before midnight is dropped. Logcat shows `Today: ...` lines.
 - **Not linked**, or the setting off: the page isn't in the list, so the clock is the last page.
   Linking or unlinking in Menu → Odysseus takes effect when the menu closes.
+
+### Done
+
+Each to-do and action item row starts with a ring. A tap anywhere on the row (48 dp tall, the
+whole column wide, so it's easy to hit from arm's length) marks it done. The tap is the
+confirmation: no spoken "yes" (contract C5 in
+[plans/2026-11-done-followup-settings-verify.md](plans/2026-11-done-followup-settings-verify.md)).
+
+- **At once** the ring fills with a tick and the title is struck through (optimistic), and the
+  device sends `POST <voice base>/todos/done {"ref", "device_id"}` or
+  `/action-items/done {"id", "device_id"}`; `device_id` is the device's id (`config.uuid`, as in
+  the announcements' hello).
+- **Done**: the row shows "Done · Undo" for 10 s. A tap on the row undoes it
+  (`/todos/undo {"ref"}`, `/action-items/undo {"id"}`, also with `device_id`): "Undoing…", then
+  the row is open again. "Too late to undo" (409) leaves it done. After the 10 s the row goes and
+  the Today data is refreshed; a refresh that comes earlier doesn't move it (the row is kept in
+  place until its window ends).
+- **Already done** (`"already": true`): "Already done" for 5 s, no Undo.
+- **Failure**: the row comes back open, with a short reason in place of its due tag for 5 s
+  ("Can't reach Odysseus", "Not found in Odysseus", "Athena unavailable", "Token refused",
+  "Odysseus can't do this yet" for a hub without the routes), and the Today data is refreshed.
+  Tap again to retry.
+- A row the hub sent without a `ref` or `id` has a dimmed ring and can't be tapped.
+- Logcat: `Today: done todo:41:2 -> ok`, `Today: undo ai_17 -> TOO_LATE (Too late to undo)`
+  (refs and ids only, never titles).
+
+The rules (optimistic state, undo window, keeping a done row in place) are in
+`odysseus/done/DoneMarks.kt`, plain Kotlin and unit-tested; `today/TodayDone.kt` sends the
+requests, runs the clock and refreshes. A reminder card's Done
+([announcements.md](announcements.md)) uses the same `odysseus/done/` client.
 
 ## How it works
 
@@ -143,7 +175,11 @@ animation need no change.
 | `odysseus/home/today/TodayFormat.kt` | times in the device's zone, due tags, "and N more", what fits. Plain Kotlin |
 | `odysseus/home/today/TodayRepository.kt` | the process-wide state and refresh; `OdysseusLink.get` for the call |
 | `odysseus/home/today/TodayRefresh.kt` | the refresh timer, composed by `HomeHost` |
-| `odysseus/home/today/TodayPage.kt` | the page |
+| `odysseus/home/today/TodayPage.kt` | the page, with its Done rows |
+| `odysseus/home/today/TodayDone.kt` | the Done buttons: requests, the undo clock, refresh afterwards |
+| `odysseus/done/DoneApi.kt` | contract C5: paths, bodies, what an answer means. Plain Kotlin |
+| `odysseus/done/DoneClient.kt` | the Done/Undo requests (testable `DoneHttp`; `OdysseusLink.hubRequest`) |
+| `odysseus/done/DoneMarks.kt` | the optimistic Done state of the rows and the undo window. Plain Kotlin |
 | `odysseus/home/today/TodaySettingsSection.kt` | the "Today page" setting |
 | `odysseus/home/HomeHost.kt` | draws the layers, swipes, animation, idle timer |
 | `odysseus/OdysseusSettingsLayout.kt` | the Home screen settings |
@@ -151,3 +187,4 @@ animation need no change.
 | `app/src/test/.../odysseus/home/HomeNavigatorTest.kt` | tests of the rules |
 | `app/src/test/.../odysseus/home/weather/WeatherClientTest.kt` | tests of the weather calls and rules |
 | `app/src/test/.../odysseus/home/today/Today{Client,Store,Format}Test.kt` | tests of the Today parsing, staleness and layout rules |
+| `app/src/test/.../odysseus/done/Done{Api,Marks}Test.kt` | tests of the Done requests, answers and row states |

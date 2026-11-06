@@ -39,6 +39,9 @@ data class Announcement(
     /** What the card shows as its heading: the title, else the text. */
     val heading: String get() = title.ifBlank { text }
 
+    /** A reminder of a to-do: its card has a Done button (reminders/done, ReminderDone.kt). */
+    val canMarkDone: Boolean get() = isReminder && !ref.isNullOrBlank()
+
     /** The card's second line, unless it only repeats the heading. */
     val body: String? get() = text.takeIf { it.isNotBlank() && it.trim() != heading.trim() }
 

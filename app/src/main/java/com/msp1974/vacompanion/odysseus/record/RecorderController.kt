@@ -13,6 +13,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.msp1974.vacompanion.device.DeviceManager
 import com.msp1974.vacompanion.odysseus.OdysseusLink
@@ -141,10 +142,17 @@ object RecorderController : EventListener {
 
     val isInstalled: Boolean get() = appContext != null
 
+    /**
+     * The clock of the gestures, the limits and [RecorderState]'s start times: time since boot,
+     * so a wall-clock change (network time after boot, the owner setting the date) can't stop a
+     * recording at once or let a note run past 5 min. The pill counts with it too.
+     */
+    fun clockMs(): Long = SystemClock.elapsedRealtime()
+
     private fun gesture(step: (Long, String?) -> List<RecorderEffect>) {
         // One lock for the step and its effects, so two quick gestures can't interleave.
         synchronized(this) {
-            val effects = step(System.currentTimeMillis(), refusal())
+            val effects = step(clockMs(), refusal())
             publishState()
             perform(effects)
         }
@@ -232,7 +240,7 @@ object RecorderController : EventListener {
     private suspend fun tick() {
         while (scope.isActive) {
             delay(1_000)
-            val now = System.currentTimeMillis()
+            val now = clockMs()
             synchronized(this) {
                 // A note that interrupted a recording resumes it only if recording may start now.
                 val effects = machine.tick(now, refusal())
@@ -242,7 +250,7 @@ object RecorderController : EventListener {
                     perform(effects)
                 }
             }
-            capture?.let { if (now - it.lastFrameAtMs > MIC_STALL_MS) it.resubscribe() }
+            capture?.let { if (System.currentTimeMillis() - it.lastFrameAtMs > MIC_STALL_MS) it.resubscribe() }
         }
     }
 

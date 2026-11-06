@@ -16,6 +16,7 @@ package com.msp1974.vacompanion.odysseus.record
 
 enum class RecordingKind { RECORDING, NOTE }
 
+/** Start times are on the caller's clock (RecorderController: time since boot, not the wall clock). */
 sealed interface RecorderState {
     data object Idle : RecorderState
     data class Recording(val startedAtMs: Long) : RecorderState

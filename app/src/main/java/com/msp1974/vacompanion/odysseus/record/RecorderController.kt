@@ -324,6 +324,16 @@ object RecorderController : EventListener {
                         setProblem(RELINK_MESSAGE)
                         toast(RELINK_MESSAGE)
                     }
+                    PassResult.RELAY_MISSING -> {
+                        // A hub problem: nothing is marked rejected; hourly, or on "Upload now".
+                        failures = 0
+                        waitMs = UploadRules.RELAY_MISSING_RETRY_MS
+                        backingOff = true
+                        if (_state.value.uploadProblem != UploadRules.RELAY_MISSING_MESSAGE) {
+                            toast(UploadRules.RELAY_MISSING_MESSAGE)
+                        }
+                        setProblem(UploadRules.RELAY_MISSING_MESSAGE)
+                    }
                 }
             }
             refreshQueue()

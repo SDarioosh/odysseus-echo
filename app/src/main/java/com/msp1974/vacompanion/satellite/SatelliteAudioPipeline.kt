@@ -103,6 +103,8 @@ abstract class SatelliteAudioPipeline(
     private var shouldContinueConversation = config.continueConversation
     var stageStartTime: Long = System.currentTimeMillis()
     var pipelineStartMode: PipelineStartMode = PipelineStartMode.WAKE_WORD_DETECTED
+    // Odysseus fork: set for a follow-up (odysseus/followup/FollowUp.kt): how long it listens, and it ends quietly.
+    var followUpListenMs: Long? = null
     var pipelineStage = PipelineStage.INIT
         set(value) {
             // Only allow increasing statuses
@@ -170,7 +172,8 @@ abstract class SatelliteAudioPipeline(
 
         return when(pipelineStage) {
             PipelineStage.STARTED -> timeInStage >  5
-            PipelineStage.LISTENING -> timeInStage > if (isContinuation) 5 else 5
+            PipelineStage.LISTENING -> followUpListenMs?.let { com.msp1974.vacompanion.odysseus.followup.FollowUpRules.listeningExpired(System.currentTimeMillis() - stageStartTime, it) } // Odysseus fork
+                ?: (timeInStage > if (isContinuation) 5 else 5)
             PipelineStage.VOICE_STARTED -> timeInStage > 20
             PipelineStage.AWAITING_TTS -> timeInStage > 5
             else -> false
@@ -406,6 +409,13 @@ abstract class SatelliteAudioPipeline(
         val text = event.getProp("text")
 
         onErrorMessage(pipelineId, text)
+
+        // Odysseus fork: a follow-up that heard nothing ends quietly, no toast or error sound (odysseus/followup/FollowUp.kt).
+        if (followUpListenMs != null && com.msp1974.vacompanion.odysseus.followup.FollowUpRules.isNothingHeard(code)) {
+            shouldContinueConversation = false
+            pipelineRunning.complete(PipelineEndReason.TIMED_OUT)
+            return
+        }
 
         val isDuplicateWakeUp = code == "duplicate_wake_up_detected"
 

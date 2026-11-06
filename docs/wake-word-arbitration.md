@@ -120,6 +120,8 @@ On each device that hears it (`Satellite.onWakeWordDetected` / `handleWakeWordDe
 **Arbitration is skipped, and the device simply answers, when:**
 
 - it is a manual wake (button, or sent from HA);
+- it is a follow-up: Odysseus waits for a "yes" and the device that answered listens again by itself,
+  with no wake word heard (Odysseus fork, `docs/odysseus/follow-up.md`);
 - the device has no wake word;
 - no master is known yet;
 - **no other device listens for this wake word** (from presence), so nobody else could have heard it.

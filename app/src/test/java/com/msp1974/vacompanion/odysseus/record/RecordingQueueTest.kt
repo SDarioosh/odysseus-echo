@@ -183,13 +183,33 @@ class RecordingQueueTest {
     }
 
     @Test
-    fun a404OnBothNamesRejectsTheChunk() {
-        session("aaaaaaaaaaaaaaaa", chunks = 1)
+    fun a404OnBothNamesIsAMissingRelayNotARejectedChunk() {
+        session("aaaaaaaaaaaaaaaa", chunks = 2)
         val hub = FakeHub { path, _ -> if (path.endsWith("/chunk")) RelayReply(404, null) else ok }
         val uploader = RecordingUploader(queue, hub)
-        uploader.runPass()
-        assertEquals(1, queue.status().rejected)
+        assertEquals(PassResult.RELAY_MISSING, uploader.runPass())
+        assertEquals(listOf("/api/codex/athena/chunk", "/api/codex/sound/chunk"), hub.paths())
+        val status = queue.status()
+        assertEquals(0, status.rejected)
+        assertEquals(2, status.chunksWaiting)
         assertEquals(UploadRules.ATHENA_PREFIX, uploader.prefix)
+        // The hub gets its relay back: the same chunks go, in order.
+        val fixed = FakeHub { _, _ -> ok }
+        assertEquals(PassResult.DONE, RecordingUploader(queue, fixed).runPass())
+        assertTrue(fixed.sent[0].second.contains("name=\"sequence\"\r\n\r\n0"))
+        assertEquals(0, queue.status().chunksWaiting)
+    }
+
+    @Test
+    fun a404OnBothNamesForAnEndStillEndsTheSession() {
+        session("aaaaaaaaaaaaaaaa", chunks = 1)
+        val hub = FakeHub { path, _ -> if (path.endsWith("/end")) RelayReply(404, """{"detail": "session not found"}""") else ok }
+        assertEquals(PassResult.DONE, RecordingUploader(queue, hub).runPass())
+        assertEquals(0, queue.status().chunksWaiting)
+        // The end was refused, as before: nothing more is sent for the session.
+        val again = FakeHub { _, _ -> ok }
+        assertEquals(PassResult.DONE, RecordingUploader(queue, again).runPass())
+        assertEquals(0, again.sent.size)
     }
 
     @Test

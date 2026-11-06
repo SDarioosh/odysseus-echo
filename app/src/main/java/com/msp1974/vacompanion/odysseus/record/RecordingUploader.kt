@@ -9,7 +9,9 @@ package com.msp1974.vacompanion.odysseus.record
 //                                                       sequence, timestamp, codec=wav, kind=note (notes only)
 //   POST <hub>/api/codex/athena/sessions/<id>/end       after the session's last chunk
 //   A 404 is tried once more on /api/codex/sound/... (an older hub); if that works, the older
-//   name is used from then on (until the app restarts).
+//   name is used from then on (until the app restarts). A chunk answered 404 on both names means
+//   the hub has no relay (RELAY_MISSING): the pass stops and no chunk is marked rejected. A 404 on
+//   both for an end (session not found) is the end's own refusal, as before.
 
 import timber.log.Timber
 import java.util.UUID
@@ -29,6 +31,8 @@ enum class PassResult {
     RETRY,
     /** 401/403: the token can't upload recordings. */
     AUTH,
+    /** 404 on both relay names for a chunk: the hub can't take recordings; try again hourly. */
+    RELAY_MISSING,
 }
 
 class RecordingUploader(private val queue: ChunkQueue, private val transport: RelayTransport) {
@@ -64,6 +68,9 @@ class RecordingUploader(private val queue: ChunkQueue, private val transport: Re
                 }
                 UploadClass.RETRY -> return PassResult.RETRY
                 UploadClass.AUTH -> return PassResult.AUTH.also { Timber.w("Recorder: upload refused ($c): relink needed") }
+                UploadClass.RELAY_MISSING -> return PassResult.RELAY_MISSING.also {
+                    Timber.w("Recorder: the hub has no recording relay (404 on both names); chunks kept")
+                }
             }
         }
     }
@@ -95,6 +102,8 @@ class RecordingUploader(private val queue: ChunkQueue, private val transport: Re
                     prefix = other
                 }
                 reply = second
+            } else if (item is QueueItem.Chunk) {
+                return UploadClass.RELAY_MISSING
             }
         }
         return UploadRules.classify(reply.code, reply.body)

@@ -37,7 +37,8 @@ object ReminderDone {
         _states.update { it + (a.id to ReminderDoneState(sending = true)) }
         val target = DoneTarget.Reminder(ref)
         scope.launch {
-            val outcome = client.done(target, Announcements.deviceId.orEmpty())
+            // The card's title goes with a ref naming one line ("todo:41:2"), as for a Today row.
+            val outcome = client.done(target, Announcements.deviceId.orEmpty(), a.title)
             when (outcome) {
                 is DoneOutcome.Ok -> {
                     Timber.i("Announcements: done %s (%s) -> %s", a.id, ref, if (outcome.already) "already" else "ok")
@@ -48,6 +49,9 @@ object ReminderDone {
                 is DoneOutcome.Failed -> {
                     Timber.w("Announcements: done %s (%s) -> %s", a.id, ref, outcome.kind)
                     _states.update { it + (a.id to ReminderDoneState(reason = outcome.reason)) }
+                    if (outcome.kind == DoneOutcome.Kind.CHANGED) {
+                        withContext(Dispatchers.Main) { TodayRepository.refresh() }
+                    }
                 }
             }
         }

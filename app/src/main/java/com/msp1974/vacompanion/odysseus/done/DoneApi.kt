@@ -4,12 +4,16 @@ package com.msp1974.vacompanion.odysseus.done
 // docs/odysseus/home-screen.md "Done", docs/odysseus/announcements.md). A tap on the screen is
 // the confirmation, so no spoken "yes" is needed. Scope `voice`, the device's own token.
 //
-//   POST <base>/todos/done         {"ref": "todo:41:2", "device_id": …} -> {"ok": true, "already": false, "title": …}
+//   POST <base>/todos/done         {"ref": "todo:41:2", "device_id": …, "title": …} -> {"ok": true, "already": false, "title": …}
 //   POST <base>/reminders/done     {"ref": "todo:41",   "device_id": …} -> {"ok": true, "already": false}
+//     (a reminder ref with an item index, "todo:41:2", also carries the card's "title")
 //   POST <base>/action-items/done  {"id": "ai_17",      "device_id": …} -> {"ok": true, "already": false}
 //   POST <base>/todos/undo         {"ref", "device_id"}   reopen within 10 min of a done by a device; 409 after
 //   POST <base>/action-items/undo  {"id", "device_id"}
-//   404 {"error": "not found"}, 400 malformed, 503 {"error": "athena unavailable"}.
+//   404 {"error": "not found"}, 400 malformed, 503 {"error": "athena unavailable"} or {"error": "busy"}.
+//   409 {"error": "changed"} on a done: the row's line was changed or removed in Odysseus since
+//   Today was fetched (the hub finds a moved line by the "title" the row showed); 409 on an undo:
+//   {"error": "too late to undo"}.
 //
 // Pure: paths, bodies and what an answer means, unit-tested (DoneApiTest). The requests go
 // through DoneHttp (DoneClient.kt), OdysseusLink.hubRequest on the device.
@@ -50,7 +54,7 @@ sealed interface DoneOutcome {
 
     data class Failed(val kind: Kind, val reason: String) : DoneOutcome
 
-    enum class Kind { NOT_FOUND, TOO_LATE, ATHENA_UNAVAILABLE, REFUSED, NOT_SUPPORTED, BAD_REQUEST, UNREACHABLE, OTHER }
+    enum class Kind { NOT_FOUND, TOO_LATE, CHANGED, ATHENA_UNAVAILABLE, BUSY, REFUSED, NOT_SUPPORTED, BAD_REQUEST, UNREACHABLE, OTHER }
 }
 
 object DoneApi {
@@ -69,14 +73,28 @@ object DoneApi {
         is DoneTarget.ActionItem -> "/action-items/undo"
     }
 
-    /** The JSON body of a done or undo request: `ref` or `id`, and the device id. */
-    fun body(target: DoneTarget, deviceId: String): String = buildJsonObject {
+    private val INDEXED_REF = Regex("""^todo:[^:]+:\d+$""")
+
+    /** Whether a done of [target] carries the row's `title` (a ref naming one line by its index). */
+    fun sendsTitle(target: DoneTarget): Boolean = when (target) {
+        is DoneTarget.Todo -> true
+        is DoneTarget.Reminder -> INDEXED_REF.matches(target.ref.trim())
+        is DoneTarget.ActionItem -> false
+    }
+
+    /**
+     * The JSON body of a done or undo request: `ref` or `id`, and the device id. [title], the row's
+     * text as shown, goes with a done of a line by index ([sendsTitle]), so a hub whose line moved
+     * since ticks the right one (or answers 409 "changed"); an older hub ignores it.
+     */
+    fun body(target: DoneTarget, deviceId: String, title: String? = null): String = buildJsonObject {
         when (target) {
             is DoneTarget.Todo -> put("ref", target.ref)
             is DoneTarget.Reminder -> put("ref", target.ref)
             is DoneTarget.ActionItem -> put("id", target.id)
         }
         put("device_id", deviceId)
+        if (sendsTitle(target)) title?.takeIf { it.isNotBlank() }?.let { put("title", it) }
     }.toString()
 
     /** The `error` string of an error answer, lower case, or null. */
@@ -112,11 +130,17 @@ object DoneApi {
             DoneOutcome.Failed(DoneOutcome.Kind.NOT_SUPPORTED, "Odysseus can't do this yet")
         }
         405 -> DoneOutcome.Failed(DoneOutcome.Kind.NOT_SUPPORTED, "Odysseus can't do this yet")
-        409 -> DoneOutcome.Failed(DoneOutcome.Kind.TOO_LATE, "Too late to undo")
-        503 -> if (error(body)?.contains("athena") == true) {
-            DoneOutcome.Failed(DoneOutcome.Kind.ATHENA_UNAVAILABLE, "Athena unavailable")
+        // "changed": the line was edited or removed in Odysseus; any other 409 is the undo's.
+        409 -> if (error(body) == "changed") {
+            DoneOutcome.Failed(DoneOutcome.Kind.CHANGED, "Changed in Odysseus")
         } else {
-            DoneOutcome.Failed(DoneOutcome.Kind.OTHER, "Odysseus busy (503)")
+            DoneOutcome.Failed(DoneOutcome.Kind.TOO_LATE, "Too late to undo")
+        }
+        503 -> when {
+            error(body)?.contains("athena") == true ->
+                DoneOutcome.Failed(DoneOutcome.Kind.ATHENA_UNAVAILABLE, "Athena unavailable")
+            error(body) == "busy" -> DoneOutcome.Failed(DoneOutcome.Kind.BUSY, "Odysseus busy, try again")
+            else -> DoneOutcome.Failed(DoneOutcome.Kind.OTHER, "Odysseus busy (503)")
         }
         else -> DoneOutcome.Failed(DoneOutcome.Kind.OTHER, "Odysseus error ($code)")
     }

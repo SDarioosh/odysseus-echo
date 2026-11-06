@@ -208,6 +208,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                         if (vaUiState.satelliteRunning) ListeningIndicator()
                         // Odysseus fork: what a voice turn did: actions, sources, confirmation (odysseus/TurnCard.kt)
                         if (vaUiState.satelliteRunning) com.msp1974.vacompanion.odysseus.TurnCard()
+                        // Odysseus fork: announcement / reminder card (odysseus/announce/AnnouncementCard.kt)
+                        com.msp1974.vacompanion.odysseus.announce.AnnouncementCard()
                         // Odysseus fork: Sendspin pairing code / approval (odysseus/SendspinPairingOverlay.kt)
                         com.msp1974.vacompanion.odysseus.SendspinPairingOverlay()
 
@@ -711,6 +713,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 "screenOrientationMode" -> screen.setScreenOrientation(this@MainActivity, event.newValue as String)
                 "deviceBump" -> if (config.screenOnBump) applyScreenMode(ScreenOnMode.ON)
                 "sendspinPairingPrompt" -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: show the pairing code
+                com.msp1974.vacompanion.odysseus.announce.Announcements.EVENT_NEW -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: show the announcement card
                 "proximity" -> if (config.screenOnProximity && event.newValue as Float == 0f) applyScreenMode(ScreenOnMode.ON)
                 "motion" -> onMotion(event.newValue as Boolean)
                 "showToastMessage" -> Toast.makeText(

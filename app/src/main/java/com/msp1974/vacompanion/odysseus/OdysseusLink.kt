@@ -288,6 +288,16 @@ object OdysseusLink {
         }
     }
 
+    /** A hub answer for callers that shape their own requests: the HTTP code and, for 2xx, the body. */
+    data class HubReply(val code: Int, val body: String)
+
+    /**
+     * One request to `<base><path>` with the voice token (a GET without [body]), for features in
+     * their own packages (announcements: odysseus/announce/). Throws when not linked or unreachable.
+     */
+    suspend fun hubRequest(path: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000): HubReply =
+        withContext(Dispatchers.IO) { request(path, contentType, body, readTimeoutMs).let { HubReply(it.code, it.body) } }
+
     /** Tests the saved link: (ok, message to show). An older hub without the turn feed is tested with /actions. */
     suspend fun testLink(): Pair<Boolean, String> {
         val dayAgo = System.currentTimeMillis() - 86_400_000L

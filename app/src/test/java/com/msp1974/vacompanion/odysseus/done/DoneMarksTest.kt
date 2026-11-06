@@ -161,6 +161,18 @@ class DoneMarksTest {
     }
 
     @Test
+    fun hiddenRowsAreTakenOffTheCountOnlyWhileTheDataStillListsThem() {
+        val hidden = DoneMarks()
+            .tap(plumber, "Call the plumber", 0, t0).doneAnswered(plumber, ok, t0)
+            .expire(t0 + DoneMarks.UNDO_MS)
+        // Data from before the done: lists it, and its open count includes it.
+        assertEquals(1, hidden.hiddenAmong(listOf(plumber, milk)))
+        // A refresh (the 15-minute one, not the Done's own) already left it out of the list and
+        // of the count: nothing more to take off, or "and N more" counts one too few.
+        assertEquals(0, hidden.hiddenAmong(listOf(milk)))
+    }
+
+    @Test
     fun failedRowsAreNotHeldWhenGone() {
         val m = DoneMarks().tap(plumber, "Call the plumber", 0, t0).doneAnswered(plumber, DoneApi.classify(404, """{"error":"not found"}"""), t0)
         assertEquals(listOf("Buy milk"), m.todoRows(items.drop(1)).map { it.title })

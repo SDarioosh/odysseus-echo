@@ -28,6 +28,8 @@ class UpdateClientTest {
         val apkCode: Int = 200,
         val ignoreRange: Boolean = false,
         val cutAfter: Int = Int.MAX_VALUE,
+        /** Answer a range request with a 206 from this byte instead of the one asked for. */
+        val rangeAnsweredFrom: Long? = null,
     ) : UpdateHttp {
         val ranges = mutableListOf<Long>()
         val paths = mutableListOf<String>()
@@ -40,10 +42,11 @@ class UpdateClientTest {
             paths += path
             ranges += rangeFrom
             if (apkCode !in 200..299) return UpdateResponse(apkCode)
-            val from = if (ignoreRange) 0 else rangeFrom.toInt()
+            val from = (if (ignoreRange) 0L else rangeAnsweredFrom?.takeIf { rangeFrom > 0 } ?: rangeFrom).toInt()
             val bytes = apk.copyOfRange(from, apk.size)
-            val code = if (from > 0) 206 else 200
-            return UpdateResponse(code, contentLength = bytes.size.toLong(), body = CutStream(bytes, cutAfter))
+            val code = if (from > 0 || (rangeFrom > 0 && !ignoreRange)) 206 else 200
+            val range = if (code == 206) "bytes $from-${apk.size - 1}/${apk.size}" else null
+            return UpdateResponse(code, contentLength = bytes.size.toLong(), body = CutStream(bytes, cutAfter), contentRange = range)
         }
     }
 
@@ -131,6 +134,36 @@ class UpdateClientTest {
         assertTrue(r is DownloadResult.Ok)
         assertEquals(listOf(50_000L), hub.ranges)
         assertArrayEquals(apk, (r as DownloadResult.Ok).file.readBytes())
+    }
+
+    @Test
+    fun aRangeAnsweredFromAnotherByteIsNotAppended() {
+        val dir = tmp.newFolder("upd")
+        val part = File(dir, "1400030-$sha.apk.part")
+        part.writeBytes(apk.copyOfRange(0, 50_000))
+        // Bytes from 40 000 appended at 50 000 would only be caught by the sha256 (and then the
+        // version waits a day): refuse them at once and start over next time.
+        val r = UpdateClient(FakeHub(apk = apk, rangeAnsweredFrom = 40_000)).download(release, dir)
+        assertTrue(r is DownloadResult.Failed)
+        assertTrue((r as DownloadResult.Failed).message.contains("40000"))
+        assertFalse(part.exists())
+    }
+
+    @Test
+    fun aRangeAnsweredFromTheStartIsAWholeFile() {
+        val dir = tmp.newFolder("upd")
+        File(dir, "1400030-$sha.apk.part").writeBytes(apk.copyOfRange(0, 50_000))
+        val r = UpdateClient(FakeHub(apk = apk, rangeAnsweredFrom = 0)).download(release, dir)
+        assertTrue(r is DownloadResult.Ok)
+        assertArrayEquals(apk, (r as DownloadResult.Ok).file.readBytes())
+    }
+
+    @Test
+    fun contentRangeStart() {
+        assertEquals(1000L, UpdateClient.rangeStart("bytes 1000-1999/2000"))
+        assertEquals(0L, UpdateClient.rangeStart("Bytes 0-9/*"))
+        assertEquals(null, UpdateClient.rangeStart(null))
+        assertEquals(null, UpdateClient.rangeStart("bytes */2000"))
     }
 
     @Test

@@ -28,7 +28,10 @@ object LinkUpdateHttp : UpdateHttp {
                 conn.disconnect()
                 return UpdateResponse(code)
             }
-            return UpdateResponse(code, contentLength = conn.contentLengthLong, body = conn.inputStream) {
+            return UpdateResponse(
+                code, contentLength = conn.contentLengthLong, body = conn.inputStream,
+                contentRange = conn.getHeaderField("Content-Range"),
+            ) {
                 conn.disconnect()
             }
         } catch (e: Exception) {

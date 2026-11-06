@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.msp1974.vacompanion.odysseus.record.RecordButton
 import com.msp1974.vacompanion.satellite.PipelineStage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -110,14 +111,15 @@ fun ListeningIndicator(modifier: Modifier = Modifier) {
     val micMuted by VoiceActivity.micMuted.collectAsState()
     val context = LocalContext.current
 
-    // The Echo Show's privacy button mutes the microphone in hardware; Android reports it as a
-    // microphone mute (AudioService.setMicrophoneMuteFromSwitch). Show it on screen.
+    // The Echo Show's privacy button mutes the microphone; Android reports it as a microphone
+    // mute (AudioService.setMicrophoneMuteFromSwitch). Show it on screen, except while the button
+    // is the record button (record/RecordButton.kt): then the flag flips on every press.
     DisposableEffect(context) {
         val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        VoiceActivity.setMicMuted(audio.isMicrophoneMute)
+        VoiceActivity.setMicMuted(RecordButton.effectiveMicMute(audio.isMicrophoneMute))
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, i: Intent?) {
-                VoiceActivity.setMicMuted(audio.isMicrophoneMute)
+                VoiceActivity.setMicMuted(RecordButton.effectiveMicMute(audio.isMicrophoneMute))
             }
         }
         context.registerReceiver(receiver, IntentFilter(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED))

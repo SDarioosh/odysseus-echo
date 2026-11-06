@@ -13,11 +13,14 @@ object RecorderSettings {
     private const val PREFS = "odysseus_record"
     private const val KEY_ENABLED = "recording_enabled"
     private const val KEY_CLOCK_BUTTON = "record_button_on_clock"
+    private const val KEY_PRIVACY_BUTTON = "privacy_button"
+    private const val KEY_PRIVACY_HINT_SHOWN = "privacy_button_hint_shown"
 
     private var appContext: Context? = null
 
     private var enabledState by mutableStateOf(true)
     private var clockButtonState by mutableStateOf(true)
+    private var privacyButtonState by mutableStateOf(PrivacyButtonMode.RECORD)
 
     /** Loads the stored values. Safe to call more than once. */
     fun init(context: Context) {
@@ -26,6 +29,7 @@ object RecorderSettings {
         val p = prefs() ?: return
         enabledState = p.getBoolean(KEY_ENABLED, true)
         clockButtonState = p.getBoolean(KEY_CLOCK_BUTTON, true)
+        privacyButtonState = PrivacyButtonMode.fromKey(p.getString(KEY_PRIVACY_BUTTON, null))
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -44,5 +48,20 @@ object RecorderSettings {
         set(value) {
             clockButtonState = value
             prefs()?.edit()?.putBoolean(KEY_CLOCK_BUTTON, value)?.apply()
+        }
+
+    /** What the Echo Show's privacy button does (RecordButton.kt). Does nothing without the button. */
+    var privacyButton: PrivacyButtonMode
+        get() = privacyButtonState
+        set(value) {
+            privacyButtonState = value
+            prefs()?.edit()?.putString(KEY_PRIVACY_BUTTON, value.key)?.apply()
+        }
+
+    /** "The privacy button now records" was shown once. */
+    var privacyHintShown: Boolean
+        get() = prefs()?.getBoolean(KEY_PRIVACY_HINT_SHOWN, false) ?: false
+        set(value) {
+            prefs()?.edit()?.putBoolean(KEY_PRIVACY_HINT_SHOWN, value)?.apply()
         }
 }

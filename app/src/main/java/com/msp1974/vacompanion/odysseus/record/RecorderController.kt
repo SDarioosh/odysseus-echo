@@ -102,7 +102,10 @@ object RecorderController : EventListener {
             refreshQueue()
             uploadLoop()
         }
-        // The hardware switch (or anything else) muting the microphone stops a recording.
+        // The privacy button as the record button (E6). It also decides whether Android's
+        // mic-mute flag counts: not while the button records (VoiceActivity.micMuted stays false).
+        RecordButton.install(app, deviceManager.config)
+        // The hardware switch in Mute mode (or anything else) muting the microphone stops a recording.
         scope.launch {
             VoiceActivity.micMuted.collect { muted -> if (muted) stopAll("microphone muted") }
         }

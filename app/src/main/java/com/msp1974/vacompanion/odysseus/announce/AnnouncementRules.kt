@@ -127,11 +127,7 @@ object AnnouncementPolling {
      * A failed poll for the log. A feed that can't be read says only so: the JSON parser's message
      * quotes the answer, which holds the announcements' text (the owner's words, never logged).
      */
-    fun describeError(e: Throwable): String = when (e) {
-        is kotlinx.serialization.SerializationException, is IllegalArgumentException ->
-            "unreadable answer (${e.javaClass.simpleName})"
-        else -> e.message ?: e.javaClass.simpleName
-    }
+    fun describeError(e: Throwable): String = com.msp1974.vacompanion.odysseus.OdysseusLink.failureText(e)
 
     /** A hello is due at start, hourly, and whenever what it says (or the hub) changed. */
     fun helloDue(lastHelloMs: Long?, lastSent: String?, nowSaying: String, nowMs: Long): Boolean =

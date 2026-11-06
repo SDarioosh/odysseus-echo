@@ -163,6 +163,17 @@ object OdysseusLink {
 
     // --- API --------------------------------------------------------------------------------
 
+    /**
+     * A failed request for logs and the settings screen. An answer that can't be read says only
+     * so: the JSON parser's message quotes the answer, which holds the owner's words (turn
+     * titles, spoken answers, announcements), never logged.
+     */
+    fun failureText(e: Throwable): String = when (e) {
+        is kotlinx.serialization.SerializationException, is IllegalArgumentException ->
+            "unreadable answer (${e.javaClass.simpleName})"
+        else -> e.message ?: e.javaClass.simpleName
+    }
+
     sealed interface Result {
         data class Ok(val actions: List<VoiceAction>) : Result
         data class Failed(val message: String) : Result
@@ -281,7 +292,7 @@ object OdysseusLink {
             if (r.code != 200) return@withContext Result.Failed(describe(r.code, "actions feed"))
             Result.Ok(json.decodeFromString<VoiceActionsResponse>(r.body).actions)
         } catch (e: Exception) {
-            Result.Failed(e.message ?: e.javaClass.simpleName)
+            Result.Failed(failureText(e))
         }
     }
 
@@ -295,7 +306,7 @@ object OdysseusLink {
                 else -> TurnResult.Failed(describe(r.code, "turn feed"))
             }
         } catch (e: Exception) {
-            TurnResult.Failed(e.message ?: e.javaClass.simpleName)
+            TurnResult.Failed(failureText(e))
         }
     }
 
@@ -312,7 +323,7 @@ object OdysseusLink {
             if (r.code !in 200..299) return@withContext PostResult.Failed(describe(r.code, "satellite route"))
             PostResult.Ok(VoiceTurnApi.parseSatelliteTurnResponse(r.body))
         } catch (e: Exception) {
-            PostResult.Failed(e.message ?: e.javaClass.simpleName)
+            PostResult.Failed(failureText(e))
         }
     }
 
@@ -338,7 +349,7 @@ object OdysseusLink {
                 else -> InterruptResult.Failed(describe(r.code, "interrupt route"))
             }
         } catch (e: Exception) {
-            InterruptResult.Failed(e.message ?: e.javaClass.simpleName)
+            InterruptResult.Failed(failureText(e))
         }
     }
 
@@ -359,7 +370,7 @@ object OdysseusLink {
                 else -> TimingResult.Failed(describe(r.code, "timing route"))
             }
         } catch (e: Exception) {
-            TimingResult.Failed(e.message ?: e.javaClass.simpleName)
+            TimingResult.Failed(failureText(e))
         }
     }
 

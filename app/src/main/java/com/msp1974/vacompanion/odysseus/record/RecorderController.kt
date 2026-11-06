@@ -165,7 +165,15 @@ object RecorderController : EventListener {
     private fun perform(effects: List<RecorderEffect>) {
         for (e in effects) {
             when (e) {
-                is RecorderEffect.StartSession -> startSession(e.kind, e.quiet)
+                is RecorderEffect.StartSession -> try {
+                    startSession(e.kind, e.quiet)
+                } catch (ex: Exception) {
+                    // Storage gone or full: don't show a REC pill for audio that isn't kept.
+                    Timber.e(ex, "Recorder: could not start a session")
+                    machine.stopAll()
+                    publishState()
+                    toast("Could not start recording: no storage")
+                }
                 is RecorderEffect.EndSession -> {
                     capture?.finish()
                     capture = null

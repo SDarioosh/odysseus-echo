@@ -105,7 +105,11 @@ voice base URL (`https://<hub>/api/chat/voice/v1` → `https://<hub>`), with the
   `sequence` (from 0), `timestamp`, `codec=wav`, and `kind=note` for voice notes only.
 - `POST <hub>/api/codex/athena/sessions/<session_id>/end` after the session's last chunk.
 - A 404 on `/api/codex/athena/*` is tried once on `/api/codex/sound/*` (an older hub). If
-  that works, the older name is used until the app restarts.
+  that works, the older name is used until the app restarts. A chunk answered 404 on both is
+  "relay missing" (table below). A 404 on both for `/sessions/<id>/end` (session not found)
+  is that end's refusal, as before.
+- Redirects are not followed (`HubRelayTransport`): the token would go to wherever a redirect
+  points. A 3xx is a retry. At most 16 KB of an answer's body is read.
 - Chunks of a session still recording are uploaded as they come. Sessions go oldest first,
   and chunks by sequence.
 
@@ -115,6 +119,8 @@ voice base URL (`https://<hub>/api/chat/voice/v1` → `https://<hub>`), with the
 | 5xx, 408, 429, network error, 200 without ok | retry | stops the pass and tries again after 1, 2, 5, 10, then every 15 min. New chunks don't cut the wait short; "Upload now" does |
 | 401 / 403 | auth | stops uploads and shows **"Relink this Echo with Odysseus to upload recordings"**. They start again once the token changes (relink) or on "Upload now" |
 | other 4xx | rejected | keeps the file as `NNNNNN.wav.rejected`, skips it, logs it |
+| 404 on both `/api/codex/athena/chunk` and `/api/codex/sound/chunk` | relay missing | a hub problem (no relay, or a misconfigured proxy), not the chunk's: stops uploads, marks nothing rejected and shows **"Odysseus can't take recordings (relay missing)"**; tries again hourly and on "Upload now" |
+| 3xx | retry | as retry (redirects aren't followed) |
 
 The token needs the `athena:ingest` scope. Echo tokens made by the hub's `/echo/link` have it
 (hub change H4). An Echo linked before H4 has a voice-only token and gets 403: relink it from
@@ -220,7 +226,10 @@ they work without Home Assistant.
   and the queue cap.
 - `RecordingCaptureTest`: one capture against a fake microphone, and a resubscribe racing a stop.
 - `RecordingQueueTest`: the queue against a fake hub (order, `/end`, retry, auth, rejected,
-  the 404 fallback, sessions left by a killed run, half-written files, the cap).
+  the 404 fallback, a missing relay, sessions left by a killed run, half-written files, the
+  cap).
+- `HubRelayTransportTest`: a local HTTP server: a redirect isn't followed (the token doesn't
+  go to its target), a long body is cut at 16 KB.
 - `RecordingTextTest`: the pill and status wording.
 - `RecordButtonGesturesTest`: the privacy button's press and hold from key down/up, repeats,
   stale timers, the mute-switch fallback and how a key covers it, and the Record/Mute rules.

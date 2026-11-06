@@ -219,13 +219,28 @@ object OdysseusLink {
             val code = conn.responseCode
             val text = when {
                 code in 200..299 -> conn.inputStream.bufferedReader().use { it.readText() }
-                errorBody -> runCatching { conn.errorStream?.bufferedReader()?.use { it.readText().take(2000) } }.getOrNull().orEmpty()
+                errorBody -> runCatching { conn.errorStream?.bufferedReader()?.use { readAtMost(it, ERROR_BODY_MAX) } }.getOrNull().orEmpty()
                 else -> ""
             }
             return Reply(code, text)
         } finally {
             conn.disconnect()
         }
+    }
+
+    /** How much of an error answer [request] keeps (errorBody). */
+    internal const val ERROR_BODY_MAX = 2000
+
+    /** The first [max] chars of [reader], without reading (or waiting for) the rest. */
+    private fun readAtMost(reader: java.io.Reader, max: Int): String {
+        val buf = CharArray(max)
+        var n = 0
+        while (n < max) {
+            val r = reader.read(buf, n, max - n)
+            if (r < 0) break
+            n += r
+        }
+        return String(buf, 0, n)
     }
 
     /**

@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.net.InetSocketAddress
@@ -29,6 +30,14 @@ class OdysseusLinkHttpTest {
             ex.sendResponseHeaders(200, b.size.toLong())
             ex.responseBody.use { it.write(b) }
         }
+        server.createContext("/api/chat/voice/v1/slow-error") { ex ->
+            // A long error page that keeps the connection open: only its start is wanted.
+            ex.sendResponseHeaders(500, 0)
+            ex.responseBody.write("x".repeat(3000).toByteArray())
+            ex.responseBody.flush()
+            runCatching { Thread.sleep(3000) }
+            runCatching { ex.close() }
+        }
         server.executor = java.util.concurrent.Executors.newCachedThreadPool()
         server.start()
     }
@@ -43,5 +52,14 @@ class OdysseusLinkHttpTest {
         assertEquals("", reply.body)
         // The token never went to the redirect's target.
         assertNull(authSeen["/elsewhere"])
+    }
+
+    @Test
+    fun errorBodyIsOnlyItsStartAndDoesNotWaitForTheRest() {
+        val started = System.currentTimeMillis()
+        val reply = OdysseusLink.send("$base/api/chat/voice/v1/slow-error", "fictional-token", readTimeoutMs = 1500, errorBody = true)
+        assertEquals(500, reply.code)
+        assertEquals("x".repeat(OdysseusLink.ERROR_BODY_MAX), reply.body)
+        assertTrue("took ${System.currentTimeMillis() - started} ms", System.currentTimeMillis() - started < 1400)
     }
 }

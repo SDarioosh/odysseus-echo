@@ -13,7 +13,7 @@
 | Speaker | Works (`AUDIO_DEVICE_OUT_SPEAKER`, 48 kHz stereo). |
 | Screen / touch | 960×480 at 195 dpi, Goodix touch. Both work. |
 | Wi-Fi | Works: 5 GHz, RSSI −22 dBm, 433 Mbps at the test spot. |
-| Mic-mute button | Shows up as `gpio-privacy-state` (`SW_MUTE_DEVICE`, currently unmuted) and `gpio-privacy-button`. Behaviour while muted was **not tested** (owner skipped it). |
+| Mic-mute button | Shows up as `gpio-privacy-state` (`SW_MUTE_DEVICE`, currently unmuted) and `gpio-privacy-button`. Muting doesn't cut the microphone (owner, 2026-11-06). The button is the record button: see [Privacy button](#privacy-button-records-or-mutes-never-sleeps). |
 | Camera shutter | `SW_CAMERA_LENS_COVER` is active (shutter closed). Camera is not used. |
 | Google services | None (no GMS / Play Store). |
 | Root | `adb root` works ("Rooted debugging" in developer options, enabled by the owner). The Magisk app is installed but not set up (no `su`). Nothing below needs root except reading `/proc/asound` while debugging. |
@@ -121,6 +121,7 @@ scripted in `scripts/odysseus/setup_device.sh`. `P=com.msp1974.vacompanion.odyss
 | 21 | Clock (only when there's no network for NTP): `adb root`; ``adb shell "date -u $(date -u +%m%d%H%M%Y.%S)"``; `adb unroot` | the clock had drifted 1.7 days with no network; HA auth and TLS need a correct clock | automatic time takes over on network |
 | 22 | **Silent testing** (owner can't have sound in the room): `cmd media_session volume --stream {1,2,3,5} --set 0`; `cmd notification set_dnd none`; `appops set $P PLAY_AUDIO deny`; `settings put system {sound_effects_enabled,haptic_feedback_enabled,dtmf_tone,lockscreen_sounds_enabled} 0`; in HA: Do not disturb = on, voice/music/alarm volume = 0 | no sound at all: the app op mutes every player of the app, even if HA pushes volumes; DND silences the rest | `appops set $P PLAY_AUDIO allow`; `cmd notification set_dnd off`; volumes back; those settings back to `1` |
 | 23 | USB tunnel to a test HA on the dev machine (no LAN exposure): `adb reverse tcp:18123 tcp:18123` (device → HA at `http://127.0.0.1:18123`); `adb forward tcp:10800 tcp:10800` (HA → satellite at `127.0.0.1:10800`) | end-to-end testing without opening ports; redo after every `adb root`/`unroot` or USB reconnect | `adb reverse --remove-all`; `adb forward --remove-all` |
+| 24 | `adb root`; install `scripts/odysseus/gpio-privacy-button.kl` in `/data/system/devices/keylayout/` (done by `setup_device.sh`); reboot | privacy button = `MEDIA_RECORD`: it records and never puts the device to sleep ([Privacy button](#privacy-button-records-or-mutes-never-sleeps)) | `rm` the file, reboot |
 
 Not granted on purpose: `CAMERA` (motion detection; the shutter is closed anyway) and
 location (only needed for VACA's BLE proxy).
@@ -213,16 +214,20 @@ adb reverse tcp:18123 tcp:18123; adb reverse tcp:17020 tcp:17020; adb forward tc
 
 Then a turn started from HA's wake button showed the four fictional actions after the turn ended: three added (to-do with due time, list line, event) and one completed (an Athena item, struck through).
 
-## Privacy button: mute only, no sleep (0.14.0+odysseus.8)
+## Privacy button: records (or mutes), never sleeps
 
 On this LineageOS build, the microphone privacy button is two input devices:
 
 | Device | Sends | Effect |
 |---|---|---|
-| `gpio-privacy-state` | `SW_MUTE_DEVICE` | Android mutes the microphone (the HAL logs `setMicMute 0 => 1`) |
-| `gpio-privacy-button` | `KEY_POWER` | `Going to sleep due to power_button`: the screen turns off |
+| `gpio-privacy-state` | `SW_MUTE_DEVICE` | Android sets its microphone-mute flag (the HAL logs `setMicMute 0 => 1`). **The microphone keeps working**: the wake word still answers while "muted" (owner, 2026-11-06). |
+| `gpio-privacy-button` | `KEY_POWER` (scancode 116) | upstream: `Going to sleep due to power_button`, the screen turns off |
 
-The fix is a key layout for `gpio-privacy-button` in `/data/system/devices/keylayout/`. That's on `/data`, not `/system`. It maps no keys, so the button's power key is ignored and only the mute switch takes effect. The file is `scripts/odysseus/gpio-privacy-button.kl`. It is loaded at boot.
+`scripts/odysseus/gpio-privacy-button.kl` maps scancode 116 to `MEDIA_RECORD` (flag `WAKE`), so
+the button never puts the device to sleep and the app can catch it. It goes in
+`/data/system/devices/keylayout/` (on `/data`, not `/system`) and is loaded at boot.
+`scripts/odysseus/setup_device.sh` installs it (needs `adb root`, i.e. Developer options →
+Rooted debugging) and says whether it is loaded. By hand:
 
 ```sh
 adb root                                   # root is needed to write /data/system
@@ -235,11 +240,65 @@ adb shell 'mkdir -p /data/system/devices/keylayout \
 adb unroot
 adb reboot                                 # ask the owner first; the layout loads at boot
 # Check: dumpsys input shows the new KeyLayoutFile for gpio-privacy-button
-adb shell dumpsys input | grep -A8 gpio-privacy-button | grep KeyLayoutFile
+adb shell dumpsys input | grep -A12 gpio-privacy-button | grep KeyLayoutFile
 # Undo: adb root; adb shell rm /data/system/devices/keylayout/gpio-privacy-button.kl; adb reboot
 ```
 
-When the microphone is muted, the app shows a red "Microphone off" pill at the bottom left, driven by `AudioManager.ACTION_MICROPHONE_MUTE_CHANGED`. The listening overlay is hidden while muted.
+What the button does is the setting Menu → Odysseus → Recording → **Privacy button**:
+
+- **Record** (default): press = start or stop a recording, hold 1 s = voice note
+  ([recording.md](recording.md#the-privacy-button)). The app ignores Android's mic-mute flag:
+  no "Microphone off", recordings aren't refused or stopped by it. **To mute, use "Mic Mute" in
+  the quick actions sheet** (or Home Assistant's mute); that still mutes and stops recordings.
+- **Mute** (upstream behaviour, without the sleep): the app swallows the key, and the switch
+  mutes. When the microphone is muted, the app shows a red "Microphone off" pill at the bottom
+  left, driven by `AudioManager.ACTION_MICROPHONE_MUTE_CHANGED`, and the listening overlay is
+  hidden. The switch is a toggle: if "Microphone off" shows right after choosing Mute (an odd
+  number of presses in Record mode), press the button once.
+
+With "Recording" off, the button mutes whatever the setting says. On devices without the button
+(no input device named `gpio-privacy-button` or `gpio-privacy-state`, e.g. tablets) the setting
+does nothing and is greyed out.
+
+Why the app can't stop the mute itself: on Android 11 the microphone is muted when the switch
+*or* an app *or* a restriction says so (`AudioService.setMicrophoneMuteFromSwitch`), so
+`AudioManager.setMicrophoneMute(false)` can't clear the switch's mute. It doesn't need to: on
+this device the flag doesn't silence our capture. The red light is probably wired to the switch
+itself; check below.
+
+### Owner's checks on the Echo
+
+1. **Key events.** With the layout loaded (check above), run
+   `adb shell getevent -lt /dev/input/eventN` for `gpio-privacy-button` (find N with
+   `adb shell getevent -il | grep -B1 -A3 gpio-privacy`), then press once and hold once for 2 s.
+   Look for:
+   - `EV_KEY KEY_POWER DOWN` and `EV_KEY KEY_POWER UP` as **two lines with different
+     timestamps**, about 2 s apart for the hold. Then press and hold both work with the screen on.
+     If DOWN and UP have the same timestamp (or only one line comes), the button reports no hold:
+     every press is a press, and voice notes come from the on-screen buttons.
+   - on `gpio-privacy-state`: `EV_SW SW_MUTE_DEVICE 00000001` then `00000000` on the next press.
+     That's the fallback the app uses with the screen off.
+2. Repeat 1 with the screen **off** (Settings → Screen off, or let the screen timeout turn it
+   off) to see whether the button reports at all then. Android 11 doesn't pass keys to the app
+   while the display is off; the switch should still change.
+3. `adb logcat | grep -E "Privacy button|Recorder"`. Screen on: press → `Privacy button: press
+   (key up)` and a REC pill; press again → it stops. Hold 1 s → `Privacy button: hold (hold)`
+   and a NOTE pill; letting go doesn't stop it; press → stops.
+4. Screen off (really off, not the black screensaver): press → `Privacy button: press (switch)`,
+   the screen wakes and REC shows. Press again → it stops. Hold → also only a press (known
+   limit).
+5. The device never goes to sleep on a press (no `Going to sleep due to power_button` in
+   logcat), in either mode.
+6. The red privacy light: note whether it toggles with each press in Record mode. If it does, it
+   is wired to the switch and the app can't stop it (it then reads "on" during every other
+   recording, and means nothing in Record mode).
+7. "Hey Athena" still answers after an odd number of presses (switch "muted"), with and without
+   a recording running.
+8. Quick actions → Mic Mute: the wake word stops, a running recording stops, and Record is
+   refused with "The microphone is muted: not recording". Unmute: it works again.
+9. Setting → Mute: a press shows "Microphone off" (and no recording starts); press again: gone.
+10. Another app in front (e.g. Settings): a press starts a recording (switch path; the pill shows
+    once the app is back in front); a hold is only a press.
 
 ## Wake word threshold rounding
 

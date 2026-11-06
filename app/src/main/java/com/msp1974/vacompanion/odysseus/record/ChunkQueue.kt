@@ -11,6 +11,7 @@ package com.msp1974.vacompanion.odysseus.record
 //       000004.wav.rejected   the hub refused it: kept, skipped
 //       end                   the session is finished; its text is the number of chunks
 //       ended                 `/end` was delivered, only rejected chunks are left
+//       sent                  the highest sequence delivered (its files are gone), for finishAbandoned
 //
 // Sessions are worked through oldest first, chunks by sequence. Files are written to a .tmp name
 // and renamed, so a crash never leaves half a chunk that looks ready.
@@ -85,9 +86,13 @@ class ChunkQueue(private val root: File) {
         var n = 0
         for (dir in sessionDirs()) {
             if (dir in activeDirs || File(dir, END_FILE).exists()) continue
-            val highest = dir.listFiles().orEmpty()
+            val written = dir.listFiles().orEmpty()
                 .mapNotNull { f -> f.name.takeIf { it.endsWith(".json") && it != SESSION_FILE }?.substringBefore('.')?.toIntOrNull() }
                 .maxOrNull()
+            // Delivered chunks' files are gone: without "sent", a session whose chunks were all
+            // uploaded would count 0 and be deleted without its `/end`.
+            val sent = runCatching { File(dir, SENT_FILE).readText().trim().toInt() }.getOrNull()
+            val highest = listOfNotNull(written, sent).maxOrNull()
             finishSession(dir, (highest ?: -1) + 1)
             n++
         }
@@ -126,6 +131,7 @@ class ChunkQueue(private val root: File) {
 
     /** The chunk was delivered: delete it and its sidecar. */
     fun uploaded(item: QueueItem.Chunk) {
+        runCatching { writeAtomic(File(item.dir, SENT_FILE), item.info.sequence.toString().toByteArray()) }
         item.wav.delete()
         File(item.dir, seqName(item.info.sequence) + ".json").delete()
     }
@@ -200,6 +206,7 @@ class ChunkQueue(private val root: File) {
     private fun writeAtomic(target: File, bytes: ByteArray) {
         val tmp = File(target.parentFile, target.name + ".tmp")
         tmp.writeBytes(bytes)
+
         if (!tmp.renameTo(target)) {
             target.delete()
             if (!tmp.renameTo(target)) throw java.io.IOException("Could not write ${target.name}")
@@ -210,6 +217,7 @@ class ChunkQueue(private val root: File) {
         const val SESSION_FILE = "session.json"
         const val END_FILE = "end"
         const val ENDED_FILE = "ended"
+        const val SENT_FILE = "sent"
         const val REJECTED_SUFFIX = ".rejected"
 
         fun seqName(sequence: Int): String = "%06d".format(sequence)

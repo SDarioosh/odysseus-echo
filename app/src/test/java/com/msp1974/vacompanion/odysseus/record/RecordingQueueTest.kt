@@ -211,6 +211,20 @@ class RecordingQueueTest {
     }
 
     @Test
+    fun aSessionKilledAfterAllItsChunksWereSentStillGetsItsEnd() {
+        // Chunks 0 and 1 were uploaded (files deleted), then the app was killed before chunk 2.
+        session("aaaaaaaaaaaaaaaa", chunks = 2, finish = false)
+        val hub = FakeHub { _, _ -> ok }
+        assertEquals(PassResult.DONE, RecordingUploader(queue, hub).runPass())
+        assertEquals(2, hub.sent.size)
+        assertEquals(1, queue.finishAbandoned())
+        RecordingUploader(queue, hub).runPass()
+        assertEquals("/api/codex/athena/sessions/aaaaaaaaaaaaaaaa/end", hub.paths().last())
+        assertEquals(3, hub.sent.size)
+        assertNull(queue.next())
+    }
+
+    @Test
     fun aHalfWrittenChunkIsNotReady() {
         val dir = session("aaaaaaaaaaaaaaaa", chunks = 0, finish = false)
         File(dir, "000000.wav.tmp").writeBytes(ByteArray(10))

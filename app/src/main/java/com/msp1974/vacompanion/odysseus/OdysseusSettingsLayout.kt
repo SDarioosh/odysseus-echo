@@ -118,6 +118,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
                 }) { Text("Save and test") }
                 OutlinedButton(onClick = {
                     OdysseusLink.setToken(""); OdysseusLink.baseUrl = ""
+                    ManagedSettings.releaseAll("unlinked") // Odysseus fork: settings back to the device (odysseus/managed/)
                     url = ""; token = ""; status = "Not linked"
                 }) { Text("Unlink") }
             }

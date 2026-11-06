@@ -68,7 +68,7 @@ object FollowUp {
             fun conditions(awaiting: Boolean?) = FollowUpRules.Conditions(
                 enabled = FollowUpSettings.enabled,
                 sameTurn = VoiceTurns.turnStartedAt == turn,
-                muted = config.isMuted,
+                muted = config.isMuted || com.msp1974.vacompanion.odysseus.lock.LockMode.isLocked, // Lock mode (odysseus/lock/)
                 micMuted = VoiceActivity.micMuted.value,
                 doNotDisturb = config.doNotDisturb,
                 recording = RecorderController.state.value.recorder != RecorderState.Idle,

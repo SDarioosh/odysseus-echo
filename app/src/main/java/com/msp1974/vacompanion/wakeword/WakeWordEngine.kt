@@ -32,7 +32,8 @@ open class WakeWordEngine(
     // mute arriving later would never be redelivered, losing it until the app restarted
     // (see issue #57). Seeded from config.isMuted so a fresh engine still starts correct.
     @Volatile
-    private var requestedMuted: Boolean = config.isMuted
+    // Odysseus fork: Lock mode keeps a fresh engine off too (odysseus/lock/LockMode.kt).
+    private var requestedMuted: Boolean = config.isMuted || com.msp1974.vacompanion.odysseus.lock.LockMode.isLocked
 
     private suspend fun get(): WakeWordEngineProvider? {
         Timber.i("Starting $engine wake word engine")

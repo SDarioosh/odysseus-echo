@@ -126,6 +126,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
             HomeScreenSettings()
             com.msp1974.vacompanion.odysseus.home.today.TodaySettingsSection()
             KioskSettingsSection()
+            com.msp1974.vacompanion.odysseus.lock.LockSettingsSection() // locked outside work hours (odysseus/lock/)
             com.msp1974.vacompanion.odysseus.update.UpdateSettingsSection()
             com.msp1974.vacompanion.odysseus.record.RecordingSettingsSection() // Menu → Odysseus → Recording (odysseus/record/)
         }

@@ -215,6 +215,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                         com.msp1974.vacompanion.odysseus.SendspinPairingOverlay()
                         // Odysseus fork: red REC / NOTE pill over every screen while recording (odysseus/record/RecordingUi.kt)
                         com.msp1974.vacompanion.odysseus.record.RecordingPill()
+                        // Odysseus fork: Lock mode covers everything above while locked (odysseus/lock/LockOverlay.kt)
+                        com.msp1974.vacompanion.odysseus.lock.LockOverlay()
 
                         vaUiState.onboardingDeviceId?.let { defaultId ->
                             UUIDEditDialog(
@@ -256,6 +258,13 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         // satellite actually starts, well after this runs). Running them before setContent used
         // to sit in front of the splash screen's dismissal for no benefit, since WebView
         // construction and Firebase init are two of the costlier parts of a cold start.
+        // Odysseus fork: Lock mode closes the settings menu when it locks (odysseus/lock/LockMode.kt).
+        lifecycleScope.launch {
+            com.msp1974.vacompanion.odysseus.lock.LockMode.locked.collect { locked ->
+                if (locked) viewModel.setShowMenu(false)
+            }
+        }
+
         lifecycleScope.launch {
             initWebView()
             firebaseManager = try {

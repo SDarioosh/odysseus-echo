@@ -3,8 +3,14 @@ package com.msp1974.vacompanion.sendspin
 import android.content.Context
 import android.content.pm.PackageManager
 import com.msp1974.vacompanion.device.DeviceManager
+import com.msp1974.vacompanion.odysseus.lock.LockMode
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
@@ -22,14 +28,31 @@ class SendspinManager(
     private var player: SendspinPlayer? = null
     private var advertiser: SendspinAdvertiser? = null
 
+    // Odysseus fork: Lock mode stops the player while locked and starts it again after (odysseus/lock/).
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var lockJob: Job? = null
+
     fun start() {
         config.eventBroadcaster.addListener(this)
-        if (config.sendspinEnabled) startPlayer()
+        if (config.sendspinEnabled && !LockMode.isLocked) startPlayer()
+        lockJob?.cancel()
+        lockJob = scope.launch {
+            LockMode.locked.collect { locked ->
+                if (locked) {
+                    if (player != null) Timber.i("SendspinManager: stopping the player, locked")
+                    stopPlayer()
+                } else if (config.sendspinEnabled) {
+                    startPlayer()
+                }
+            }
+        }
     }
 
     // The background task only stops when the app or its service does, and the satellite comes
     // back with them, so tell Music Assistant to keep reconnecting (goodbye `restart`).
     fun shutdown() {
+        lockJob?.cancel()
+        lockJob = null
         config.eventBroadcaster.removeListener(this)
         stopPlayer(restarting = true)
     }
@@ -78,6 +101,6 @@ class SendspinManager(
     override fun onEventTriggered(event: Event) {
         if (event.eventName != "sendspin_enabled") return
         Timber.d("SendspinManager: sendspin_enabled=${config.sendspinEnabled}")
-        if (config.sendspinEnabled) startPlayer() else stopPlayer()
+        if (config.sendspinEnabled && !LockMode.isLocked) startPlayer() else stopPlayer()
     }
 }

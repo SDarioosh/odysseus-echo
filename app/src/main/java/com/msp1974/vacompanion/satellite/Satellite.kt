@@ -6,6 +6,7 @@ import com.msp1974.vacompanion.odysseus.OdysseusTurn // Odysseus fork
 import com.msp1974.vacompanion.odysseus.VoiceActivity // Odysseus fork
 import com.msp1974.vacompanion.odysseus.followup.FollowUp // Odysseus fork
 import com.msp1974.vacompanion.odysseus.followup.FollowUpRules // Odysseus fork
+import com.msp1974.vacompanion.odysseus.lock.LockMode // Odysseus fork
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -161,6 +162,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
         state = SatelliteState.STARTING
         config.eventBroadcaster.addListener(this)
+        watchLockMode() // Odysseus fork (odysseus/lock/LockMode.kt)
 
         val loadedSettings = waitForSettings()
         if (!loadedSettings) {
@@ -402,6 +404,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
     suspend fun processMessage(packet: WyomingPacket) {
         // Odysseus fork: drop what HA still sends for a run a wake word interrupted (odysseus/HaRunGate.kt).
         if (packet.type != WyomingEvent.CUSTOM_EVENT && HaRunGate.onServerPacket(packet.type)) return
+        if (packet.type != WyomingEvent.CUSTOM_EVENT && lockedServerPacket(packet.type)) return // Odysseus fork (odysseus/lock/)
         when (packet.type) {
             WyomingEvent.CUSTOM_EVENT -> customEventHandler(clientId, packet)
             else -> {
@@ -565,6 +568,10 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
     }
 
     suspend fun handleWakeWordDetection(detection: WakeWordEngineProvider.WakeWordDetection) {
+        if (LockMode.isLocked) { // Odysseus fork: no voice while locked (odysseus/lock/)
+            Timber.i("Lock mode: wake (${detection.wakeWordId}) ignored, locked")
+            return
+        }
         if (clientId.isEmpty()) {
             Timber.e("Unable to run audio pipeline. Satellite not connected to HA")
             val toastMessage = "No connection to Home Assistant.  Unable to respond to voice command."
@@ -691,7 +698,8 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
     fun muteMicrophone(muted: Boolean) {
         runCatching {
-            wakeWordHandler?.engine?.setMuted(muted)
+            // Odysseus fork: Lock mode keeps the wake word engine (and so the microphone) off.
+            wakeWordHandler?.engine?.setMuted(muted || LockMode.isLocked)
         }.onFailure { e ->
             Timber.e(e, "Error setting wake word engine muted=$muted")
         }
@@ -853,6 +861,16 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
         Timber.d("Action received: $action")
         runCatching {
             val payloadStr = packet.getProp("payload")
+            // Odysseus fork: Lock mode (odysseus/lock/). Home Assistant locks and unlocks through
+            // navigate odysseus://lock|unlock; while locked nothing it sends may wake, play or show.
+            if (action == "navigate" && payloadStr.isNotEmpty()) {
+                val url = Json.parseToJsonElement(payloadStr).jsonObject["url"]?.jsonPrimitive?.content ?: ""
+                if (LockMode.handleRemote(url)) return
+            }
+            if (LockMode.isLocked && action in LOCKED_IGNORED_ACTIONS) {
+                Timber.i("Lock mode: action $action ignored, locked")
+                return
+            }
             when (action) {
                 "play-media", "play", "pause", "stop", "set-volume" -> { handleMediaPlayerAction(action, payloadStr) }
                 "toast-message" -> if (payloadStr.isNotEmpty()) {
@@ -1195,8 +1213,72 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
         }
     }
 
+    // --- Odysseus fork: Lock mode (odysseus/lock/LockMode.kt, docs/odysseus/lock-mode.md) ---------
+
+    private var lockWatchJob: Job? = null
+
+    // Home Assistant's announcement audio being dropped because the device is locked.
+    @Volatile
+    private var droppingLockedAudio = false
+
+    /** Follows Lock mode for this session: mutes the wake word, stops a turn and all sound on lock. */
+    private fun watchLockMode() {
+        lockWatchJob?.cancel()
+        lockWatchJob = scope.launch {
+            LockMode.locked.collect { locked ->
+                muteMicrophone(config.isMuted)
+                if (!locked) return@collect
+                runCatching {
+                    audioPipeline?.stop()
+                    audioPipeline = null
+                    cancelDetectionBuffer()
+                    mediaManager.stopAll()
+                }.onFailure { Timber.e(it, "Lock mode: error stopping the satellite's audio") }
+            }
+        }
+    }
+
+    /**
+     * While locked, what Home Assistant starts on its own is refused without leaving it waiting:
+     * an announcement's audio is dropped and answered with `played` at its end, and a conversation
+     * it starts (`transcribe`) gets an `audio-stop` at once, so no microphone audio is sent.
+     * True if [type] was handled here.
+     */
+    private fun lockedServerPacket(type: String): Boolean {
+        if (!LockMode.isLocked && !droppingLockedAudio) return false
+        if (audioPipeline != null && audioPipeline?.pipelineStage != PipelineStage.ENDED) return false
+        return when (type) {
+            WyomingEvent.AUDIO_START -> {
+                if (!LockMode.isLocked) return false
+                Timber.i("Lock mode: announcement from Home Assistant dropped, locked")
+                droppingLockedAudio = true
+                true
+            }
+            WyomingEvent.AUDIO_CHUNK -> droppingLockedAudio
+            WyomingEvent.AUDIO_STOP -> {
+                if (!droppingLockedAudio) return false
+                droppingLockedAudio = false
+                sendSatelliteMessage(clientId, WyomingEvent.PLAYED, buildJsonObject {})
+                true
+            }
+            WyomingEvent.TRANSCRIBE -> {
+                if (!LockMode.isLocked) return false
+                Timber.i("Lock mode: conversation started by Home Assistant refused, locked")
+                sendSatelliteMessage(clientId, WyomingEvent.AUDIO_STOP, buildJsonObject { put("timestamp", isoNow()) })
+                true
+            }
+            else -> false
+        }
+    }
+
     companion object {
         fun isoNow(): String = DateTimeFormatter.ISO_INSTANT.format(Instant.now())
+
+        // Odysseus fork: Home Assistant actions that would wake, play or show something; ignored
+        // while Lock mode is locked. Logs, refresh and interrupt still work.
+        private val LOCKED_IGNORED_ACTIONS = setOf(
+            "play-media", "play", "set-volume", "toast-message", "wake", "alarm", "navigate",
+        )
 
         private const val AUDIO_DEVICE_DEBOUNCE_MS = 1000L
 

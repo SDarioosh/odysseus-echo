@@ -112,6 +112,10 @@ object RecorderController : EventListener {
         scope.launch {
             VoiceActivity.micMuted.collect { muted -> if (muted) stopAll("microphone muted") }
         }
+        // Lock mode locking stops a recording (odysseus/lock/LockMode.kt).
+        scope.launch {
+            com.msp1974.vacompanion.odysseus.lock.LockMode.locked.collect { locked -> if (locked) stopAll("locked") }
+        }
         Timber.i("Recorder installed")
     }
 
@@ -167,6 +171,7 @@ object RecorderController : EventListener {
         return when {
             !RecorderSettings.enabled -> "Recording is off (Menu → Odysseus → Recording)"
             !OdysseusLink.isConfigured -> "Link this Echo with Odysseus to record"
+            com.msp1974.vacompanion.odysseus.lock.LockMode.isLocked -> "Locked: not recording" // Lock mode (odysseus/lock/)
             cfg.isMuted || VoiceActivity.micMuted.value -> "The microphone is muted: not recording"
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ->
                 "No microphone permission: not recording"

@@ -12,6 +12,8 @@ package com.msp1974.vacompanion.odysseus
 //   POST <base>/satellite/interrupt (form: device_id)  -> a barge-in: end this device's turn now (BargeIn.kt)
 //   GET <base>/today                                   -> the home screen's Today page (home/today/)
 //   GET <base>/app/latest, GET <base>/app/apk          -> updates from the hub (odysseus/update/, openGet)
+//   POST <base>/todos/done, /reminders/done, /action-items/done, /todos/undo, /action-items/undo
+//                                                      -> Done buttons (odysseus/done/, hubRequest)
 //
 
 // The token is the same `voice`-scope token Home Assistant uses (read-only plus voice actions).
@@ -179,8 +181,15 @@ object OdysseusLink {
         else -> "HTTP $code"
     }
 
-    /** One request to the hub; null body for a GET. Runs on the caller's dispatcher. */
-    private fun request(path: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000): Reply {
+    /**
+     * One request to the hub; null body for a GET. Runs on the caller's dispatcher. The reply's
+     * body is "" unless 2xx, or with [errorBody] also the start of an error answer (the Done
+     * routes tell "not found" from "no such route" by it).
+     */
+    private fun request(
+        path: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000,
+        errorBody: Boolean = false,
+    ): Reply {
         val base = baseUrl
         val token = token()
         if (!base.startsWith("http") || token.isNullOrEmpty()) throw IllegalStateException("not set up")
@@ -198,7 +207,11 @@ object OdysseusLink {
                 conn.outputStream.use { it.write(body) }
             }
             val code = conn.responseCode
-            val text = if (code in 200..299) conn.inputStream.bufferedReader().use { it.readText() } else ""
+            val text = when {
+                code in 200..299 -> conn.inputStream.bufferedReader().use { it.readText() }
+                errorBody -> runCatching { conn.errorStream?.bufferedReader()?.use { it.readText().take(2000) } }.getOrNull().orEmpty()
+                else -> ""
+            }
             return Reply(code, text)
         } finally {
             conn.disconnect()
@@ -316,15 +329,22 @@ object OdysseusLink {
         }
     }
 
-    /** A hub answer for callers that shape their own requests: the HTTP code and, for 2xx, the body. */
+    /**
+     * A hub answer for callers that shape their own requests: the HTTP code and, for 2xx, the body
+     * (asked with errorBody, also the start of an error answer).
+     */
     data class HubReply(val code: Int, val body: String)
 
     /**
      * One request to `<base><path>` with the voice token (a GET without [body]), for features in
-     * their own packages (announcements: odysseus/announce/). Throws when not linked or unreachable.
+     * their own packages (announcements: odysseus/announce/; Done: odysseus/done/). Throws when
+     * not linked or unreachable.
      */
-    suspend fun hubRequest(path: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000): HubReply =
-        withContext(Dispatchers.IO) { request(path, contentType, body, readTimeoutMs).let { HubReply(it.code, it.body) } }
+    suspend fun hubRequest(
+        path: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000,
+        errorBody: Boolean = false,
+    ): HubReply =
+        withContext(Dispatchers.IO) { request(path, contentType, body, readTimeoutMs, errorBody).let { HubReply(it.code, it.body) } }
 
     /** Tests the saved link: (ok, message to show). An older hub without the turn feed is tested with /actions. */
     suspend fun testLink(): Pair<Boolean, String> {

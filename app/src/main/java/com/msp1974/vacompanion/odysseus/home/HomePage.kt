@@ -9,6 +9,8 @@ package com.msp1974.vacompanion.odysseus.home
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
+import com.msp1974.vacompanion.odysseus.done.DoneMarks
+import com.msp1974.vacompanion.odysseus.done.DoneTarget
 import com.msp1974.vacompanion.odysseus.home.today.TodayPage
 import com.msp1974.vacompanion.odysseus.home.today.TodayView
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherNow
@@ -26,6 +28,12 @@ data class HomePageContext(
     val weather: WeatherNow? = null,
     /** The Today page's data from Odysseus (today/TodayRepository). */
     val today: TodayView = TodayView.NotLinked,
+    /** The Today page's Done marks (today/TodayDone). */
+    val todayDone: DoneMarks = DoneMarks(),
+    /** Marks a Today row done: target, its title and its place in its list. */
+    val onTodayDone: (DoneTarget, String, Int) -> Unit = { _, _, _ -> },
+    /** Undoes a Today row's done. */
+    val onTodayUndo: (DoneTarget) -> Unit = {},
     /** Sends a Sendspin transport command ("play", "pause", "next", …). */
     val onSendspinCommand: (String) -> Unit = {},
 )

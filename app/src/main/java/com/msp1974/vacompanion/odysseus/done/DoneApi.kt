@@ -1,0 +1,126 @@
+package com.msp1974.vacompanion.odysseus.done
+
+// Odysseus fork: marking things done from the device's own screen (plan contract C5;
+// docs/odysseus/home-screen.md "Done", docs/odysseus/announcements.md). A tap on the screen is
+// the confirmation, so no spoken "yes" is needed. Scope `voice`, the device's own token.
+//
+//   POST <base>/todos/done         {"ref": "todo:41:2", "device_id": …} -> {"ok": true, "already": false, "title": …}
+//   POST <base>/reminders/done     {"ref": "todo:41",   "device_id": …} -> {"ok": true, "already": false}
+//   POST <base>/action-items/done  {"id": "ai_17",      "device_id": …} -> {"ok": true, "already": false}
+//   POST <base>/todos/undo         {"ref", "device_id"}   reopen within 10 min of a done by a device; 409 after
+//   POST <base>/action-items/undo  {"id", "device_id"}
+//   404 {"error": "not found"}, 400 malformed, 503 {"error": "athena unavailable"}.
+//
+// Pure: paths, bodies and what an answer means, unit-tested (DoneApiTest). The requests go
+// through DoneHttp (DoneClient.kt), OdysseusLink.hubRequest on the device.
+
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
+
+/** What a Done button marks done. Also the key of its row's mark (DoneMarks). */
+sealed interface DoneTarget {
+    /** One item of a to-do note ("todo:41:2"). */
+    data class Todo(val ref: String) : DoneTarget
+    /** A reminder: a whole note with a due date ("todo:41"), from an announcement's `ref`. */
+    data class Reminder(val ref: String) : DoneTarget
+    /** An Athena action item ("ai_17"). */
+    data class ActionItem(val id: String) : DoneTarget
+
+    /** The hub has an undo route for it (reminders have none). */
+    val canUndo: Boolean get() = this !is Reminder
+
+    /** For logs: refs and ids only, never titles. */
+    val label: String
+        get() = when (this) {
+            is Todo -> ref
+            is Reminder -> "reminder $ref"
+            is ActionItem -> id
+        }
+}
+
+/** What a done or undo request came to. */
+sealed interface DoneOutcome {
+    /** Done (or undone). [already]: it was so before this request. [title] from todos/done. */
+    data class Ok(val already: Boolean = false, val title: String? = null) : DoneOutcome
+
+    data class Failed(val kind: Kind, val reason: String) : DoneOutcome
+
+    enum class Kind { NOT_FOUND, TOO_LATE, ATHENA_UNAVAILABLE, REFUSED, NOT_SUPPORTED, BAD_REQUEST, UNREACHABLE, OTHER }
+}
+
+object DoneApi {
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+
+    fun donePath(target: DoneTarget): String = when (target) {
+        is DoneTarget.Todo -> "/todos/done"
+        is DoneTarget.Reminder -> "/reminders/done"
+        is DoneTarget.ActionItem -> "/action-items/done"
+    }
+
+    /** Null for a target without an undo route. */
+    fun undoPath(target: DoneTarget): String? = when (target) {
+        is DoneTarget.Todo -> "/todos/undo"
+        is DoneTarget.Reminder -> null
+        is DoneTarget.ActionItem -> "/action-items/undo"
+    }
+
+    /** The JSON body of a done or undo request: `ref` or `id`, and the device id. */
+    fun body(target: DoneTarget, deviceId: String): String = buildJsonObject {
+        when (target) {
+            is DoneTarget.Todo -> put("ref", target.ref)
+            is DoneTarget.Reminder -> put("ref", target.ref)
+            is DoneTarget.ActionItem -> put("id", target.id)
+        }
+        put("device_id", deviceId)
+    }.toString()
+
+    /** The `error` string of an error answer, lower case, or null. */
+    private fun error(body: String): String? =
+        (obj(body)?.get("error") as? JsonPrimitive)?.contentOrNull?.trim()?.lowercase()
+
+    private fun obj(body: String): JsonObject? =
+        runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
+
+    /**
+     * What the hub's answer means. [body] is the answer's body, also for errors (the start of it):
+     * a 404 with `{"error": "not found"}` is an unknown item, a 404 without it a hub that doesn't
+     * have the route yet. The reasons are short: they replace a row's due tag.
+     */
+    fun classify(code: Int, body: String): DoneOutcome = when (code) {
+        in 200..299 -> {
+            val o = obj(body)
+            val ok = (o?.get("ok") as? JsonPrimitive)?.booleanOrNull
+            if (ok == false) {
+                DoneOutcome.Failed(DoneOutcome.Kind.OTHER, "Odysseus said no")
+            } else {
+                DoneOutcome.Ok(
+                    already = (o?.get("already") as? JsonPrimitive)?.booleanOrNull ?: false,
+                    title = (o?.get("title") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+        400 -> DoneOutcome.Failed(DoneOutcome.Kind.BAD_REQUEST, "Odysseus refused it (400)")
+        401, 403 -> DoneOutcome.Failed(DoneOutcome.Kind.REFUSED, "Token refused ($code)")
+        404 -> if (error(body) == "not found") {
+            DoneOutcome.Failed(DoneOutcome.Kind.NOT_FOUND, "Not found in Odysseus")
+        } else {
+            DoneOutcome.Failed(DoneOutcome.Kind.NOT_SUPPORTED, "Odysseus can't do this yet")
+        }
+        405 -> DoneOutcome.Failed(DoneOutcome.Kind.NOT_SUPPORTED, "Odysseus can't do this yet")
+        409 -> DoneOutcome.Failed(DoneOutcome.Kind.TOO_LATE, "Too late to undo")
+        503 -> if (error(body)?.contains("athena") == true) {
+            DoneOutcome.Failed(DoneOutcome.Kind.ATHENA_UNAVAILABLE, "Athena unavailable")
+        } else {
+            DoneOutcome.Failed(DoneOutcome.Kind.OTHER, "Odysseus busy (503)")
+        }
+        else -> DoneOutcome.Failed(DoneOutcome.Kind.OTHER, "Odysseus error ($code)")
+    }
+
+    /** The request never got an answer (not linked, network down, timeout). */
+    fun unreachable(): DoneOutcome.Failed = DoneOutcome.Failed(DoneOutcome.Kind.UNREACHABLE, "Can't reach Odysseus")
+}

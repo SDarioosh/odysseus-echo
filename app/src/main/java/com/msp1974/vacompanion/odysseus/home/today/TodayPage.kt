@@ -1,14 +1,18 @@
 package com.msp1974.vacompanion.odysseus.home.today
 
-// Odysseus fork: the Today page, right of the clock (swipe left from the clock). Read-only: the
-// headline of Odysseus's Today insight, today's calendar, to-dos due today or overdue, Athena's
-// open action items, and "and N more" where they don't all fit. Data comes from
-// TodayRepository through HomePageContext.today; TodayRefresh (composed by HomeHost) keeps it
-// fresh. Sized for the Echo Show 5 (960×480 px, about 790×395 dp) and to be read from across a
-// kitchen: large rows, few of them, the rest counted.
+// Odysseus fork: the Today page, right of the clock (swipe left from the clock): the headline of
+// Odysseus's Today insight, today's calendar, to-dos due today or overdue, Athena's open action
+// items, and "and N more" where they don't all fit. Data comes from TodayRepository through
+// HomePageContext.today; TodayRefresh (composed by HomeHost) keeps it fresh. A tap on a to-do or
+// action item row marks it done ("Done · Undo" for 10 s; HomePageContext.todayDone and
+// onTodayDone/onTodayUndo, today/TodayDone). Sized for the Echo Show 5 (960×480 px, about
+// 790×395 dp) and to be read from across a kitchen: large rows, few of them, the rest counted;
+// rows that can be tapped are TAP_ROW_HEIGHT tall, the full column wide.
 
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,6 +28,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,11 +41,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.msp1974.vacompanion.odysseus.done.DoneMark
+import com.msp1974.vacompanion.odysseus.done.DoneTarget
+import com.msp1974.vacompanion.odysseus.done.ShownRow
 import com.msp1974.vacompanion.odysseus.home.HomePage
 import com.msp1974.vacompanion.odysseus.home.HomePageContext
 import com.msp1974.vacompanion.odysseus.home.HomeSettings
@@ -53,6 +65,9 @@ import java.util.Locale
 /** One item row (titleLarge text) and one section label, for working out what fits. */
 private val ROW_HEIGHT = 40.dp
 private val LABEL_HEIGHT = 32.dp
+/** A row with a Done control: Material's 48 dp touch target, the whole row wide. */
+private val TAP_ROW_HEIGHT = 48.dp
+private val CHECK_SIZE = 30.dp
 
 private const val MINUTE_MS = 60_000L
 
@@ -83,7 +98,7 @@ object TodayPage : HomePage {
             Header(now, (view as? TodayView.Ready)?.data)
             when (view) {
                 is TodayView.Ready -> {
-                    Body(view.data, now, is24h, Modifier.weight(1f).fillMaxWidth())
+                    Body(view.data, context, now, is24h, Modifier.weight(1f).fillMaxWidth())
                     if (view.stale) {
                         Text(
                             text = "Odysseus unreachable · " +
@@ -135,28 +150,43 @@ private fun Header(now: Long, data: TodayData?) {
 }
 
 @Composable
-private fun Body(data: TodayData, now: Long, is24h: Boolean, modifier: Modifier) {
+private fun Body(data: TodayData, context: HomePageContext, now: Long, is24h: Boolean, modifier: Modifier) {
     val zone = ZoneId.systemDefault()
     val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val marks = context.todayDone
+    // The rows as shown: done ones stay in place for their undo window, then leave.
+    val todos = marks.rows(data.todos, TodayDone::todoTarget, { it.title }, { it is DoneTarget.Todo })
+    val actionItems = marks.rows(data.actionItems, TodayDone::actionItemTarget, { it.title }, { it is DoneTarget.ActionItem })
     BoxWithConstraints(modifier) {
-        val leftRows = rows(maxHeight - LABEL_HEIGHT)
+        val leftRows = rows(maxHeight - LABEL_HEIGHT, ROW_HEIGHT)
         // The right column has two sections; an empty one takes one row for its "nothing" line.
-        val empties = (if (data.todos.isEmpty()) 1 else 0) + (if (data.actionItems.isEmpty()) 1 else 0)
-        val rightRows = rows(maxHeight - LABEL_HEIGHT * 2) - empties
-        val (todoShown, aiShown) = TodayFormat.fitColumn(rightRows, data.todos.size, data.actionItems.size)
+        val empties = (if (todos.isEmpty()) 1 else 0) + (if (actionItems.isEmpty()) 1 else 0)
+        val rightRows = rows(maxHeight - LABEL_HEIGHT * 2, TAP_ROW_HEIGHT) - empties
+        val (todoShown, aiShown) = TodayFormat.fitColumn(rightRows, todos.size, actionItems.size)
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Column(Modifier.weight(1.15f)) {
                 Events(data.events, TodayFormat.fitEvents(leftRows, data.events.size), now, zone, is24h)
             }
             Column(Modifier.weight(1f)) {
-                Todos(data, todoShown, today)
-                ActionItems(data, aiShown)
+                Todos(todos, todoShown, today, context)
+                if (todos.isNotEmpty()) {
+                    More(TodayFormat.more(data.counts.todosOpen?.minus(marks.hiddenIn { it is DoneTarget.Todo }), todos.size, todoShown))
+                }
+                ActionItems(actionItems, aiShown, context)
+                if (actionItems.isNotEmpty()) {
+                    More(
+                        TodayFormat.more(
+                            data.counts.actionItemsOpen?.minus(marks.hiddenIn { it is DoneTarget.ActionItem }),
+                            actionItems.size, aiShown,
+                        )
+                    )
+                }
             }
         }
     }
 }
 
-private fun rows(height: Dp): Int = (height / ROW_HEIGHT).toInt().coerceAtLeast(0)
+private fun rows(height: Dp, rowHeight: Dp): Int = (height / rowHeight).toInt().coerceAtLeast(0)
 
 @Composable
 private fun SectionLabel(text: String) {
@@ -237,53 +267,131 @@ private fun Events(events: List<TodayEvent>, shown: Int, now: Long, zone: ZoneId
 }
 
 @Composable
-private fun Bullet(color: Color) {
-    Box(Modifier.padding(end = 12.dp).size(10.dp).background(color, CircleShape))
-}
-
-@Composable
-private fun Todos(data: TodayData, shown: Int, today: LocalDate) {
+private fun Todos(rows: List<ShownRow<TodayTodo>>, shown: Int, today: LocalDate, context: HomePageContext) {
     val colors = MaterialTheme.colorScheme
     SectionLabel("To-do")
-    if (data.todos.isEmpty()) {
+    if (rows.isEmpty()) {
         Quiet("Nothing due")
         return
     }
-    data.todos.take(shown).forEach { t ->
-        val due = TodayFormat.dueLabel(t, today)
-        val dueColor = if (due == "Overdue") colors.error else colors.primary
-        ItemRow {
-            Bullet(if (due == "Overdue") colors.error else colors.onSurfaceVariant)
-            Title(t.title, Modifier.weight(1f, fill = false))
-            if (due != null) {
-                Text(
-                    due, style = MaterialTheme.typography.labelLarge, color = dueColor, maxLines = 1,
-                    modifier = Modifier
-                        .padding(start = 10.dp)
-                        .background(dueColor.copy(alpha = 0.14f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                )
-            }
+    rows.take(shown).forEachIndexed { index, row ->
+        val due = row.item?.let { TodayFormat.dueLabel(it, today) }
+        val tagColor = if (due == "Overdue") colors.error else colors.primary
+        DoneRow(row, index, if (due == "Overdue") colors.error else colors.onSurfaceVariant, context) {
+            if (due != null) Tag(due, tagColor)
         }
     }
-    More(TodayFormat.more(data.counts.todosOpen, data.todos.size, shown))
 }
 
 @Composable
-private fun ActionItems(data: TodayData, shown: Int) {
-    val colors = MaterialTheme.colorScheme
+private fun ActionItems(rows: List<ShownRow<TodayActionItem>>, shown: Int, context: HomePageContext) {
     SectionLabel("From conversations")
-    if (data.actionItems.isEmpty()) {
+    if (rows.isEmpty()) {
         Quiet("No open action items")
         return
     }
-    data.actionItems.take(shown).forEach { a ->
-        ItemRow {
-            Bullet(colors.secondary)
-            Title(a.title, Modifier.weight(1f, fill = false))
+    rows.take(shown).forEachIndexed { index, row ->
+        DoneRow(row, index, MaterialTheme.colorScheme.secondary, context) {}
+    }
+}
+
+@Composable
+private fun Tag(text: String, color: Color) {
+    Text(
+        text, style = MaterialTheme.typography.labelLarge, color = color, maxLines = 1,
+        modifier = Modifier
+            .padding(start = 10.dp)
+            .background(color.copy(alpha = 0.14f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
+}
+
+/**
+ * A to-do or action item row with its Done control: a ring to tick at the start, the title, and
+ * at the end the due tag, or once tapped "Done · Undo" (a tap on the row undoes), "Undoing…",
+ * or a short reason. Tapping anywhere on the row counts. A row without a ref or id can't be done.
+ */
+@Composable
+private fun DoneRow(
+    row: ShownRow<*>,
+    index: Int,
+    ringColor: Color,
+    context: HomePageContext,
+    tag: @Composable RowScope.() -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val mark = row.mark
+    val ticked = mark?.ticked == true
+    val doable = when (val t = row.target) {
+        is DoneTarget.Todo -> t.ref.isNotBlank()
+        is DoneTarget.ActionItem -> t.id.isNotBlank()
+        is DoneTarget.Reminder -> false
+    }
+    val onTap: (() -> Unit)? = when {
+        !doable -> null
+        mark == null || mark.phase == DoneMark.Phase.FAILED -> { { context.onTodayDone(row.target, row.title, index) } }
+        mark.phase == DoneMark.Phase.DONE && mark.canUndo -> { { context.onTodayUndo(row.target) } }
+        else -> null
+    }
+    Row(
+        modifier = Modifier
+            .height(TAP_ROW_HEIGHT)
+            .fillMaxWidth()
+            .then(
+                if (onTap != null) Modifier.clickable(
+                    role = Role.Checkbox,
+                    onClickLabel = if (ticked) "Undo" else "Mark done",
+                    onClick = onTap,
+                ) else Modifier
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(end = 12.dp)
+                .size(CHECK_SIZE)
+                .then(
+                    if (ticked) Modifier.background(colors.primary, CircleShape)
+                    else Modifier.border(2.dp, if (doable) ringColor else ringColor.copy(alpha = 0.4f), CircleShape)
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (ticked) Icon(Icons.Filled.Check, contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size(22.dp))
+        }
+        Text(
+            row.title, style = MaterialTheme.typography.titleLarge,
+            color = if (ticked) colors.onSurfaceVariant else colors.onBackground,
+            textDecoration = if (ticked) TextDecoration.LineThrough else null,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+        )
+        when {
+            mark == null -> tag()
+            mark.phase == DoneMark.Phase.FAILED -> mark.reason?.let { Tag(it, colors.error) }
+            mark.phase == DoneMark.Phase.UNDOING -> Status("Undoing…", null)
+            mark.phase == DoneMark.Phase.SENDING -> Status("Done", null)
+            mark.phase == DoneMark.Phase.DONE -> Status(
+                mark.reason ?: "Done",
+                if (mark.canUndo) "Undo" else null,
+            )
+            else -> Unit
         }
     }
-    More(TodayFormat.more(data.counts.actionItemsOpen, data.actionItems.size, shown))
+}
+
+/** "Done · Undo" at the end of a ticked row. */
+@Composable
+private fun Status(text: String, action: String?) {
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text, style = MaterialTheme.typography.titleMedium, color = colors.onSurfaceVariant, maxLines = 1)
+        if (action != null) {
+            Text(" · ", style = MaterialTheme.typography.titleMedium, color = colors.onSurfaceVariant, maxLines = 1)
+            Text(
+                action, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                color = colors.primary, maxLines = 1,
+            )
+        }
+    }
 }
 
 @Composable

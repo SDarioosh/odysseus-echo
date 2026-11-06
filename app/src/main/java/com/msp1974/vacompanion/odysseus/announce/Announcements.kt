@@ -77,6 +77,9 @@ object Announcements : EventListener {
         Timber.i("Announcements: stopped")
     }
 
+    /** This device's id (config.uuid), as sent in the hello; null before start. */
+    val deviceId: String? get() = config?.uuid
+
     /** Ask the feed now (the screen came on). */
     fun pollNow() { wake.trySend(Unit) }
 

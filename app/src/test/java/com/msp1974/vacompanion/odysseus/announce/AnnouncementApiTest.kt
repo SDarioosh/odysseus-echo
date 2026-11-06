@@ -66,4 +66,12 @@ class AnnouncementApiTest {
         assertFalse(AnnouncementApi.parseHello("""{"ok": false}"""))
         assertFalse(AnnouncementApi.parseHello("not json"))
     }
+
+    @Test
+    fun onlyRemindersWithARefCanBeMarkedDone() {
+        assertTrue(Announcement(id = "an_1", kind = "reminder", ref = "todo:41").canMarkDone)
+        assertFalse(Announcement(id = "an_2", kind = "reminder").canMarkDone)
+        assertFalse(Announcement(id = "an_3", kind = "reminder", ref = " ").canMarkDone)
+        assertFalse(Announcement(id = "an_4", kind = "announcement", ref = "todo:41").canMarkDone)
+    }
 }

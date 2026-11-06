@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.msp1974.vacompanion.odysseus.home.HomeSettings
+import com.msp1974.vacompanion.odysseus.kiosk.KioskSettings
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherClient
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherEntity
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherRepository
@@ -119,6 +120,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
             }
             Text(status, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             HomeScreenSettings()
+            KioskSettingsSection()
         }
     }
 }
@@ -197,4 +199,35 @@ private fun HomeScreenSettings() {
             fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/** Menu → Odysseus → Kiosk: coming back from other apps, reloading a failed dashboard (odysseus/kiosk/). */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun KioskSettingsSection() {
+    KioskSettings.init(LocalContext.current)
+    // KioskSettings is Compose state, so these recompose when it changes.
+    val returnSeconds = KioskSettings.returnSeconds
+    Text(
+        "Kiosk", fontSize = 18.sp, color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 12.dp),
+    )
+    Setting(
+        KioskSettings.autoReload, "Reload a dashboard that failed to load",
+        "Tries again after 5 s, then waits longer each time, up to every 5 minutes. Soon after Wi-Fi comes back.",
+    ) { KioskSettings.autoReload = it }
+    Text("Back from other apps after", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        KioskSettings.RETURN_CHOICES_SECONDS.forEach { seconds ->
+            FilterChip(
+                selected = returnSeconds == seconds,
+                onClick = { KioskSettings.returnSeconds = seconds },
+                label = { Text(KioskSettings.returnLabel(seconds)) },
+            )
+        }
+    }
+    Text(
+        "When another app has been in front this long, this app comes back. Not while the screen is off.",
+        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }

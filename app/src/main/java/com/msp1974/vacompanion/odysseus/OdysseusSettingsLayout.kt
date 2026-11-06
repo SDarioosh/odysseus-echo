@@ -121,6 +121,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
             Text(status, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             HomeScreenSettings()
             KioskSettingsSection()
+            com.msp1974.vacompanion.odysseus.update.UpdateSettingsSection()
         }
     }
 }

@@ -114,7 +114,9 @@ class ChunkQueue(private val root: File) {
             val finished = end.exists()
             val chunk = pendingChunks(dir).firstOrNull()
             if (chunk != null) {
-                val info = readChunk(chunk) ?: continue
+                // An unreadable sidecar (power lost before it reached the disk) is rebuilt from what
+                // is known; skipping it would leave the session stuck for good.
+                val info = readChunk(chunk) ?: rebuildChunkInfo(session, chunk) ?: continue
                 return QueueItem.Chunk(dir, session, info, chunk)
             }
             if (!finished || File(dir, ENDED_FILE).exists()) continue
@@ -203,10 +205,23 @@ class ChunkQueue(private val root: File) {
         json.decodeFromString(ChunkInfo.serializer(), File(wav.parentFile, wav.name.removeSuffix(".wav") + ".json").readText())
     }.getOrNull()
 
+    /**
+     * A chunk's sidecar from its session and file name: every chunk but the last is 30 s
+     * (ChunkAssembler), and the session started at its created time, so chunk n starts n × 30 s in.
+     */
+    private fun rebuildChunkInfo(session: SessionInfo, wav: File): ChunkInfo? {
+        val sequence = wav.name.removeSuffix(".wav").toIntOrNull() ?: return null
+        val startMs = session.createdMs + sequence * ChunkAssembler.CHUNK_SAMPLES * 1000L / ChunkAssembler.SAMPLE_RATE
+        return ChunkInfo(session.sessionId, sequence, session.kind, ChunkAssembler.isoUtc(startMs))
+    }
+
     private fun writeAtomic(target: File, bytes: ByteArray) {
         val tmp = File(target.parentFile, target.name + ".tmp")
-        tmp.writeBytes(bytes)
-
+        // Synced before the rename, so a power cut can't leave an empty file under the real name.
+        java.io.FileOutputStream(tmp).use { out ->
+            out.write(bytes)
+            out.fd.sync()
+        }
         if (!tmp.renameTo(target)) {
             target.delete()
             if (!tmp.renameTo(target)) throw java.io.IOException("Could not write ${target.name}")

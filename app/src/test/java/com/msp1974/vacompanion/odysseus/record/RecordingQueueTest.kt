@@ -225,6 +225,19 @@ class RecordingQueueTest {
     }
 
     @Test
+    fun anUnreadableSidecarIsRebuiltNotStuck() {
+        // Power lost after the rename but before the data reached the disk: an empty sidecar.
+        val dir = session("aaaaaaaaaaaaaaaa", created = 5_000L, chunks = 2)
+        File(dir, "000001.json").writeBytes(ByteArray(0))
+        val hub = FakeHub { _, _ -> ok }
+        assertEquals(PassResult.DONE, RecordingUploader(queue, hub).runPass())
+        assertEquals(3, hub.sent.size)
+        assertTrue(hub.sent[1].second.contains("1970-01-01T00:00:35.000Z"))
+        assertTrue(hub.sent[1].second.contains("name=\"sequence\"\r\n\r\n1\r\n"))
+        assertEquals("/api/codex/athena/sessions/aaaaaaaaaaaaaaaa/end", hub.paths().last())
+    }
+
+    @Test
     fun aHalfWrittenChunkIsNotReady() {
         val dir = session("aaaaaaaaaaaaaaaa", chunks = 0, finish = false)
         File(dir, "000000.wav.tmp").writeBytes(ByteArray(10))

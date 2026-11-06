@@ -176,7 +176,8 @@ object OdysseusLink {
         data class Failed(val message: String) : PostResult
     }
 
-    internal class Reply(val code: Int, val body: String)
+    /** [dateMs]: the answer's Date header (the hub's clock), or null without one. */
+    internal class Reply(val code: Int, val body: String, val dateMs: Long? = null)
 
     private fun describe(code: Int, what: String) = when (code) {
         401, 403 -> "token refused ($code)"
@@ -225,7 +226,7 @@ object OdysseusLink {
                 errorBody -> runCatching { conn.errorStream?.bufferedReader()?.use { readAtMost(it, ERROR_BODY_MAX) } }.getOrNull().orEmpty()
                 else -> ""
             }
-            return Reply(code, text)
+            return Reply(code, text, conn.date.takeIf { it > 0 })
         } finally {
             conn.disconnect()
         }
@@ -359,9 +360,10 @@ object OdysseusLink {
 
     /**
      * A hub answer for callers that shape their own requests: the HTTP code and, for 2xx, the body
-     * (asked with errorBody, also the start of an error answer).
+     * (asked with errorBody, also the start of an error answer), and its Date header ([dateMs],
+     * the hub's clock, for comparing the hub's times with the device's).
      */
-    data class HubReply(val code: Int, val body: String)
+    data class HubReply(val code: Int, val body: String, val dateMs: Long? = null)
 
     /**
      * One request to `<base><path>` with the voice token (a GET without [body]), for features in
@@ -372,7 +374,7 @@ object OdysseusLink {
         path: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000,
         errorBody: Boolean = false,
     ): HubReply =
-        withContext(Dispatchers.IO) { request(path, contentType, body, readTimeoutMs, errorBody).let { HubReply(it.code, it.body) } }
+        withContext(Dispatchers.IO) { request(path, contentType, body, readTimeoutMs, errorBody).let { HubReply(it.code, it.body, it.dateMs) } }
 
     /** Tests the saved link: (ok, message to show). An older hub without the turn feed is tested with /actions. */
     suspend fun testLink(): Pair<Boolean, String> {

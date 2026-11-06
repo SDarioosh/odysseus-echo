@@ -18,12 +18,15 @@ data class AnnouncementCards(val items: List<AnnouncementCardItem> = emptyList()
     val current: AnnouncementCardItem? get() = items.firstOrNull()
     val more: Int get() = (items.size - 1).coerceAtLeast(0)
 
-    /** New announcements arrived: each stays SHOW_MS from now, or until it expires if sooner. */
-    fun add(new: List<Announcement>, nowMs: Long): AnnouncementCards {
+    /**
+     * New announcements arrived: each stays SHOW_MS from now, or until it expires if sooner.
+     * [clockOffsetMs] is the hub's clock minus the device's (HubClock): `expires_at` is the hub's.
+     */
+    fun add(new: List<Announcement>, nowMs: Long, clockOffsetMs: Long = 0L): AnnouncementCards {
         val known = items.map { it.announcement.id }.toSet()
         val added = new.filter { it.id !in known && !it.isSettings }.map { a ->
             val until = nowMs + SHOW_MS
-            AnnouncementCardItem(a, a.expiresAt?.let { minOf(it, until) } ?: until)
+            AnnouncementCardItem(a, a.expiresAt?.let { minOf(it - clockOffsetMs, until) } ?: until)
         }
         return copy(items = (items + added).takeLast(MAX_CARDS))
     }
@@ -49,6 +52,17 @@ data class AnnouncementCards(val items: List<AnnouncementCardItem> = emptyList()
             else DateTimeFormatter.ofPattern("EEE", locale).format(at) + " " + time
         }
     }
+}
+
+/**
+ * The hub's clock as seen from the device. The feed's times (`at`, `expires_at`) are the hub's;
+ * comparing them with a device clock that is off by an hour drops every announcement (or, the
+ * other way, `since` is ahead of the hub and nothing new ever comes). Each answer's Date header
+ * gives the offset.
+ */
+object HubClock {
+    /** The hub's clock minus the device's, from an answer's Date header; null without one. */
+    fun offset(hubDateMs: Long?, deviceNowMs: Long): Long? = hubDateMs?.takeIf { it > 0 }?.let { it - deviceNowMs }
 }
 
 /**

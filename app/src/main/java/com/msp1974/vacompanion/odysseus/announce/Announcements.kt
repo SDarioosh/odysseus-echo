@@ -56,6 +56,15 @@ object Announcements : EventListener {
     private var lastHelloMs: Long? = null
     private var lastHelloSaid: String? = null
 
+    /** The hub's clock minus the device's (HubClock), from the last answer; 0 until one came. */
+    @Volatile private var clockOffsetMs = 0L
+
+    private fun hubNow() = System.currentTimeMillis() + clockOffsetMs
+
+    private fun noteClock(reply: OdysseusLink.HubReply) {
+        HubClock.offset(reply.dateMs, System.currentTimeMillis())?.let { clockOffsetMs = it }
+    }
+
     @Synchronized
     fun start(context: Context, config: APPConfig) {
         if (scope != null) return
@@ -151,10 +160,11 @@ object Announcements : EventListener {
             sayHello(form, saying, now)?.let { return it }
         }
 
-        val reply = OdysseusLink.hubRequest(AnnouncementApi.feedPath(deviceId, feed.sinceFor(now)))
+        val reply = OdysseusLink.hubRequest(AnnouncementApi.feedPath(deviceId, feed.sinceFor(hubNow())))
+        noteClock(reply)
         return when (reply.code) {
             200 -> {
-                val news = feed.acceptNews(AnnouncementApi.parseFeed(reply.body), System.currentTimeMillis())
+                val news = feed.acceptNews(AnnouncementApi.parseFeed(reply.body), hubNow())
                 if (news.settingsChanged) ManagedSettings.fetchNow("feed")
                 if (news.cards.isNotEmpty()) show(news.cards)
                 AnnouncementPolling.Outcome.OK
@@ -172,6 +182,7 @@ object Announcements : EventListener {
     private suspend fun sayHello(form: HelloForm, saying: String, now: Long): AnnouncementPolling.Outcome? {
         val body = AnnouncementApi.formBody(form.fields()).toByteArray()
         val reply = OdysseusLink.hubRequest(AnnouncementApi.HELLO_PATH, "application/x-www-form-urlencoded", body, readTimeoutMs = 4000)
+        noteClock(reply)
         when (reply.code) {
             in 200..299 -> {
                 if (!AnnouncementApi.parseHello(reply.body)) Timber.w("Announcements: hello not ok: ${reply.body.take(200)}")
@@ -193,7 +204,7 @@ object Announcements : EventListener {
 
     private fun show(fresh: List<Announcement>) {
         val now = System.currentTimeMillis()
-        _cards.update { it.prune(now).add(fresh, now) }
+        _cards.update { it.prune(now).add(fresh, now, clockOffsetMs) }
         // Ids and kinds only: the text is the owner's.
         Timber.i("Announcements: new ${fresh.joinToString { "${it.id} (${it.kind})" }}")
         config?.eventBroadcaster?.notifyEvent(Event(EVENT_NEW, "", fresh.last().id))

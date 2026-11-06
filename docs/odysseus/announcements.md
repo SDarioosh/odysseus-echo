@@ -45,8 +45,16 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   (dashboard, home screen, blank screen):
   - It shows the kind and time ("Reminder · 3:05 PM"), the title and the text (left out when it
     only repeats the title).
-  - A reminder has a **Dismiss** button. A tap anywhere on a card also dismisses it. A "Done"
-    button comes later; it needs a write route on the hub.
+  - A reminder has a **Dismiss** button. A tap anywhere on a card also dismisses it.
+  - A reminder of a to-do (one with a `ref`) also has **Done**, beside Dismiss: it calls
+    `POST <voice base>/reminders/done {"ref", "device_id"}` (contract C5 in
+    [plans/2026-11-done-followup-settings-verify.md](plans/2026-11-done-followup-settings-verify.md);
+    `device_id` is the hub id from the hello). The tap is the confirmation: no spoken "yes".
+    Done (or already done): the card goes and the Today page is refreshed. Failed: the card
+    stays with a short reason under the buttons ("Can't reach Odysseus", "Not found in
+    Odysseus", "Odysseus can't do this yet" for a hub without the route), and Done can be tapped
+    again. There is no undo for a reminder (the hub has no undo route for it). The buttons are
+    52 dp tall, to hit from arm's length.
   - It stays 10 min, or until its `expires_at` if that's sooner. With several at once, the oldest
     shows first, with "and N more".
   - It doesn't cover a voice turn: it's hidden from a wake word until the turn has ended and its
@@ -86,14 +94,18 @@ phase. Check it on the device first (below), then decide.
 - `odysseus/announce/Announcements.kt`: the process-wide runner: hello, polling, the cards' state,
   the wake-the-screen event `odysseusAnnouncement`.
 - `odysseus/announce/AnnouncementCard.kt`: the card.
+- `odysseus/announce/ReminderDone.kt`: the reminder card's Done button (its state per card).
+- `odysseus/done/`: contract C5, shared with the Today page: `DoneApi.kt` (paths, bodies, what an
+  answer means; pure, tested), `DoneClient.kt` (the requests through `OdysseusLink.hubRequest`).
 - `odysseus/OdysseusLink.kt`: `hubRequest`, a plain request with the voice token for features
-  in their own packages.
+  in their own packages (`errorBody = true` also returns the start of an error answer).
 - Hooks:
   - `service/BackgroundTask.kt`: `Announcements.start`/`stop`, beside the other background
     services, so it runs whether or not the activity is in front.
   - `MainActivity.kt`: the card composable, beside the turn card, and the
     `odysseusAnnouncement` event, which turns the screen on as the Sendspin pairing prompt does.
-- Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/announce/`.
+- Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/announce/`,
+  `.../odysseus/done/DoneApiTest.kt`.
 
 ## Still to check on the real device
 
@@ -108,6 +120,10 @@ phase. Check it on the device first (below), then decide.
    and the announcement card comes back once the turn card has gone.
 5. **Screen off.** With the screen off, an announcement turns it on. The screen goes off again
    as usual (screen timeout).
+6. **Done.** On a reminder card of a to-do, tap Done from arm's length: the card goes, the to-do
+   is ticked (or its due date cleared) on the hub's to-do page, and the voice ledger lists it as
+   completed by the device. `adb logcat -s Announcements` shows `done an_… (todo:…) -> ok`. With
+   the hub stopped, Done shows "Can't reach Odysseus" and the card stays.
 6. **DND.** Turn DND on (from HA or the device) and announce to that room. Note whether HA's
    announce is heard and whether the card shows. Expected from the code: silent, card shown.
    Write down the result here.

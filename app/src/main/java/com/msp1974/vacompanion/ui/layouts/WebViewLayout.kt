@@ -62,6 +62,9 @@ fun WebViewScreen (webView: CustomWebView, vaViewModel: VAViewModel = viewModel(
         }
     }
 
+    // Odysseus fork: reload by itself when the dashboard failed to load (odysseus/kiosk/DashboardAutoReload.kt)
+    com.msp1974.vacompanion.odysseus.kiosk.DashboardAutoReload(webView, vaUiState.webViewPageLoadingStage, vaUiState.isNetworkConnected)
+
     LaunchedEffect(webView) {
         webView.setOnGestureListener(object : WebViewGestureDetector.OnGestureListener {
             override fun onSwipe(

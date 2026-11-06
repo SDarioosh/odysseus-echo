@@ -40,6 +40,10 @@ State is centralized in `VAViewModel` (`ui/VAViewModel.kt`) via a single `vacaSt
 
 Full description in [docs/odysseus/home-screen.md](docs/odysseus/home-screen.md). Native pages (`odysseus/home/`, the clock first) are drawn by `HomeHost` **over** the dashboard; the `WebViewScreen` stays composed underneath so HA stays live. Swipe right from the clock reveals the dashboard, swipe left (or the idle timeout, `HomeSettings`) brings the clock back. The rules live in `HomeNavigator` (plain Kotlin, unit-tested); `HomeScreenController` is the one process-wide holder of that state as Compose state, and the target of the dashboard's gesture hook in `WebViewLayout`. To add a page, implement `HomePage`, add it to `HomePages.all`, and pass any new data through `HomePageContext` (pages don't read the view model).
 
+### Kiosk (Odysseus fork)
+
+Full description in [docs/odysseus/kiosk.md](docs/odysseus/kiosk.md). `odysseus/kiosk/`: `ReturnToDashboard` (installed from `VACAApplication`) brings `MainActivity` back when another app has been in front for `KioskSettings.returnSeconds` (not while the screen is off); `DashboardAutoReload` (composed in `WebViewScreen`) reloads a dashboard whose page state is `ERROR` with a growing wait. The timing rules are plain Kotlin and unit-tested (`ReturnPolicy`, `ReloadBackoff`).
+
 ### DI and app-wide singletons
 
 Hilt (`@HiltAndroidApp` on `VACAApplication`, `@AndroidEntryPoint` on `MainActivity`/`VAForegroundService`). The one hand-wired module is `di/AppModule.kt`, providing the single `DeviceManager` singleton. `DeviceManager` (`device/DeviceManager.kt`) is the root object graph: it owns `APPConfig` (`settings/Settings.kt` — the mutable, `SharedPreferences`-backed app config, with `Delegates.observable` properties that fire `eventBroadcaster` notifications on change), `DeviceInfo`, `SensorManager`, and `AuthenticationManager` (HA long-lived token auth), and exposes `StateFlow`s for network/server/sensor/UI status.

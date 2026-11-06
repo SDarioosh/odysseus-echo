@@ -21,6 +21,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.StrictMode
 import android.provider.Settings
+import android.view.KeyEvent // Odysseus fork
 import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.Toast
@@ -590,6 +591,12 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             config.screenSaver = false
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Odysseus fork: the Echo Show's privacy button records (odysseus/record/RecordButton.kt)
+        if (com.msp1974.vacompanion.odysseus.record.RecordButton.onKeyEvent(event)) return true
+        return super.dispatchKeyEvent(event)
     }
 
     private fun terminateApp() {

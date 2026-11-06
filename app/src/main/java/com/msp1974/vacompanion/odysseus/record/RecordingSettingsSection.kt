@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,12 +38,14 @@ fun RecordingSettingsSection() {
     ) {
         RecorderSettings.enabled = it
         if (!it) RecorderController.onRecordingDisabled()
+        RecordButton.refreshMute()
     }
     Toggle(
         RecorderSettings.clockButton, "Record button on the clock",
         "A small record button in the clock page's bottom right. Also in the quick actions sheet.",
         enabled = enabled,
     ) { RecorderSettings.clockButton = it }
+    PrivacyButtonChoice(enabled)
     Text(RecordingText.queue(ui.queue), fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
     ui.uploadProblem?.let { Text(it, fontSize = 15.sp, color = OdysseusColors.Red) }
     ui.warning?.let { Text(it, fontSize = 15.sp, color = OdysseusColors.Red) }
@@ -65,5 +68,42 @@ private fun Toggle(checked: Boolean, title: String, detail: String, enabled: Boo
             Text(title, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
             Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/** "Privacy button": Record or Mute (record/RecordButton.kt, docs/odysseus/recording.md). */
+@Composable
+private fun PrivacyButtonChoice(recordingEnabled: Boolean) {
+    val hasButton = RecordButton.hasPrivacyButton(LocalContext.current)
+    val mode = RecorderSettings.privacyButton
+    Column {
+        Text("Privacy button", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            for (m in PrivacyButtonMode.entries) {
+                RadioButton(
+                    selected = mode == m,
+                    onClick = {
+                        RecorderSettings.privacyButton = m
+                        RecordButton.refreshMute()
+                    },
+                    enabled = hasButton,
+                )
+                Text(
+                    if (m == PrivacyButtonMode.RECORD) "Record" else "Mute",
+                    fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(end = 16.dp),
+                )
+            }
+        }
+        val detail = when {
+            !hasButton -> "This device has no privacy button: the setting does nothing here."
+            mode == PrivacyButtonMode.MUTE -> "The button mutes the microphone (\"Microphone off\"). If that shows " +
+                "right after choosing Mute, press the button once."
+            !recordingEnabled -> "Recording is off, so the button mutes the microphone."
+            else -> "Press: record, press again to stop. Hold 1 s: voice note. The button no longer " +
+                "mutes: use Mic Mute in the quick actions. With the screen off or another app in " +
+                "front, a hold counts as a press."
+        }
+        Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

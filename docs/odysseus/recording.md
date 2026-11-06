@@ -16,8 +16,8 @@ transcribes and summarizes them like the T-Watch's recordings. The code is in
 - A recording stops by itself after 4 hours.
 - A second tap within 1 s of the last one is ignored.
 - Nothing starts while the microphone is muted (the quick actions "Mic Mute", Home Assistant's
-  mute, or the privacy switch). The reason is shown on screen. Muting while recording stops
-  the recording.
+  mute, or the privacy switch when it is set to Mute). The reason is shown on screen. Muting
+  while recording stops the recording.
 - The wake word ("Hey Athena") keeps working during recordings and voice notes. Both listen to
   the same microphone.
 
@@ -27,7 +27,8 @@ Where the button is:
 - **Clock page**: a small round button in the bottom right. Setting: "Record button on the
   clock" (on by default).
 - **The red pill**: tapping it works the same as tapping the button, so it stops a recording.
-- **Hardware button**: that comes in E6 (see the API below).
+- **The Echo Show's privacy button** (the microphone button on top): press and hold, like the
+  on-screen button. See [The privacy button](#the-privacy-button).
 
 While anything records:
 
@@ -45,6 +46,7 @@ These devices have no vibration, so the sounds and the pill are the only feedbac
 |---|---|---|
 | Recording | on | Off hides the record buttons and refuses presses. Turning it off stops a running recording. |
 | Record button on the clock | on | The small button on the clock page |
+| Privacy button | Record | Record: the Echo Show's privacy button records (below). Mute: it only mutes, as before. Greyed out on devices without the button |
 | *(status)* | | "3 chunks waiting (2.7 MB)", and why uploads wait (hub unreachable, relink needed) |
 | Upload now | | Tries at once, skipping the retry wait. Also use it after relinking. |
 
@@ -112,7 +114,51 @@ The token needs the `athena:ingest` scope. Echo tokens made by the hub's `/echo/
 (hub change H4). An Echo linked before H4 has a voice-only token and gets 403: relink it from
 the phone (Menu → Odysseus → Set up with phone).
 
-## API for the hardware button (E6)
+## The privacy button
+
+On the Echo Show 5 (2nd gen) the microphone button on top is the record button (setting
+**Privacy button = Record**, the default). Hardware details, the key layout and the owner's
+checks: [echo-show-5.md](echo-show-5.md#privacy-button-records-or-mutes-never-sleeps).
+
+- **Press**: start a recording, press again to stop. **Hold 1 s**: voice note. The same
+  gestures and rules as the on-screen button.
+- **The button no longer mutes.** Mute with "Mic Mute" in the quick actions sheet (or Home
+  Assistant's mute): that still stops recordings and refuses new ones. The first time the
+  button records, a message says so once.
+- While the button records, Android's microphone-mute flag (which the button flips on every
+  press) is ignored: no "Microphone off" pill, no refusal. On this device the flag doesn't cut
+  the microphone, so the wake word and the recording keep working whatever it says.
+
+How a press reaches the app (`odysseus/record/RecordButton.kt`, logic in
+`RecordButtonGestures.kt`, plain Kotlin, `RecordButtonGesturesTest`):
+
+1. **Key path** (press and hold). The key layout turns the button's `KEY_POWER` into
+   `MEDIA_RECORD`. `MainActivity.dispatchKeyEvent` passes it to `RecordButton` (one hook). Down
+   starts a 1 s timer; still down at 1 s → `hold()`; up before that → `press()`; the up after a
+   hold does nothing; key repeats are ignored. Only keys from the input device
+   `gpio-privacy-button` are taken; a `MEDIA_RECORD` from anything else passes through.
+2. **Switch path** (press only), automatic. Every press also flips Android's mic-mute flag
+   (`ACTION_MICROPHONE_MUTE_CHANGED`, a receiver registered process-wide from
+   `RecorderController.install`). A change counts as a press unless a key event covers it: it
+   waits 300 ms for a key down, and is ignored while a key is down or within 1.5 s of the last
+   key event. So with working keys a press is counted once, and where keys don't arrive the
+   switch still works.
+
+When does which path work:
+
+| Situation | Press | Hold (voice note) |
+|---|---|---|
+| Screen on, the app in front (normal: it is the home app) | key | key |
+| Display off (Screen off from HA or the screen timeout) | switch; the recorder wakes the screen | no: a hold is a press |
+| Black screensaver (display on) | key | key |
+| Another app in front (e.g. Settings) | switch: the recording starts, the pill shows once the app is back in front (kiosk return, [kiosk.md](kiosk.md)) | no: the key goes to that app (unhandled, Android hands it to the media session), the switch makes it a press |
+| Button reports no separate down/up (owner's `getevent` check) | key or switch | no: voice notes come from the on-screen buttons |
+| Key layout not installed (no root) | switch; but the button's `KEY_POWER` also puts the device to sleep | no |
+
+Android 11 passes no key to the app while the display is off, and doesn't wake the device for a
+media key (the layout's `WAKE` flag doesn't change that), so a hold needs the screen on.
+
+## API for the hardware button
 
 ```kotlin
 import com.msp1974.vacompanion.odysseus.record.RecorderController
@@ -169,6 +215,8 @@ they work without Home Assistant.
 - `RecordingQueueTest`: the queue against a fake hub (order, `/end`, retry, auth, rejected,
   the 404 fallback, sessions left by a killed run, half-written files, the cap).
 - `RecordingTextTest`: the pill and status wording.
+- `RecordButtonGesturesTest`: the privacy button's press and hold from key down/up, repeats,
+  stale timers, the mute-switch fallback and how a key covers it, and the Record/Mute rules.
 
 ## Checking on a device
 
@@ -180,3 +228,5 @@ they work without Home Assistant.
    Recording shows chunks waiting, and then everything arrives (or tap "Upload now").
 4. Say "Hey Athena" during a recording. It answers, and the recording goes on.
 5. `adb logcat | grep Recorder` shows the start, the chunks and the uploads.
+6. The privacy button: the checks in
+   [echo-show-5.md](echo-show-5.md#owners-checks-on-the-echo).

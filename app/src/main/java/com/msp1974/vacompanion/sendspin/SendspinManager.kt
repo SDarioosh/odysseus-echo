@@ -40,7 +40,10 @@ class SendspinManager(
             LockMode.locked.collect { locked ->
                 if (locked) {
                     if (player != null) Timber.i("SendspinManager: stopping the player, locked")
-                    stopPlayer()
+                    // The player comes back on unlock, so say goodbye `restart`: after `shutdown`
+                    // Music Assistant stops re-dialling a manual (Tailscale) address and the player
+                    // stays unavailable until its Sendspin provider is reloaded.
+                    stopPlayer(restarting = true)
                 } else if (config.sendspinEnabled) {
                     startPlayer()
                 }
@@ -101,6 +104,11 @@ class SendspinManager(
     override fun onEventTriggered(event: Event) {
         if (event.eventName != "sendspin_enabled") return
         Timber.d("SendspinManager: sendspin_enabled=${config.sendspinEnabled}")
-        if (config.sendspinEnabled && !LockMode.isLocked) startPlayer() else stopPlayer()
+        if (config.sendspinEnabled && !LockMode.isLocked) {
+            startPlayer()
+        } else {
+            // Odysseus fork: only the owner switching Sendspin off is a real `shutdown`.
+            stopPlayer(restarting = config.sendspinEnabled)
+        }
     }
 }

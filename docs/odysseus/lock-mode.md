@@ -17,7 +17,9 @@ PIN unlocks it on the device. Code: `app/src/main/java/com/msp1974/vacompanion/o
   `wake` action and a follow-up are ignored. A turn running at the lock time is stopped.
 - **Recording:** stopped on lock and refused while locked ("Locked: not recording").
 - **Music:** the Sendspin player is stopped (Music Assistant sees it leave) and started again on
-  unlock if Sendspin is on. Home Assistant's `play-media`, `play`, `set-volume` actions are ignored.
+  unlock if Sendspin is on. It leaves with the goodbye reason `restart`, not `shutdown`, so Music
+  Assistant keeps re-dialling it and reconnects by itself after the unlock (with `shutdown` it gave
+  up on a manually added address until its Sendspin provider was reloaded). Home Assistant's `play-media`, `play`, `set-volume` actions are ignored.
 - **What Home Assistant starts:** an announcement's audio is dropped and answered with `played`
   at its end, so Home Assistant doesn't wait on it; a conversation it starts (`transcribe`) gets an
   `audio-stop` at once, so no audio is sent. `toast-message`, `alarm` and `navigate` are ignored.

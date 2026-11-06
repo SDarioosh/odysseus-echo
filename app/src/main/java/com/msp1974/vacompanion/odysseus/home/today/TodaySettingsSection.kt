@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.msp1974.vacompanion.odysseus.OdysseusLink
 import com.msp1974.vacompanion.odysseus.home.HomeSettings
+import com.msp1974.vacompanion.odysseus.managed.ManagedNote
+import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
 
 @Composable
 fun TodaySettingsSection() {
@@ -34,7 +36,7 @@ fun TodaySettingsSection() {
         Switch(
             checked = HomeSettings.todayEnabled,
             onCheckedChange = { HomeSettings.todayEnabled = it },
-            enabled = HomeSettings.enabled,
+            enabled = HomeSettings.enabled && !ManagedSettings.isManaged("today.enabled"),
         )
         Column(Modifier.padding(start = 14.dp)) {
             Text("Today page", fontSize = 16.sp, color = colors.onSurface)
@@ -43,6 +45,7 @@ fun TodaySettingsSection() {
                     if (TodayRepository.linked) "" else " Shows once this device is linked to Odysseus.",
                 fontSize = 13.sp, color = colors.onSurfaceVariant,
             )
+            ManagedNote("today.enabled")
         }
     }
 }

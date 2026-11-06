@@ -11,6 +11,8 @@ package com.msp1974.vacompanion.odysseus.announce
 // - Expired ones (expires_at passed) are skipped but still marked seen. So are ones older than
 //   STALE_MS that have no expires_at of their own: an Echo that was off for hours doesn't show
 //   them all when it comes back.
+// - A "settings" item (C6) is never a card: it only says the device's settings changed, so
+//   [News.settingsChanged] asks for them (odysseus/managed/), however old the item is.
 
 /** Where the feed state is kept (SharedPreferences on the device, a map in tests). */
 interface AnnouncementFeedStore {
@@ -25,11 +27,21 @@ class AnnouncementFeed(private val store: AnnouncementFeedStore) {
     /** The `since` to ask with now. */
     fun sinceFor(nowMs: Long): Long = store.since ?: (nowMs - FIRST_LOOKBACK_MS)
 
+    /** A feed answer's news: the cards to show, oldest first, and whether the settings changed. */
+    data class News(val cards: List<Announcement>, val settingsChanged: Boolean)
+
+    /** [accept], plus the "settings" items, which never become cards. */
+    fun acceptNews(items: List<Announcement>, nowMs: Long): News {
+        var settingsChanged = false
+        val cards = accept(items, nowMs) { settingsChanged = true }
+        return News(cards, settingsChanged)
+    }
+
     /**
      * Takes a feed answer and returns the announcements to show, oldest first. Updates and
-     * persists `since` and the seen ids.
+     * persists `since` and the seen ids. New "settings" items go to [onSettings], not the cards.
      */
-    fun accept(items: List<Announcement>, nowMs: Long): List<Announcement> {
+    fun accept(items: List<Announcement>, nowMs: Long, onSettings: (Announcement) -> Unit = {}): List<Announcement> {
         val seen = store.seen.toMutableMap()
         val fresh = mutableListOf<Announcement>()
         var newest = store.since
@@ -38,7 +50,8 @@ class AnnouncementFeed(private val store: AnnouncementFeedStore) {
             if (newest == null || a.at > newest) newest = a.at
             if (seen.containsKey(a.id)) continue
             seen[a.id] = a.at
-            if (isShowable(a, nowMs)) fresh += a
+            if (a.isSettings) onSettings(a)
+            else if (isShowable(a, nowMs)) fresh += a
         }
         // Forget ids the hub no longer keeps, measured on the hub's clock (the newest `at`).
         val horizon = newest?.let { it - KEEP_SEEN_MS }

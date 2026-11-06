@@ -21,6 +21,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.msp1974.vacompanion.odysseus.OdysseusColors
+import com.msp1974.vacompanion.odysseus.managed.ManagedNote
+import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
 
 @Composable
 fun RecordingSettingsSection() {
@@ -35,6 +37,7 @@ fun RecordingSettingsSection() {
         enabled, "Recording",
         "Record conversations (tap the record button) and voice notes (hold it 1 s) for Athena. " +
             "The audio goes only to your Odysseus hub. A red pill shows while anything records.",
+        managedKey = "record.enabled",
     ) {
         RecorderSettings.enabled = it
         if (!it) RecorderController.onRecordingDisabled()
@@ -44,6 +47,7 @@ fun RecordingSettingsSection() {
         RecorderSettings.clockButton, "Record button on the clock",
         "A small record button in the clock page's bottom right. Also in the quick actions sheet.",
         enabled = enabled,
+        managedKey = "record.clock_button",
     ) { RecorderSettings.clockButton = it }
     PrivacyButtonChoice(enabled)
     Text(RecordingText.queue(ui.queue), fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
@@ -61,12 +65,20 @@ fun RecordingSettingsSection() {
 }
 
 @Composable
-private fun Toggle(checked: Boolean, title: String, detail: String, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+private fun Toggle(
+    checked: Boolean, title: String, detail: String, enabled: Boolean = true,
+    managedKey: String? = null, // set by Odysseus: disabled + "Set by Odysseus" (odysseus/managed/)
+    onChange: (Boolean) -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
+        Switch(
+            checked = checked, onCheckedChange = onChange,
+            enabled = enabled && (managedKey == null || !ManagedSettings.isManaged(managedKey)),
+        )
         Column(Modifier.padding(start = 14.dp)) {
             Text(title, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
             Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (managedKey != null) ManagedNote(managedKey)
         }
     }
 }
@@ -86,7 +98,7 @@ private fun PrivacyButtonChoice(recordingEnabled: Boolean) {
                         RecorderSettings.privacyButton = m
                         RecordButton.refreshMute()
                     },
-                    enabled = hasButton,
+                    enabled = hasButton && !ManagedSettings.isManaged("record.privacy_button"),
                 )
                 Text(
                     if (m == PrivacyButtonMode.RECORD) "Record" else "Mute",
@@ -105,5 +117,6 @@ private fun PrivacyButtonChoice(recordingEnabled: Boolean) {
                 "front, a hold counts as a press."
         }
         Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ManagedNote("record.privacy_button")
     }
 }

@@ -21,7 +21,7 @@ data class AnnouncementCards(val items: List<AnnouncementCardItem> = emptyList()
     /** New announcements arrived: each stays SHOW_MS from now, or until it expires if sooner. */
     fun add(new: List<Announcement>, nowMs: Long): AnnouncementCards {
         val known = items.map { it.announcement.id }.toSet()
-        val added = new.filter { it.id !in known }.map { a ->
+        val added = new.filter { it.id !in known && !it.isSettings }.map { a ->
             val until = nowMs + SHOW_MS
             AnnouncementCardItem(a, a.expiresAt?.let { minOf(it, until) } ?: until)
         }

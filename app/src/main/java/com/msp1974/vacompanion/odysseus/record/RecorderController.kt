@@ -234,7 +234,8 @@ object RecorderController : EventListener {
             delay(1_000)
             val now = System.currentTimeMillis()
             synchronized(this) {
-                val effects = machine.tick(now)
+                // A note that interrupted a recording resumes it only if recording may start now.
+                val effects = machine.tick(now, refusal())
                 if (effects.isNotEmpty()) {
                     Timber.i("Recorder: maximum length reached")
                     publishState()

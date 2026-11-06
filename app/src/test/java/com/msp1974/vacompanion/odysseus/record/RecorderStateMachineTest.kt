@@ -135,6 +135,21 @@ class RecorderStateMachineTest {
         assertEquals(RecorderState.Idle, sm.state)
     }
 
+    @Test
+    fun aNoteThatInterruptedARecordingDoesNotResumeItWhenRecordingIsRefusedNow() {
+        // Unlinked (or the permission gone) during the note: the note stops, nothing resumes.
+        val p = noteDuringRecording()
+        assertEquals(listOf(EndSession(NOTE), PlayStopSound, Refused("not linked")), p.press(t0 + 20_000, "not linked"))
+        assertEquals(RecorderState.Idle, p.state)
+        val h = noteDuringRecording()
+        assertEquals(listOf(EndSession(NOTE), PlayStopSound, Refused("not linked")), h.hold(t0 + 20_000, "not linked"))
+        assertEquals(RecorderState.Idle, h.state)
+        val t = noteDuringRecording()
+        val end = t0 + 5_000 + RecorderStateMachine.MAX_NOTE_MS
+        assertEquals(listOf(EndSession(NOTE), PlayStopSound, Refused("not linked")), t.tick(end, "not linked"))
+        assertEquals(RecorderState.Idle, t.state)
+    }
+
     // --- maximum lengths ---
 
     @Test

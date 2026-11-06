@@ -41,15 +41,14 @@ but test them against a merged hub.
 5. **Speaking stays with Home Assistant.** The hub asks HA to announce on the right
    satellites. The Echo shows a card for the same message, from a feed it polls.
 
-## Open questions for the owner
+## Owner's answers (2026-11-06)
 
-- **Mute switch** (Phase 0). If it cuts the microphones in hardware, it can't start a
-  recording. Fallback, already in E5: an on-screen record button. E6 can also use the Echo's
-  volume buttons (for example, hold volume-down). Which do you want if Phase 0 fails?
-- **Today on shared screens.** The kitchen Echo would show your calendar and to-dos to anyone
-  in the room. E1 adds a per-device on/off setting. Default on or off?
-- **Wake word while recording.** This plan keeps "Hey Athena" working during a recording and
-  pauses it during a voice note. OK?
+- **Mute switch**: it doesn't cut the microphone in hardware (the wake word still worked while
+  muted), so E6 goes ahead with the switch. Whether the button reports separate down and up
+  events is still to be seen with `getevent` on the device (Phase 0, step 1).
+- **Today page**: on by default, with a per-device off switch.
+- **Wake word**: "Hey Athena" keeps working during recordings **and** voice notes (this replaces
+  E5's "pause wake word during a voice note").
 
 ## Shared contracts (hub and echo build against these)
 
@@ -305,8 +304,7 @@ Paste the output into a new issue on odysseus-echo. Then:
 > - data passed to the page through `HomePageContext` (pages don't read the view model).
 >
 > The call goes through `OdysseusLink` (its base URL and voice token; add a GET helper if
-> needed). Settings in Menu → Odysseus → Home screen: "Today page" on/off (default: ask the
-> owner — see Open questions in the plan), stored in `HomeSettings`. With Odysseus not linked
+> needed). Settings in Menu → Odysseus → Home screen: "Today page" on/off (default on), stored in `HomeSettings`. With Odysseus not linked
 > or the page off, the page isn't in the list.
 >
 > [paste contract C1]
@@ -412,8 +410,7 @@ Paste the output into a new issue on odysseus-echo. Then:
 > `audio/DetectionBuffer` does. Encode 30 s WAV chunks (`Wav.encodePcm16Mono`, 16 kHz mono)
 > on a background dispatcher.
 > - Each chunk's timestamp = session start + 80 ms × frames before it.
-> - The wake word keeps working during a recording.
-> - During a voice note, pause wake word detection (one hook) and resume after.
+> - The wake word keeps working during recordings and voice notes (owner's choice).
 >
 > **Durable queue**: write each chunk to app-private storage before uploading (`session_id`,
 > `sequence`, `kind`, timestamp in a small sidecar file). Upload in order per session.

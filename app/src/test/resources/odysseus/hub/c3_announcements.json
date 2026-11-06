@@ -1,0 +1,76 @@
+{
+  "announcements": [
+    {
+      "id": "an_7a62d07065f94420",
+      "at": 1793938123706,
+      "kind": "reminder",
+      "title": "Feed the fictional cat",
+      "text": "Reminder: Feed the fictional cat",
+      "target": {
+        "all": true
+      },
+      "ref": "todo:4ef56451-1b45-43c8-934d-eb6fb1ff87a1",
+      "expires_at": 1793941723706
+    },
+    {
+      "id": "an_e16d5fea79324638",
+      "at": 1793938273567,
+      "kind": "announcement",
+      "title": "Test announcement",
+      "text": "Fictional test for the kitchen.",
+      "target": {
+        "device_id": "echo-kitchen-1"
+      },
+      "ref": null,
+      "expires_at": 1793941873567
+    },
+    {
+      "id": "an_27be5df6099c4bdf",
+      "at": 1793938273678,
+      "kind": "announcement",
+      "title": "Test announcement",
+      "text": "This is a test announcement from Odysseus.",
+      "target": {
+        "device_id": "echo-kitchen-1"
+      },
+      "ref": null,
+      "expires_at": 1793941873678
+    },
+    {
+      "id": "an_30d9a381715c44d3",
+      "at": 1793938281891,
+      "kind": "announcement",
+      "title": "Dinner is ready in the fictional kitchen.",
+      "text": "Dinner is ready in the fictional kitchen.",
+      "target": {
+        "area": "kitchen"
+      },
+      "ref": null,
+      "expires_at": 1793941881891
+    },
+    {
+      "id": "an_9adba1b3bfcb49a2",
+      "at": 1793938354749,
+      "kind": "settings",
+      "title": "Settings",
+      "text": "Settings changed in Odysseus.",
+      "target": {
+        "device_id": "echo-kitchen-1"
+      },
+      "ref": "settings:1",
+      "expires_at": 1793938954749
+    },
+    {
+      "id": "an_adae07b7126f4b4e",
+      "at": 1793938355168,
+      "kind": "settings",
+      "title": "Settings",
+      "text": "Settings changed in Odysseus.",
+      "target": {
+        "device_id": "echo-kitchen-1"
+      },
+      "ref": "settings:2",
+      "expires_at": 1793938955168
+    }
+  ]
+}

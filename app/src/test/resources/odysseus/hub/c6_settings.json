@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "settings": {
+    "home.enabled": true,
+    "home.idle_seconds": 120,
+    "home.weather_enabled": false,
+    "today.enabled": true,
+    "kiosk.return_seconds": 600,
+    "kiosk.auto_reload": true,
+    "record.enabled": true,
+    "record.clock_button": false,
+    "record.privacy_button": "mute",
+    "followup.enabled": true,
+    "followup.seconds": 8
+  }
+}

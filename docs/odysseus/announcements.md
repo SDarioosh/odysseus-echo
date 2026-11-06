@@ -20,8 +20,9 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   -> {"ok": true}
   ```
 
-- **Feed.** Every 30 s, and at once when the screen comes on, it asks for announcements meant for
-  it (all devices, its area, or its id; the hub filters):
+- **Feed.** Every 30 s, and at once when the screen comes on (at most every 10 s, and not while
+  waiting after a refused token or on an older hub), it asks for announcements meant for it (all
+  devices, its area, or its id; the hub filters):
 
   ```
   GET <base>/announcements?device_id=<id>&since=<epoch ms>
@@ -40,7 +41,7 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
     them all when it comes back.
   - After a failed request it waits 30 s, 1, 2, 4, then 5 min. On a refused token (401/403) it
     waits 15 min. An older Odysseus without the feed (404) is asked again hourly. A changed link
-    in Menu → Odysseus starts again within a minute.
+    in Menu → Odysseus (a new token too) starts again within a minute.
   - Not linked to Odysseus: nothing is sent at all. It only checks the settings again every minute.
 
 - **Card.** A new announcement wakes the screen and shows a card at the top, over any screen

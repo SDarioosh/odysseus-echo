@@ -121,4 +121,16 @@ class AnnouncementRulesTest {
         // ...so the hello (and with it the managed settings) is sent again at once.
         assertTrue(AnnouncementPolling.helloDue(now - 60_000, "$before|x", "$after|x", now))
     }
+
+    @Test
+    fun screenOnPollsOnlyWhenItHelpsAndNotInAStorm() {
+        assertTrue(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.OK, 20_000))
+        assertTrue(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.FAILED, 20_000))
+        // The screen going on and off every few seconds doesn't poll every few seconds.
+        assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.OK, 2_000))
+        // A refused token, an older hub, no link: their long waits hold.
+        assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.UNAUTHORIZED, 60_000))
+        assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.NOT_SUPPORTED, 60_000))
+        assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.NOT_LINKED, 60_000))
+    }
 }

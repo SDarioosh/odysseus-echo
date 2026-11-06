@@ -102,6 +102,7 @@ object Announcements : EventListener {
         var failures = 0
         var lastOutcome: AnnouncementPolling.Outcome? = null
         while (scope?.isActive == true) {
+            val requestedAt = System.currentTimeMillis()
             val outcome = try {
                 once()
             } catch (e: CancellationException) {
@@ -113,18 +114,23 @@ object Announcements : EventListener {
             failures = if (outcome == AnnouncementPolling.Outcome.FAILED) failures + 1 else 0
             if (outcome != lastOutcome) Timber.i("Announcements: feed $outcome")
             lastOutcome = outcome
-            waitFor(AnnouncementPolling.nextDelay(outcome, failures))
+            waitFor(AnnouncementPolling.nextDelay(outcome, failures), outcome, requestedAt)
         }
     }
 
-    /** Waits [ms], or less when asked to poll now or the link was changed in the settings. */
-    private suspend fun waitFor(ms: Long) {
+    /**
+     * Waits [ms], or less when the link was changed in the settings, or when asked to poll now
+     * and [AnnouncementPolling.wakeHonored] allows it after [outcome] at [requestedAt].
+     */
+    private suspend fun waitFor(ms: Long, outcome: AnnouncementPolling.Outcome, requestedAt: Long) {
         val signature = linkSignature()
         val deadline = System.currentTimeMillis() + ms
         while (true) {
             val left = deadline - System.currentTimeMillis()
             if (left <= 0) return
-            if (withTimeoutOrNull(minOf(left, AnnouncementPolling.NOT_LINKED_MS)) { wake.receive() } != null) return
+            if (withTimeoutOrNull(minOf(left, AnnouncementPolling.NOT_LINKED_MS)) { wake.receive() } != null &&
+                AnnouncementPolling.wakeHonored(outcome, System.currentTimeMillis() - requestedAt)
+            ) return
             if (linkSignature() != signature) return
         }
     }

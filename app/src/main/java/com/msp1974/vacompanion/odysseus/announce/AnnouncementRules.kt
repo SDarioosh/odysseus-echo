@@ -77,6 +77,8 @@ object AnnouncementPolling {
     /** Not linked to Odysseus: no requests; only look at the settings again. */
     const val NOT_LINKED_MS = 60_000L
     const val HELLO_EVERY_MS = 60 * 60_000L
+    /** "Poll now" (the screen came on) at most this often. */
+    const val MIN_WAKE_GAP_MS = 10_000L
 
     enum class Outcome { OK, FAILED, UNAUTHORIZED, NOT_SUPPORTED, NOT_LINKED }
 
@@ -97,6 +99,15 @@ object AnnouncementPolling {
      * ([tokenStamp]: OdysseusLink.tokenStamp), so a token typed in after a 401 is tried at once.
      */
     fun linkSignature(baseUrl: String, tokenStamp: Int): String = "$baseUrl|$tokenStamp"
+
+    /**
+     * Whether "poll now" (the screen came on) cuts the wait short after [outcome], [sinceRequestMs]
+     * after the last request. Not after a refused token, an older hub or while not linked (their
+     * long waits would be lost to every screen-on), and not more often than MIN_WAKE_GAP_MS (a
+     * motion sensor can turn the screen on and off every few seconds).
+     */
+    fun wakeHonored(outcome: Outcome, sinceRequestMs: Long): Boolean =
+        (outcome == Outcome.OK || outcome == Outcome.FAILED) && sinceRequestMs >= MIN_WAKE_GAP_MS
 
     /** A hello is due at start, hourly, and whenever what it says (or the hub) changed. */
     fun helloDue(lastHelloMs: Long?, lastSent: String?, nowSaying: String, nowMs: Long): Boolean =

@@ -123,6 +123,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
             com.msp1974.vacompanion.odysseus.home.today.TodaySettingsSection()
             KioskSettingsSection()
             com.msp1974.vacompanion.odysseus.update.UpdateSettingsSection()
+            com.msp1974.vacompanion.odysseus.record.RecordingSettingsSection() // Menu → Odysseus → Recording (odysseus/record/)
         }
     }
 }

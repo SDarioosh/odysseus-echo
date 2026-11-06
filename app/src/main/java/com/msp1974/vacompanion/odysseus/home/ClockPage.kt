@@ -114,6 +114,7 @@ object ClockPage : HomePage {
             StatusLine(context, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
             // A downloaded update from Odysseus (odysseus/update/UpdateBanner.kt); nothing otherwise.
             com.msp1974.vacompanion.odysseus.update.UpdateBanner(Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 12.dp))
+            com.msp1974.vacompanion.odysseus.record.ClockRecordButton(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 12.dp))
         }
     }
 }

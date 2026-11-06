@@ -94,6 +94,8 @@ fun QuickActionsSheet(
                         onToggleMicMute()
                     }
                 )
+                // Odysseus fork: record button, tap = record, hold 1 s = voice note (odysseus/record/RecordingUi.kt)
+                com.msp1974.vacompanion.odysseus.record.RecordQuickAction()
                 QuickActionButton(
                     icon = Icons.Default.MonitorHeart,
                     label = "Diagnostics",

@@ -212,6 +212,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                         com.msp1974.vacompanion.odysseus.announce.AnnouncementCard()
                         // Odysseus fork: Sendspin pairing code / approval (odysseus/SendspinPairingOverlay.kt)
                         com.msp1974.vacompanion.odysseus.SendspinPairingOverlay()
+                        // Odysseus fork: red REC / NOTE pill over every screen while recording (odysseus/record/RecordingUi.kt)
+                        com.msp1974.vacompanion.odysseus.record.RecordingPill()
 
                         vaUiState.onboardingDeviceId?.let { defaultId ->
                             UUIDEditDialog(
@@ -714,6 +716,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 "deviceBump" -> if (config.screenOnBump) applyScreenMode(ScreenOnMode.ON)
                 "sendspinPairingPrompt" -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: show the pairing code
                 com.msp1974.vacompanion.odysseus.announce.Announcements.EVENT_NEW -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: show the announcement card
+                com.msp1974.vacompanion.odysseus.record.RecorderController.EVENT_STARTED -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: show the REC pill
                 "proximity" -> if (config.screenOnProximity && event.newValue as Float == 0f) applyScreenMode(ScreenOnMode.ON)
                 "motion" -> onMotion(event.newValue as Boolean)
                 "showToastMessage" -> Toast.makeText(

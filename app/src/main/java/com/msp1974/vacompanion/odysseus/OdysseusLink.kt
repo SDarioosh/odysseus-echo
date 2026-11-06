@@ -116,6 +116,9 @@ object OdysseusLink {
         prefs()?.edit()?.putString(KEY_TOKEN, encrypt(t))?.apply()
     }
 
+    /** The voice token, for the recorder's uploads to the same hub (odysseus/record/HubRelayTransport.kt). */
+    internal fun bearerToken(): String? = token()
+
     private fun token(): String? = prefs()?.getString(KEY_TOKEN, null)?.let {
         runCatching { decrypt(it) }.onFailure { e -> Timber.w(e, "Odysseus token unreadable") }.getOrNull()
     }

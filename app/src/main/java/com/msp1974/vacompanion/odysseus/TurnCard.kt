@@ -95,6 +95,9 @@ object VoiceTurns {
     /** This device's id (APPConfig.uuid), so a turn another satellite answered isn't shown here. */
     @Volatile var deviceId = ""
 
+    /** The turn (its turnStartedAt) the card in [shown] was fetched for; 0 = none yet. */
+    @Volatile private var shownFor = 0L
+
     /** False once the hub answered 404 for /turns/latest; then /actions is used. Reset on relink. */
     @Volatile private var turnFeed = true
 
@@ -129,12 +132,36 @@ object VoiceTurns {
                 Fetched.Stop -> return
                 Fetched.NoTurn -> Unit
                 is Fetched.Card -> {
-                    if (turnStartedAt == since) _shown.value = found.state
+                    if (turnStartedAt == since) { _shown.value = found.state; shownFor = since }
                     return
                 }
             }
             if (attempt == 0) delay(RETRY_MS)
         }
+    }
+
+    /**
+     * Whether the current turn waits for a spoken "yes" from this device (odysseus/followup/FollowUp.kt).
+     * Uses the card already fetched for this turn (when the answer started); otherwise asks the hub,
+     * whether or not the card is shown. A card tapped away counts as no.
+     */
+    suspend fun awaitingConfirmation(): Boolean {
+        val since = turnStartedAt
+        if (since == 0L || !OdysseusLink.isConfigured) return false
+        if (shownFor == since) return _shown.value?.awaitingConfirmation != null
+        val from = since - CLOCK_SLACK_MS
+        repeat(2) { attempt ->
+            when (val found = fetch(from)) {
+                Fetched.Stop -> return false
+                Fetched.NoTurn -> Unit
+                is Fetched.Card -> {
+                    if (OdysseusLink.showActions && turnStartedAt == since) { _shown.value = found.state; shownFor = since }
+                    return found.state?.awaitingConfirmation != null
+                }
+            }
+            if (attempt == 0) delay(RETRY_MS)
+        }
+        return false
     }
 
     private sealed interface Fetched {

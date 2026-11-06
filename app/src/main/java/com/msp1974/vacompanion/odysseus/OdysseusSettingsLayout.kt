@@ -97,6 +97,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
             Setting(thinking, "Thinking sound", "A soft tone once when an answer takes longer than 5 seconds") {
                 thinking = it; OdysseusLink.thinkingSound = it
             }
+            com.msp1974.vacompanion.odysseus.followup.FollowUpSettingsSection() // answer without the wake word (odysseus/followup/)
             OutlinedTextField(
                 value = deviceName,
                 onValueChange = { deviceName = it; OdysseusLink.deviceName = it },

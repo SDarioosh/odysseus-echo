@@ -18,7 +18,7 @@ A card at the top of the screen, from the moment the answer starts playing. It s
 
 - **Rows:** up to four action rows, fewer when the card also has a question or sources, then "and N more". It's sized for the Echo Show 5's 960×480 screen.
 - **Sources:** a chip shows the hub's label, else the link's host. Only `http`/`https` links are shown. A tap opens the page full screen inside the app, with a close button (✕) at the top right. Links open in that view only, never in another app. The page loads from wherever the link points: Athena's transcript links are on the owner's network; a web source is fetched from the web only when you tap it.
-- **Confirmations:** HA keeps the microphone open after an answer that ends with "?". The card for that question stays while you answer. When the follow-up turn ends, the card shows what "yes" did, or goes away after "no".
+- **Confirmations:** HA keeps the microphone open after an answer that ends with "?". When it doesn't, but Odysseus waits for a "yes" from this device, the device listens again by itself after a soft tone ([follow-up.md](follow-up.md), "Answer without the wake word"). The card for that question stays while you answer. When the follow-up turn ends, the card shows what "yes" did, or goes away after "no".
 - **Nothing to show:** a turn that added nothing, has no sources and asks nothing shows no card.
 
 ## The satellite post and "Check my voice"
@@ -64,6 +64,7 @@ Read them on the server: `python scripts/voice_timings.py` in the Odysseus check
 | Show what a voice turn did | on | the turn card |
 | Check my voice | on | sends the spoken command with the satellite post |
 | Thinking sound | on | the tone after 5 s of waiting |
+| Answer without the wake word | on | listens for the "yes" by itself, 8 s by default ([follow-up.md](follow-up.md); own file `odysseus_followup`) |
 | Device name told to Odysseus | blank ("VACA <id>") | the `device_name` Odysseus puts in the turn's context ("Asked from: Kitchen Echo, Kitchen") |
 
 Nothing is fetched or posted until the device is linked (base URL and token below). They're stored on the device (SharedPreferences, `odysseus_link`), not sent to HA.
@@ -126,6 +127,7 @@ The URL must be reachable from the device: Odysseus's LAN or Tailscale address, 
 - `odysseus/TurnTimings.kt`: the turn's stage times and their JSON (unit-tested).
 - `odysseus/TurnAudioRecorder.kt`: the copy of the turn's streamed audio, and the WAV writer (unit-tested).
 - `odysseus/ThinkingChime.kt`: when the thinking sound plays (unit-tested).
+- `odysseus/followup/`: listening for the "yes" without the wake word ([follow-up.md](follow-up.md)); `VoiceTurns.awaitingConfirmation()` in `TurnCard.kt`.
 - `odysseus/OdysseusSettingsLayout.kt`: Menu → Odysseus. `odysseus/EchoSetup.kt` and the files next to it: the phone setup ([setup.md](setup.md)).
 - Hooks: `MainActivity.kt` (the card overlay), `ui/layouts/SettingsLayout.kt` (the tile and screen), `satellite/Satellite.kt` (`startAudioPipeline`: `OdysseusTurn.begin`, `tee` on the pipeline's microphone flow, `onStage` next to the listening indicator).
 - Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/` (`./gradlew :app:testDebugUnitTest`).

@@ -30,6 +30,20 @@ class TodayFormatTest {
     }
 
     @Test
+    fun eventsRunningOverMidnightDontShowYesterdaysStart() {
+        val today = LocalDate.of(2026, 11, 6)
+        val night = TodayEvent(title = "Night shift", start = "2026-11-05T22:00:00-05:00", end = "2026-11-06T06:00:00-05:00")
+        assertEquals("–6:00", TodayFormat.eventTime(night, ny, true, Locale.US, today))
+        assertEquals("–6:00 AM", TodayFormat.eventTime(night, ny, false, Locale.US, today))
+        // Began yesterday and ends tomorrow (or has no end): all of today.
+        val trip = night.copy(end = "2026-11-07T12:00:00-05:00")
+        assertEquals("All day", TodayFormat.eventTime(trip, ny, true, Locale.US, today))
+        assertEquals("All day", TodayFormat.eventTime(night.copy(end = null), ny, true, Locale.US, today))
+        // Starting today: its start, as before.
+        assertEquals("15:00", TodayFormat.eventTime(dentist, ny, true, Locale.US, today))
+    }
+
+    @Test
     fun pastEvents() {
         assertFalse(TodayFormat.isPast(dentist, ms("2026-11-06T15:29:00-05:00")))
         assertTrue(TodayFormat.isPast(dentist, ms("2026-11-06T15:30:00-05:00")))

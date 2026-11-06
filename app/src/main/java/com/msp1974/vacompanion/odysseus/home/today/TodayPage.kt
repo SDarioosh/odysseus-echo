@@ -165,7 +165,7 @@ private fun Body(data: TodayData, context: HomePageContext, now: Long, is24h: Bo
         val (todoShown, aiShown) = TodayFormat.fitColumn(rightRows, todos.size, actionItems.size)
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Column(Modifier.weight(1.15f)) {
-                Events(data.events, TodayFormat.fitEvents(leftRows, data.events.size), now, zone, is24h)
+                Events(data.events, TodayFormat.fitEvents(leftRows, data.events.size), now, zone, is24h, today)
             }
             Column(Modifier.weight(1f)) {
                 Todos(todos, todoShown, today, context)
@@ -236,7 +236,7 @@ private fun Title(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun Events(events: List<TodayEvent>, shown: Int, now: Long, zone: ZoneId, is24h: Boolean) {
+private fun Events(events: List<TodayEvent>, shown: Int, now: Long, zone: ZoneId, is24h: Boolean, today: LocalDate) {
     val colors = MaterialTheme.colorScheme
     SectionLabel("Calendar")
     if (events.isEmpty()) {
@@ -249,7 +249,7 @@ private fun Events(events: List<TodayEvent>, shown: Int, now: Long, zone: ZoneId
         val past = TodayFormat.isPast(e, now)
         ItemRow(Modifier.alpha(if (past) 0.45f else 1f)) {
             Text(
-                TodayFormat.eventTime(e, zone, is24h),
+                TodayFormat.eventTime(e, zone, is24h, today = today),
                 style = MaterialTheme.typography.titleLarge,
                 color = colors.primary, maxLines = 1,
                 modifier = Modifier.width(timeWidth),

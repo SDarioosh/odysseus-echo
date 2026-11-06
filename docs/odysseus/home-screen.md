@@ -77,6 +77,8 @@ To-dos and action items can be marked done from it (below); everything else is r
   8:15" at the bottom; after that, or with nothing fetched yet, the page says "Can't reach
   Odysseus" and why (a refused token says to link again; a hub without the route says 404). A
   result from before midnight is dropped. Logcat shows `Today: ...` lines.
+- **Events over midnight**: one that began yesterday shows when it ends ("–6:00"), or "All day"
+  when it doesn't end today either.
 - **Not linked**, or the setting off: the page isn't in the list, so the clock is the last page.
   Linking or unlinking in Menu → Odysseus takes effect when the menu closes.
 

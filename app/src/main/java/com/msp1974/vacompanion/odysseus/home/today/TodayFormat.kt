@@ -19,12 +19,27 @@ object TodayFormat {
             ?: runCatching { Instant.parse(iso) }.getOrNull()
     }
 
-    /** "15:00" / "3:00 PM" in [zone]; "All day" for all-day events; "" when unreadable. */
-    fun eventTime(event: TodayEvent, zone: ZoneId, is24h: Boolean, locale: Locale = Locale.getDefault()): String {
+    /**
+     * "15:00" / "3:00 PM" in [zone]; "All day" for all-day events; "" when unreadable. An event
+     * that began before [today] (it runs over midnight) shows when it ends, "–2:00", or "All day"
+     * when it doesn't end today either: its start time would be yesterday's.
+     */
+    fun eventTime(
+        event: TodayEvent,
+        zone: ZoneId,
+        is24h: Boolean,
+        locale: Locale = Locale.getDefault(),
+        today: LocalDate? = null,
+    ): String {
         if (event.allDay) return "All day"
         val start = instant(event.start) ?: return ""
         val pattern = if (is24h) "H:mm" else "h:mm a"
-        return DateTimeFormatter.ofPattern(pattern, locale).format(start.atZone(zone))
+        val format = DateTimeFormatter.ofPattern(pattern, locale)
+        if (today != null && start.atZone(zone).toLocalDate().isBefore(today)) {
+            val end = instant(event.end)?.atZone(zone) ?: return "All day"
+            return if (end.toLocalDate() == today) "–" + format.format(end) else "All day"
+        }
+        return format.format(start.atZone(zone))
     }
 
     /** The event has ended (or, without an end, started more than an hour ago). All-day: never. */

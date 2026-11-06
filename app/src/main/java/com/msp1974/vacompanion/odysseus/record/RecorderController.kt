@@ -175,6 +175,8 @@ object RecorderController : EventListener {
     // Effects run in order, under the lock, on the calling thread; nothing here waits long.
     private fun perform(effects: List<RecorderEffect>) {
         for (e in effects) {
+            // A session that could not start leaves the recorder idle: no start sound after it.
+            if (e == RecorderEffect.PlayStartSound && machine.state == RecorderState.Idle) continue
             when (e) {
                 is RecorderEffect.StartSession -> try {
                     startSession(e.kind, e.quiet)

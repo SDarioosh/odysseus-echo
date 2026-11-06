@@ -173,7 +173,7 @@ object OdysseusLink {
         data class Failed(val message: String) : PostResult
     }
 
-    private class Reply(val code: Int, val body: String)
+    internal class Reply(val code: Int, val body: String)
 
     private fun describe(code: Int, what: String) = when (code) {
         401, 403 -> "token refused ($code)"
@@ -193,10 +193,20 @@ object OdysseusLink {
         val base = baseUrl
         val token = token()
         if (!base.startsWith("http") || token.isNullOrEmpty()) throw IllegalStateException("not set up")
-        val conn = URL("$base$path").openConnection() as HttpURLConnection
+        return send("$base$path", token, contentType, body, readTimeoutMs, errorBody)
+    }
+
+    /** [request] to a full [url]; split out so it is unit-tested against a local server. */
+    internal fun send(
+        url: String, token: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000,
+        errorBody: Boolean = false,
+    ): Reply {
+        val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 4000
             conn.readTimeout = readTimeoutMs
+            // A redirect is answered as it is: following it would send the token to wherever it points.
+            conn.instanceFollowRedirects = false
             conn.setRequestProperty("Authorization", "Bearer $token")
             conn.setRequestProperty("Accept", "application/json")
             if (body != null) {

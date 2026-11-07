@@ -1,0 +1,8 @@
+{"friendly_name": "Kitchen Echo", "media_title": "Lantern Song", "media_artist": "The Copper Lanterns",
+ "media_album_name": "Harbour Lights", "media_duration": 214, "media_position": 61.5,
+ "media_position_updated_at": "2026-11-07T10:00:00.250000+00:00", "shuffle": true, "repeat": "all",
+ "volume_level": 0.35, "is_volume_muted": false,
+ "entity_picture": "/api/media_player_proxy/media_player.kitchen_echo?token=fictional&cache=1",
+ "entity_picture_local": "/api/media_player_proxy/media_player.kitchen_echo?token=fictional&cache=2",
+ "group_members": [], "mass_player_type": "player", "active_queue": "Zk3vQ-fictional-client-id",
+ "supported_features": 311999, "device_class": "speaker"}

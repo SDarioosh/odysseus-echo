@@ -11,6 +11,8 @@
     "record.clock_button": false,
     "record.privacy_button": "mute",
     "followup.enabled": true,
-    "followup.seconds": 8
+    "followup.seconds": 8,
+    "music.enabled": true,
+    "music.stay_while_playing": false
   }
 }

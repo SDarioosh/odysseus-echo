@@ -1,0 +1,7 @@
+{"items": [
+  {"media_type": "playlist", "uri": "library://playlist/12", "name": "Sunday Kitchen", "version": "", "image": "http://192.168.1.20:8095/imageproxy/abc123?size=0", "favorite": true, "explicit": null, "artists": [], "owner": "Mira Fennwick"},
+  {"media_type": "playlist", "uri": "spotify://playlist/37iFictional", "name": "Rainy Day Jazz", "version": null, "image": "https://images.example-cdn.test/a/rainy.jpg", "favorite": false, "explicit": null, "artists": []},
+  {"media_type": "playlist", "uri": "library://playlist/14", "name": "Road Trip", "image": null, "favorite": false},
+  {"media_type": "mystery", "uri": "library://x/1", "name": "Skipped"},
+  {"media_type": "playlist", "name": "No uri, skipped"}
+], "limit": 5, "offset": 0, "order_by": "last_played_desc", "media_type": "playlist"}

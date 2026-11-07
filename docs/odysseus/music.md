@@ -20,6 +20,13 @@ Assistant is signed in and Music Assistant has at least one player.
 - **Rooms**: every Music Assistant room with what it plays and a volume control, this device
   first, marked "This Echo". Tap a room to select it; "Move here" moves what plays in another room
   to this one; "Group with…" joins rooms (only where the player can group).
+- **Library**: playlists, albums, artists, radio, tracks, podcasts and audiobooks, sorted by
+  recent, name or added, favourites only if you like; artists and albums open a detail list.
+- **Search**: type two letters or more; results by kind.
+- **The play menu** on any library or search item: play now, play next, add to queue, replace
+  the queue, radio from this, in the selected room or another.
+- **Tablets** (1100×600 dp and up): two panes, the tab on the left and the selected room's player
+  on the right. The Echo Show 5 keeps one pane.
 - **A line at the bottom** for a few seconds when an action fails: "Locked" while Lock mode is on
   (the lock screen covers the page anyway), "Home Assistant offline", or the action and a short
   reason.
@@ -180,6 +187,63 @@ Known limits: `PlayerState` has no Home Assistant state text, so "Off" is inferr
 controls, no volume); a group's leader is taken to be the first of `group_members`; no seeking on
 the progress bar yet.
 
+### Library
+
+`LibraryTab.kt`; rules in `LibraryRules.kt` (pure, `LibraryRulesTest`); sections in
+`LibrarySections.kt` (adding a type is one line). Top bar: section ▾, sort ▾ (Recent =
+`last_played_desc` first, Name, Added), Favourites. Pages of 50 (`MusicBackend.library`); MA gives
+no total, so there is more while a page comes back full, and the next offset counts every item MA
+returned. The next page loads when the last visible item is within 15 of the end; a failure stops
+paging until "Try again". Lists, filters and scroll positions are kept per list in `LibraryState`
+(until restart); a list older than 10 min starts again when shown. Rows on the Echo (two to a
+line from 580 dp), cards on screens at least 560 dp tall and wide (at least 180 dp each; tracks
+stay rows). Artists and albums open a detail view (Back, Play, More…).
+
+**Detail** (`MusicBackend.detail`, `HaMusicDetail`): HA's MA actions have no "albums of" or
+"tracks of" call. An artist is one `search` by its name (albums and tracks, 25 each), keeping
+items whose artists include it (uri or loose name, case and "(version)" ignored). An album is a
+`search` for tracks (50) plus `get_library` tracks with `search` = the album name (100), keeping
+tracks on that album, in disc and track order when MA gives the numbers. Limits: it may miss
+tracks or include a namesake. Playlists' tracks can't be listed through HA, so playlists (and
+radio, podcasts, audiobooks) open the play menu.
+
+### Search
+
+`SearchTab.kt`: a field on top (the keyboard comes up below it; the results scroll above it),
+`MusicBackend.search` 400 ms after the last keystroke from 2 characters, 10 per kind, grouped
+Artists, Albums, Tracks, Playlists, Radio, Podcasts, Audiobooks. "Search" on the keyboard hides
+it. The last results stay while the page is away (`SearchState`).
+
+### Play menu
+
+`PlayMenu.kt` (rules pure, `PlayMenuTest`): Play now (`play`), Play next (`next`), Add to queue
+(`add`), Replace queue (`replace`), Radio from this (`play` + `radio_mode`, tracks and artists
+only); a station only plays. "in <room>": the selected room, else this device's room ("(here)"),
+else the first available; Change lists the available rooms, this device first. Through
+`MusicActions.run`, so Lock → "Locked". Play now, Replace and Radio select the room and open
+Playing; Next and Add say "Plays next in X" / "Added to the queue in X".
+
+### Images
+
+`MusicImages.kt` (`MusicImagesTest`): an in-memory LRU of decoded bitmaps capped at 16 MB
+(`ByteLru`) over a 200-file disk cache in `cacheDir/music_images/` (`DiskCache`, least recently
+used out, keyed by the sha256 of the URL). Library and search thumbnails are hub URLs (C8,
+`/music/image`), fetched only when they start with the linked voice base, with the Odysseus
+bearer, no redirects, `image/*` up to 5 MB. HA paths (`/api/…`) go through `HaApi.bytes`.
+Anything else isn't fetched. Decoded down to 64/128/256/512 px; at most 4 loads at once; a
+failed URL isn't retried for 5 min. No URL, no hub link or a failure → the kind's icon
+(`MediaThumb`).
+
+### Tablets
+
+From 1100×600 dp (`MusicLayout`, pure, `MusicLayoutTest`) the page has two panes: the selected tab
+on the left and a compact Now playing for the selected room on the right
+(`NowPlayingTab(compact = true)`), beside every tab but Playing, which keeps the whole width. The
+Echo Show 5 (960×480 dp, or 721×360 at tvdpi) stays one pane. Beside the pane
+(`LocalMusicSidePane`), Rooms picks columns by card width (≥360 dp each, at most 3), and a tap on
+a room only selects it. On tablets the Playing tab is one centred block (room chip above the art),
+with text 1.3× (1.6× from 1500×900 dp).
+
 ## Files
 
 | File | What |
@@ -189,12 +253,19 @@ the progress bar yet.
 | `odysseus/home/music/MusicPage.kt` | the page: rail, tab content, message line, idle exemption, `LocalHomePageContext` |
 | `odysseus/home/music/MusicTabs.kt` | `MusicTab`, the registry `MusicTabs.all`, the selected tab |
 | `odysseus/home/music/NowPlayingTab.kt`, `RoomsTab.kt` | the two tabs; their pure rules in `NowPlayingRules.kt`, `RoomsRules.kt` |
+| `odysseus/home/music/LibraryTab.kt`, `SearchTab.kt`, `LibrarySections.kt`, `LibraryRules.kt` | Library and Search tabs, their sections, paging, grid and search rules |
+| `odysseus/home/music/PlayMenu.kt` | the play menu and its rules |
+| `odysseus/home/music/MediaItemRow.kt` | item rows and cards, top-bar chips, the artist/album detail view |
+| `odysseus/home/music/MusicImages.kt` | thumbnails: memory + disk cache, C8/HA loading, `MediaThumb` |
+| `odysseus/home/music/MusicLayout.kt` | one or two panes by size, columns beside the pane |
+| `odysseus/music/HaMusicDetail.kt` | `MediaDetail`, artist/album detail over `search`/`get_library` |
+| `odysseus/home/clock/ClockNowPlaying.kt` | the clock's now playing from this device or the selected room |
 | `odysseus/home/music/MusicActions.kt` | actions, error messages, `clockFor` |
 | `odysseus/home/music/MusicLive.kt` | `rememberPlayerState`, `rememberRoomArt`, the art cache |
 | `odysseus/home/music/MusicRefresh.kt` | install, attach/detach, probe |
 | `odysseus/home/music/MusicSettingsSection.kt` | Menu → Odysseus → Music |
 | `odysseus/home/HomePage.kt`, `HomeNavigator.kt`, `HomeScreenController.kt`, `HomeHost.kt` | the page list, `idleExempt`, `MusicRefresh` |
-| `app/src/test/.../odysseus/home/music/Music{Tabs,Actions}Test.kt`, `home/HomeNavigatorTest.kt` | tests of the registry, error texts, clocks, art cache and the idle exemption |
+| `app/src/test/.../odysseus/home/music/Music{Tabs,Actions}Test.kt`, `home/HomeNavigatorTest.kt` | tests of the registry, error texts, clocks, art cache and the idle exemption; also `{Library,PlayMenu,MusicImages,MusicLayout}*Test.kt`, `music/HaMusicDetailTest.kt`, `clock/ClockNowPlayingTest.kt`, screenshots in `screenshots/` |
 
 ## Adding a tab
 
@@ -203,7 +274,8 @@ the progress bar yet.
    and the helpers above; change things only through `MusicActions`.
 2. Add one entry to `MusicTabs.all`: `MusicTab("my_tab", "Short", Icons.Rounded.Something) {
    MyTab(it) }`. Its place in the list is its place on the rail; keep labels to one short word.
-   About four tabs fit the Echo Show 5's rail.
+   The rail has four tabs now (Playing, Rooms, Library, Search), about as many as fit the Echo
+   Show 5.
 
 No other file changes.
 

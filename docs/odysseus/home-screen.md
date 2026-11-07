@@ -62,6 +62,14 @@ colours (background, an optional gradient end, text, secondary text, accent, car
 colour switches off the app's own colours), cover art as the background while music plays, and
 dimming (off, 80, 60, 40 %).
 
+**Now playing from**: *This device* (Sendspin, default) or *Selected room*, the Music page's room
+(Music Assistant through Home Assistant, [music.md](music.md)), so a tablet that plays nothing
+itself can show the kitchen's music. It applies to every now-playing look and to the cover-art
+background. It's stored in the style JSON (`nowPlayingFrom`: `device`/`room`; missing or unknown
+means This device) and kept when a preset or the night look is picked. A tap on the element opens
+the Music page. `clock/ClockNowPlaying.kt` turns either source into one `ClockMusic` and owns the
+20 s "Paused" linger; it follows the room only while the clock shows it.
+
 **Elements**, each on/off, at one of nine places (a 3×3 grid: top/middle/bottom × left/centre/right),
 with a size (S, M, L, XL) and a look where it has several. Elements at the same place stack top to
 bottom; ↑ moves one above the one before it.

@@ -34,6 +34,13 @@ interface MusicBackend {
     suspend fun transfer(fromRoomId: String, toRoomId: String)
     suspend fun group(leaderId: String, memberIds: List<String>)
     suspend fun ungroup(roomId: String)
+
+    /**
+     * Odysseus fork addition beyond contract I2 (E14): what an artist or album holds, for the
+     * Library's detail view (MediaDetail.kt). Default: nothing listable (the view then offers only
+     * the play menu for the item itself).
+     */
+    suspend fun detail(item: MediaItem): MediaDetail = MediaDetail()
 }
 
 /** Thrown by every play / control / transfer / group call while Lock mode is on (odysseus/lock/). */

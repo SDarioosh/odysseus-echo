@@ -1,0 +1,8 @@
+{"items": [
+  {"media_type": "track", "uri": "library://track/302", "name": "Breakwater", "image": null,
+   "artists": [{"name": "The Copper Lanterns"}], "album": {"uri": "library://album/21", "name": "Harbour Lights (Deluxe)"}, "track_number": 2, "disc_number": 1},
+  {"media_type": "track", "uri": "library://track/301", "name": "Lantern Song", "image": null,
+   "artists": [{"name": "The Copper Lanterns"}], "album": {"uri": "library://album/21", "name": "Harbour Lights"}, "track_number": 1, "disc_number": 1},
+  {"media_type": "track", "uri": "library://track/310", "name": "Bonus Light", "image": null,
+   "artists": [{"name": "The Copper Lanterns"}], "album": {"uri": "library://album/22", "name": "Harbour Lights Live"}, "track_number": 1, "disc_number": 1}
+ ], "offset": 0, "limit": 100}

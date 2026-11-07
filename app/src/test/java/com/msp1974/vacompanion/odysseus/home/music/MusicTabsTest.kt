@@ -5,9 +5,9 @@ import org.junit.Test
 
 class MusicTabsTest {
     @Test
-    fun nowPlayingThenRooms() {
-        assertEquals(listOf(MusicTabs.NOW_PLAYING, MusicTabs.ROOMS), MusicTabs.all.map { it.id })
-        assertEquals(listOf("Playing", "Rooms"), MusicTabs.all.map { it.label })
+    fun nowPlayingRoomsLibrarySearch() {
+        assertEquals(listOf(MusicTabs.NOW_PLAYING, MusicTabs.ROOMS, MusicTabs.LIBRARY, MusicTabs.SEARCH), MusicTabs.all.map { it.id })
+        assertEquals(listOf("Playing", "Rooms", "Library", "Search"), MusicTabs.all.map { it.label })
     }
 
     @Test

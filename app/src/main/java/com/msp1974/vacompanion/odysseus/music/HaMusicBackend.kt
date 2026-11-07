@@ -233,6 +233,34 @@ class HaMusicBackend(
         return HaMusicJson.parseSearch(response, kinds, imageUrl)
     }
 
+    /**
+     * An artist's albums and tracks, or an album's tracks (HaMusicDetail): HA's MA actions have no
+     * "tracks of" call, so this searches by name and keeps what belongs. Anything else: nothing.
+     */
+    override suspend fun detail(item: MediaItem): MediaDetail = when (item.kind) {
+        MediaKind.ARTIST -> {
+            val c = HaMusicDetail.artistCall(entry(), item)
+            HaMusicDetail.parseArtist(ha.call(c.domain, c.service, c.data, returnResponse = true), item, imageUrl)
+        }
+        MediaKind.ALBUM -> {
+            val entry = entry()
+            val s = HaMusicDetail.albumSearchCall(entry, item)
+            val found = ha.call(s.domain, s.service, s.data, returnResponse = true)
+            val l = HaMusicDetail.albumLibraryCall(entry, item)
+            // The library pass only adds tracks the search missed; its failure isn't the view's.
+            val library = try {
+                ha.call(l.domain, l.service, l.data, returnResponse = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.d("Music: album library search failed: %s", e.message)
+                null
+            }
+            HaMusicDetail.parseAlbum(listOfNotNull(found, library), item, imageUrl)
+        }
+        else -> MediaDetail()
+    }
+
     private fun guard() {
         if (isLocked()) throw MusicLocked()
     }

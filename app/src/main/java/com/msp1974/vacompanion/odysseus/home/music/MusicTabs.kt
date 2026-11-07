@@ -6,7 +6,9 @@ package com.msp1974.vacompanion.odysseus.home.music
 // LocalHomePageContext. Tabs must not scroll or drag horizontally: the home screen owns those.
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,11 +28,15 @@ data class MusicTab(
 object MusicTabs {
     const val NOW_PLAYING = "now_playing"
     const val ROOMS = "rooms"
+    const val LIBRARY = "library"
+    const val SEARCH = "search"
 
-    /** Top to bottom. The first one is the default. Library and Search (E14) are added here. */
+    /** Top to bottom. The first one is the default. */
     val all: List<MusicTab> = listOf(
         MusicTab(NOW_PLAYING, "Playing", Icons.Rounded.PlayCircle) { NowPlayingTab(it) },
         MusicTab(ROOMS, "Rooms", Icons.Rounded.Speaker) { RoomsTab(it) },
+        MusicTab(LIBRARY, "Library", Icons.Rounded.LibraryMusic) { LibraryTab(it) },
+        MusicTab(SEARCH, "Search", Icons.Rounded.Search) { SearchTab(it) },
     )
 
     /**

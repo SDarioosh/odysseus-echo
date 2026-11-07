@@ -1,0 +1,19 @@
+{"artists": [],
+ "albums": [
+  {"media_type": "album", "uri": "library://album/21", "name": "Harbour Lights", "version": "Deluxe", "image": "http://192.168.1.20:8095/imageproxy/al21", "favorite": true,
+   "artists": [{"media_type": "artist", "uri": "library://artist/7", "name": "The Copper Lanterns"}]},
+  {"media_type": "album", "uri": "fictional://album/x21", "name": "Harbour Lights", "version": "", "image": null, "favorite": false,
+   "artists": [{"media_type": "artist", "uri": "fictional://artist/x7", "name": "the copper lanterns"}]},
+  {"media_type": "album", "uri": "library://album/40", "name": "Lantern Covers", "version": "", "image": null, "favorite": false,
+   "artists": [{"media_type": "artist", "uri": "library://artist/12", "name": "Various Fictional Artists"}]}
+ ],
+ "tracks": [
+  {"media_type": "track", "uri": "library://track/301", "name": "Lantern Song", "version": "", "image": null, "favorite": false,
+   "artists": [{"media_type": "artist", "uri": "library://artist/9", "name": "Ada Brightwater"}, {"media_type": "artist", "uri": "library://artist/7", "name": "The Copper Lanterns"}],
+   "album": {"media_type": "album", "uri": "library://album/21", "name": "Harbour Lights"}},
+  {"media_type": "track", "uri": "library://track/450", "name": "Copper Sky", "version": "Live", "image": null, "favorite": false,
+   "artists": [{"media_type": "artist", "uri": "library://artist/7", "name": "The Copper Lanterns"}]},
+  {"media_type": "track", "uri": "library://track/999", "name": "Lanterns at Dusk", "version": "", "image": null, "favorite": false,
+   "artists": [{"media_type": "artist", "uri": "library://artist/12", "name": "Various Fictional Artists"}]}
+ ],
+ "playlists": [], "radio": [], "audiobooks": [], "podcasts": []}

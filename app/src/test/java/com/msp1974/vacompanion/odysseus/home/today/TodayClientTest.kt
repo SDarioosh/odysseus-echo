@@ -1,6 +1,6 @@
 package com.msp1974.vacompanion.odysseus.home.today
 
-import com.msp1974.vacompanion.odysseus.HaResponse
+import com.msp1974.vacompanion.odysseus.ha.HaResponse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

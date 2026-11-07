@@ -1,6 +1,6 @@
 package com.msp1974.vacompanion.odysseus.home.today
 
-import com.msp1974.vacompanion.odysseus.HaResponse
+import com.msp1974.vacompanion.odysseus.ha.HaResponse
 import com.msp1974.vacompanion.odysseus.HubFixtures
 import com.msp1974.vacompanion.odysseus.done.DoneApi
 import com.msp1974.vacompanion.odysseus.done.DoneTarget

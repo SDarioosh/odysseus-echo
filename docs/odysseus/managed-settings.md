@@ -48,6 +48,8 @@ Only these; any other key is ignored and logged.
 | `record.privacy_button` | `"record"` / `"mute"` | Privacy button | `RecorderSettings.privacyButton` |
 | `followup.enabled` | bool | Answer without the wake word | registered by that setting (below) |
 | `followup.seconds` | int 3..15 | How long it listens | registered by that setting (below) |
+| `music.enabled` | bool | Music page (C7, `docs/odysseus/music.md`) | `MusicSettings.enabled` |
+| `music.stay_while_playing` | bool | Music page stays while this room plays (C7) | `MusicSettings.stayWhilePlaying` |
 
 - Absent or `null`: the device decides.
 - A value of the wrong JSON type (`"true"`, `60.5`, `1` for a bool) or out of range is ignored

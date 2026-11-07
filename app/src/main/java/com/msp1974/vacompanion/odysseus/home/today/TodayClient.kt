@@ -7,7 +7,7 @@ package com.msp1974.vacompanion.odysseus.home.today
 // malformed item is skipped rather than failing the whole page. HTTP goes through TodayHttp so it
 // is unit-tested with a fake (TodayClientTest).
 
-import com.msp1974.vacompanion.odysseus.HaResponse
+import com.msp1974.vacompanion.odysseus.ha.HaResponse
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

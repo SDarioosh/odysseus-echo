@@ -35,7 +35,7 @@ android {
     // it). major.minor.patch+odysseus.N gives major*10^7 + minor*10^5 + patch*10^3 + N, so a new
     // fork release (N+1) or a rebase onto a newer upstream always goes up, and every build of a
     // commit gets the same code. Starts at 1400016 for 0.14.0+odysseus.16 (above the old 52xx).
-    val odysseusVersionName = "0.14.0+odysseus.41"
+    val odysseusVersionName = "0.14.0+odysseus.42"
     val odysseusVersionCode = Regex("""(\d+)\.(\d+)\.(\d+)\+odysseus\.(\d+)""")
         .matchEntire(odysseusVersionName)
         ?.destructured

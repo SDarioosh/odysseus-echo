@@ -144,6 +144,42 @@ Code: `app/src/main/java/com/msp1974/vacompanion/odysseus/home/music/`.
   artwork. Home Assistant's states put `positionAtMs` on the wall clock, Sendspin's on
   `elapsedRealtime`: pass `MusicActions.clockFor(state)` to `FullPlayer` / `Progress`.
 
+### Now playing
+
+`NowPlayingTab.kt`; the rules are in `NowPlayingRules.kt` (pure, `NowPlayingRulesTest`).
+
+- **Layout**: the room chip on top. Wide screens put the art on the left (square, as tall as fits,
+  at most 45% of the width) and on the right: title, artist · album, progress and times, then
+  shuffle / previous / play-pause / next / repeat, volume and the queue. Narrow or portrait screens
+  use one column. Text is 1.3x from 900 dp wide.
+- **Controls**: only those the player's `can` has, sent through `MusicActions.control`. Repeat
+  cycles off → all → one.
+- **Which state**: MA's player state while it has a track. For this device's room, Sendspin's own
+  state (`toPlayerState()`, commands through `onSendspinCommand`, pushed artwork only) while
+  Sendspin is active. Otherwise "Nothing playing in <room>", with its volume and "Move here from
+  <room>" (`MusicActions.transfer`) when another available room plays (not a group containing
+  this one).
+- **Queue**: `MusicActions.queue` again when the room or the track changes: "Next: <title> —
+  <artist>", "N in the queue". Hidden when the room has no queue.
+- **Room chip**: "<room> · This Echo ▾" ("This Echo?" when guessed from the area). A tap opens a
+  vertical list, this device first; a pick calls `MusicActions.select`.
+
+### Rooms
+
+`RoomsTab.kt`; the rules are in `RoomsRules.kt` (pure, `RoomsRulesTest`). Every room, this device
+first with "This Echo" ("This Echo?" when guessed from the area): artwork, name, area when it
+differs, and what plays ("Title — Artist", " · Paused"; else "Idle", "Off" or "Unavailable",
+greyed), play/pause and a compact volume bar. One column below 840 dp, 2 below 1200 dp, else 3;
+it scrolls vertically only. Tap a room to select it and open **Playing**. The ⋮ menu:
+**Move music here** (from a room that plays and isn't in this room's group; with several, pick
+one), **Group with…** (ticks for the other available rooms whose player can group; unticked
+members are taken out), **Leave group** / **Ungroup**. Group leaders show "+N rooms", Music
+Assistant group players "Group of N". The tab collects each room's player state once.
+
+Known limits: `PlayerState` has no Home Assistant state text, so "Off" is inferred (no title, no
+controls, no volume); a group's leader is taken to be the first of `group_members`; no seeking on
+the progress bar yet.
+
 ## Files
 
 | File | What |
@@ -152,7 +188,7 @@ Code: `app/src/main/java/com/msp1974/vacompanion/odysseus/home/music/`.
 | `odysseus/player/` | the shared player pieces (`FullPlayer`, `Progress`, `VolumeBar`, `RoomChip`, …) |
 | `odysseus/home/music/MusicPage.kt` | the page: rail, tab content, message line, idle exemption, `LocalHomePageContext` |
 | `odysseus/home/music/MusicTabs.kt` | `MusicTab`, the registry `MusicTabs.all`, the selected tab |
-| `odysseus/home/music/NowPlayingTab.kt`, `RoomsTab.kt` | the two tabs |
+| `odysseus/home/music/NowPlayingTab.kt`, `RoomsTab.kt` | the two tabs; their pure rules in `NowPlayingRules.kt`, `RoomsRules.kt` |
 | `odysseus/home/music/MusicActions.kt` | actions, error messages, `clockFor` |
 | `odysseus/home/music/MusicLive.kt` | `rememberPlayerState`, `rememberRoomArt`, the art cache |
 | `odysseus/home/music/MusicRefresh.kt` | install, attach/detach, probe |

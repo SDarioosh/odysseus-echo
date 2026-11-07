@@ -103,7 +103,9 @@ is reachable over Tailscale where MA's LAN address isn't. Code: `app/src/main/ja
    the device key), only if that player is available.
 3. **NAME**: exactly one player named `VACA <uuid> Sendspin Player` (any case).
 4. **AREA**: exactly one player of type `player` in this device's area (`config.area`). A guess; the
-   page shows it as one ("Kitchen speaker?").
+   page shows it as one ("Kitchen speaker?"). Other devices' Sendspin players are left out (Music
+   Assistant's default name `VACA … Sendspin Player`, or a `vaca-` or 43-character key id that isn't
+   this device's), so two Echos in one room never claim each other's player.
 5. Otherwise none: no "Play here"; the room picker offers to set the override.
 
 The room the page starts on (`RoomChoice.defaultRoom`): this device's room, else the first room in

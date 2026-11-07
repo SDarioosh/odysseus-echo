@@ -19,6 +19,8 @@ This is a Gradle Android project (Kotlin, Jetpack Compose, Hilt DI). Use the Gra
 
 On Windows use `gradlew.bat` instead of `./gradlew`.
 
+Screenshot tests (Odysseus fork, Roborazzi + Robolectric on the JVM, no emulator): `./gradlew :app:recordRoborazziDebug -Pscreenshots` renders Compose screens to `app/build/outputs/roborazzi/` (not committed); they run only with `-Pscreenshots`. Add one with `shots("name") { ... }` in `app/src/test/.../screenshots/`; see [docs/odysseus/screenshots.md](docs/odysseus/screenshots.md).
+
 Note (Odysseus fork): the version is set once, as `odysseusVersionName` (`0.14.0+odysseus.N`) in `app/build.gradle.kts`; bump `N` for a release. `versionCode` is derived from it (`major*10^7 + minor*10^5 + patch*10^3 + N`) — don't set it by hand. Upstream's `version.properties` counter (which incremented on every Gradle run) is removed; if a rebase brings it back, delete it again.
 
 There are 3 Gradle modules (`settings.gradle.kts`):
@@ -39,6 +41,14 @@ State is centralized in `VAViewModel` (`ui/VAViewModel.kt`) via a single `vacaSt
 ### Home screen (Odysseus fork)
 
 Full description in [docs/odysseus/home-screen.md](docs/odysseus/home-screen.md). Native pages (`odysseus/home/`, the clock first) are drawn by `HomeHost` **over** the dashboard; the `WebViewScreen` stays composed underneath so HA stays live. Swipe right from the clock reveals the dashboard, swipe left (or the idle timeout, `HomeSettings`) brings the clock back. The rules live in `HomeNavigator` (plain Kotlin, unit-tested); `HomeScreenController` is the one process-wide holder of that state as Compose state, and the target of the dashboard's gesture hook in `WebViewLayout`. To add a page, implement `HomePage`, add it to `HomePages.all`, and pass any new data through `HomePageContext` (pages don't read the view model). The Today page (`odysseus/home/today/`, page 1) shows Odysseus's `GET /today` through `OdysseusLink`; `TodayRepository` holds it, and `HomePages.all` includes it only while it's turned on and the device is linked. Its rows can be marked done: the pure rules are in `odysseus/done/` (`DoneApi`, `DoneMarks`), `today/TodayDone` sends the requests through `OdysseusLink.hubRequest` and refreshes Today; reminder cards use the same client (`announce/ReminderDone`). Music on other speakers (`odysseus/home/players/`): while the Echo's own Sendspin player plays nothing, `OtherPlayers` (driven from `HomeHost`) polls Home Assistant's media players through `POST /api/template` and the clock and the dashboard's now-playing card show the chosen one (`OtherPlayers.nowPlaying`, rules in the pure `OtherPlayersRules`); their buttons go through `OtherPlayers.command`, which sends `media_player.*` services for another speaker and the `sendspinCommand` event otherwise.
+
+### Home Assistant client (Odysseus fork)
+
+Full description in [docs/odysseus/home-assistant-client.md](docs/odysseus/home-assistant-client.md). `odysseus/ha/` is the one way new code reaches Home Assistant: `HaClient.get(deviceManager)` is an `HaApi` (contract I1 in `HaApi.kt`: `template`, `call`, `states`, `watch`, `bytes`) over REST (`HaRestApi`, `HaHttp`) and a websocket (`HaSocket`, open only while `watch()` is collected). The pure parts (`HaEntities` decoding of `subscribe_entities`, `HaBackoff`, `withAuthRetry`: one token refresh per call on a 401) are unit-tested with fakes. `HaHttp`/`HaResponse`/`UrlConnectionHaHttp` live in `odysseus/ha/HaHttp.kt`.
+
+### Music page (Odysseus fork)
+
+Full description in [docs/odysseus/music.md](docs/odysseus/music.md). `odysseus/home/music/MusicPage` is the home page after Today (`HomePages.all`), offered while `MusicSettings.enabled && MusicRepository.available`; a rail of tabs from `MusicTabs.all` (Playing, Rooms; a new tab is one entry there). Tabs read `MusicRepository` (`odysseus/music/`, the backend over `odysseus/ha/`), `LocalHomePageContext`, `rememberPlayerState`/`rememberRoomArt` (`MusicLive.kt`), and change things only through `MusicActions` (process scope, failures as a short `message`: "Locked", "Home Assistant offline"). `MusicRefresh` (in `HomeHost`) installs the repository, attaches it while the page shows and probes otherwise; `HomePage.idleExempt()` keeps the page up while music plays here ("Stay while playing here").
 
 ### Kiosk (Odysseus fork)
 

@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -38,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -49,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.msp1974.vacompanion.odysseus.home.music.MusicRefresh
 import com.msp1974.vacompanion.odysseus.home.today.TodayDone
 import com.msp1974.vacompanion.odysseus.home.today.TodayRefresh
 import com.msp1974.vacompanion.odysseus.home.today.TodayRepository
@@ -69,6 +72,14 @@ private val FLICK_VELOCITY = 800.dp
 
 /** A two-finger swipe up longer than this opens the menu. */
 private val MENU_SWIPE_DISTANCE = 100.dp
+
+/**
+ * Where the page strip is now (in page widths, page i = i, the dashboard -1), for a page that
+ * should stay idle while it is only composed beside the one shown (MusicPage); null outside
+ * HomeHost (e.g. a screenshot of one page). Read it in a derivedStateOf: it changes every frame
+ * of a swipe.
+ */
+val LocalHomeStripPosition = staticCompositionLocalOf<(() -> Float)?> { null }
 
 private fun HomeDestination.position(): Float = when (this) {
     HomeDestination.Dashboard -> -1f
@@ -121,6 +132,9 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
         // The Today page's data from Odysseus (today/).
         TodayRefresh(vaUiState.isNetworkConnected)
 
+        // The Music page's rooms from Home Assistant (music/): live while it shows, probed otherwise.
+        MusicRefresh(vaViewModel.deviceManager, vaUiState.isNetworkConnected, vaUiState.isServerConnected)
+
         // Music on other speakers, read from Home Assistant (players/).
         OtherPlayers.Driver(
             vaViewModel.deviceManager, vaUiState.isNetworkConnected,
@@ -135,7 +149,9 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
         if (HomeSettings.enabled && HomePages.all.isNotEmpty()) {
             val deviceId = vaViewModel.config.uuid
             val context = HomePageContext(
-                nowPlaying = OtherPlayers.nowPlaying(vaUiState.sendspinNowPlaying),
+                nowPlaying = vaUiState.sendspinNowPlaying,
+                // The clock's "This device" also shows another speaker's music while this one plays nothing (players/).
+                clockNowPlaying = OtherPlayers.nowPlaying(vaUiState.sendspinNowPlaying),
                 isNetworkConnected = vaUiState.isNetworkConnected,
                 isServerConnected = vaUiState.isServerConnected,
                 isDND = vaUiState.isDND,
@@ -144,7 +160,8 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
                 todayDone = todayDone,
                 onTodayDone = { target, title, index -> TodayDone.markDone(target, title, index, deviceId) },
                 onTodayUndo = { target -> TodayDone.undo(target, deviceId) },
-                onSendspinCommand = { command ->
+                onSendspinCommand = vaViewModel::onSendspinCommand,
+                onClockCommand = { command ->
                     OtherPlayers.command(vaUiState.sendspinNowPlaying, command, vaViewModel.deviceManager, vaViewModel::onSendspinCommand)
                 },
             )
@@ -178,6 +195,8 @@ private fun PageLayer(context: HomePageContext, onOpenMenu: () -> Unit) {
 
     // The pages within one width of the strip's position: at most two at a time.
     val firstVisible by remember { derivedStateOf { floor(offset.value).toInt() } }
+
+    val stripPosition: () -> Float = remember(offset) { { offset.value } }
 
     val touchSlop = LocalViewConfiguration.current.touchSlop
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -252,7 +271,9 @@ private fun PageLayer(context: HomePageContext, onOpenMenu: () -> Unit) {
                             // Opaque, so the dashboard never shows through a page.
                             .background(MaterialTheme.colorScheme.background)
                     ) {
-                        page.Content(context, Modifier.fillMaxSize())
+                        CompositionLocalProvider(LocalHomeStripPosition provides stripPosition) {
+                            page.Content(context, Modifier.fillMaxSize())
+                        }
                     }
                 }
             }

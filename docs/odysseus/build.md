@@ -31,6 +31,8 @@ scripts/odysseus/build.sh assembleRelease   # needs KEYSTORE_FILE, KEYSTORE_PASS
 python3 scripts/odysseus/check_apk_privacy.py <apk>   # must pass before installing
 ```
 
+Screenshots of Compose screens without an emulator: [screenshots.md](screenshots.md).
+
 `versionCode` comes from `versionName` (`odysseusVersionName` in `app/build.gradle.kts`):
 `0.14.0+odysseus.16` is 1400016. Bump `N` with each release; nothing else needs committing, and
 every build of a commit gets the same code (`./gradlew printVersionCode` shows it). Upstream's

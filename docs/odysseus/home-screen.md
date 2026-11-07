@@ -16,8 +16,11 @@ away, and the Echo goes back to the clock by itself.
 - **Swipe left** on the dashboard: back to the clock.
 - **Swipe left** on the clock: the **Today page** (see below), when the device is linked to
   Odysseus. Swipe right to go back to the clock.
-- **Idle**: after 2 minutes without a touch, the dashboard (or the Today page) goes back to the
-  clock by itself.
+- **Swipe left** again: the **Music page** ([music.md](music.md)), when Home Assistant is signed
+  in and Music Assistant has players (right of the clock when the Today page is off).
+- **Idle**: after 2 minutes without a touch, the dashboard (or another page) goes back to the
+  clock by itself; the Music page stays while something plays on this device when its "Stay
+  while playing here" is on.
 - **Menu from the clock**: two-finger swipe up.
 - The listening indicator and the turn card show over the clock as they do over the dashboard.
 
@@ -32,6 +35,7 @@ Menu → Odysseus → **Home screen**. Stored on the Echo only, not sent to Home
 | Weather | on / off | on |
 | Weather entity | Auto, or one of Home Assistant's `weather.*` entities | Auto |
 | Today page | on / off (shown only while linked to Odysseus) | on |
+| Music page (Menu → Odysseus → Music, [music.md](music.md)) | on / off (shown only while Music Assistant has players) | on |
 | Music on other speakers | on / off (also the dashboard's now-playing card) | on |
 | Speaker to follow | Auto (this room first), or one of the media players playing now | Auto |
 | Clock style | a preset, then fonts, colours and elements (below) | Classic |
@@ -61,6 +65,18 @@ Bebas Neue; all SIL OFL, licences in `assets/licenses/`), clock weight (thin to 
 colours (background, an optional gradient end, text, secondary text, accent, cards; picking any
 colour switches off the app's own colours), cover art as the background while music plays, and
 dimming (off, 80, 60, 40 %).
+
+**Now playing from**: *This device* (Sendspin, default) or *Selected room*, the Music page's room
+(Music Assistant through Home Assistant, [music.md](music.md)), so a tablet that plays nothing
+itself can show the kitchen's music. It applies to every now-playing look and to the cover-art
+background. It's stored in the style JSON (`nowPlayingFrom`: `device`/`room`; missing or unknown
+means This device) and kept when a preset or the night look is picked. A tap on the element opens
+the Music page. `clock/ClockNowPlaying.kt` turns either source into one `ClockMusic` and owns the
+20 s "Paused" linger (per source and room: switching drops the previous track at once); it
+follows the room only while the clock shows it and the style draws music (a visible now-playing
+element or the cover-art background). With *Selected room* and no Music page, the setting says
+"Needs the Music page and Home Assistant". Sendspin's playback speed moves the progress
+(`PlayerState.rate`).
 
 **Elements**, each on/off, at one of nine places (a 3×3 grid: top/middle/bottom × left/centre/right),
 with a size (S, M, L, XL) and a look where it has several. Elements at the same place stack top to
@@ -106,6 +122,12 @@ event, counts; plain Kotlin), `ClockTheming.kt` (hands the style's colours and t
 `MaterialTheme`, so shared pieces like the weather badge and the Done rows follow it; the
 background, with the cover art blurred by drawing a 12×12 copy scaled up, since Android 11 has no
 blur effect), `ClockElements.kt` (one composable per element) and `ClockStyleSettingsSection.kt`.
+The now-playing looks are the shared player pieces of `odysseus/player/` (`RowPlayer`, `PillPlayer`,
+`MiniPlayer`, `LinePlayer`, `BarPlayer`, `FullPlayer`, built from `Artwork`, `Transport`,
+`TitleArtist`, `Progress`), drawn over the neutral `music/PlayerState`: `ClockElements` turns the
+Sendspin state into one (`toPlayerState`) and sends their controls back as the same Sendspin
+commands (`commandFor`); it keeps the clock's own parts, `rememberArtwork`, `nowPlayingVisible`
+and the 20 s "Paused" linger.
 `ClockPage` lays the elements out in three full-height columns (left, middle, right): each
 column's top elements, then its middle ones centred in the space left, then its bottom ones, so
 elements on the same side never overlap (a column that is too full pushes its bottom ones off the
@@ -138,6 +160,11 @@ The Echo's Sendspin player only hears about its own Music Assistant group, so mu
 other speakers never reached it: the clock and the now-playing card stayed empty. Now, while the
 Echo itself plays nothing, they show what another speaker plays, read from Home Assistant's
 `media_player.*` entities, and the buttons control that speaker.
+
+On the clock this applies while its style's **Now playing from** is *This device*; with
+*Selected room* the clock follows the Music page's room instead. The Music page itself always
+treats only the Echo's own Sendspin player as "this device" (`HomePageContext.nowPlaying`); the
+other speakers reach the clock through `clockNowPlaying` / `onClockCommand`.
 
 - **Which speaker** (*Auto*): media players that are playing or buffering, or paused in the last
   15 minutes, with a title or artist. The Echo's own room (the HA `area` the integration pushes)
@@ -253,7 +280,9 @@ Where the screen is, left to right:
 
 - Swipe right shows what is to the left; swipe left shows what is to the right.
 - Swipe right on the dashboard, or left on the last page, does nothing and isn't consumed.
-- After the idle time without a touch, any other place goes back to page 0.
+- After the idle time without a touch, any other place goes back to page 0, unless the page
+  shown is idle-exempt now (`HomePage.idleExempt()`, the Music page while music plays here); the
+  idle time starts again when the exemption ends.
 - Home screen off, or no pages: always the dashboard; no swipe is consumed.
 
 `HomeScreenController` is the one process-wide holder of that state, as Compose state. It
@@ -278,6 +307,11 @@ home screen when the swipe is long. Turn the home screen off if a dashboard need
 Pages must not handle horizontal swipes; `HomeHost` does. Navigation, idle return and the
 animation need no change.
 
+`HomeHost` composes the page shown and the one after it (so a swipe can reveal it), so a page that
+follows something live (a Home Assistant subscription) should stay idle while it is out of sight:
+read `LocalHomeStripPosition` (the strip's position, null outside `HomeHost`) in a
+`derivedStateOf`, as the Music page does (`MusicPageLive`).
+
 ## Files
 
 | File | What |
@@ -292,6 +326,7 @@ animation need no change.
 | `odysseus/home/clock/ClockToday.kt` | next event, open counts, headline for the clock. Plain Kotlin |
 | `odysseus/home/clock/ClockTheming.kt` | fonts, colours handed to Material, the background |
 | `odysseus/home/clock/ClockElements.kt` | one composable per element and look |
+| `odysseus/player/` | the shared player pieces over `music/PlayerState`, Sendspin mapping, `PlayerMetrics`, `VolumeBar`, `RoomChip` |
 | `odysseus/home/clock/NightRules.kt`, `NightMode.kt` | the night look: when (plain Kotlin), light sensor, backlight |
 | `odysseus/home/clock/ClockStyleSettingsSection.kt` | Menu → Odysseus → Home screen → Clock style |
 | `res/font/clock_*.ttf` | the clock fonts (SIL OFL, `assets/licenses/*-OFL.txt`) |
@@ -314,6 +349,7 @@ animation need no change.
 | `odysseus/done/DoneClient.kt` | the Done/Undo requests (testable `DoneHttp`; `OdysseusLink.hubRequest`) |
 | `odysseus/done/DoneMarks.kt` | the optimistic Done state of the rows and the undo window. Plain Kotlin |
 | `odysseus/home/today/TodaySettingsSection.kt` | the "Today page" setting |
+| `odysseus/home/music/` | the Music page (files in [music.md](music.md#files)) |
 | `odysseus/home/HomeHost.kt` | draws the layers, swipes, animation, idle timer |
 | `odysseus/OdysseusSettingsLayout.kt` | the Home screen settings |
 | `MainActivity.kt`, `ui/layouts/WebViewLayout.kt` | hooks (marked `Odysseus fork`) |

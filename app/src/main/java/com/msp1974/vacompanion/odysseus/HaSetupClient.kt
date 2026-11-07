@@ -9,10 +9,13 @@ package com.msp1974.vacompanion.odysseus
 //   POST /api/config/config_entries/options/flow(/<id>) options "ha_url" (keeps default_dashboard)
 //   POST /api/template                                  the entry's entities (EchoSetupRules)
 //   POST /api/services/select/select_option, number/set_value
-// HTTP goes through HaHttp so the steps are unit-tested with a fake.
+// HTTP goes through HaHttp (odysseus/ha/HaHttp.kt) so the steps are unit-tested with a fake.
 
 import com.msp1974.vacompanion.odysseus.EchoSetupRules.HaEntity
 import com.msp1974.vacompanion.odysseus.EchoSetupRules.VacaEntities
+import com.msp1974.vacompanion.odysseus.ha.HaHttp
+import com.msp1974.vacompanion.odysseus.ha.HaResponse
+import com.msp1974.vacompanion.odysseus.ha.UrlConnectionHaHttp
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -22,41 +25,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
-import java.net.HttpURLConnection
-import java.net.URL
-
-data class HaResponse(val code: Int, val body: String)
-
-fun interface HaHttp {
-    /** [contentType] null = no body. Throws on network errors. */
-    fun call(method: String, url: String, bearer: String?, contentType: String?, body: String?): HaResponse
-}
-
-/** Plain HttpURLConnection; certificates are checked by the platform as usual. */
-object UrlConnectionHaHttp : HaHttp {
-    override fun call(method: String, url: String, bearer: String?, contentType: String?, body: String?): HaResponse {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        try {
-            conn.requestMethod = method
-            conn.connectTimeout = 10_000
-            conn.readTimeout = 30_000
-            conn.instanceFollowRedirects = false
-            conn.setRequestProperty("Accept", "application/json")
-            if (bearer != null) conn.setRequestProperty("Authorization", "Bearer $bearer")
-            if (body != null && contentType != null) {
-                conn.doOutput = true
-                conn.setRequestProperty("Content-Type", contentType)
-                conn.outputStream.use { it.write(body.toByteArray()) }
-            }
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val text = stream?.bufferedReader()?.use { it.readText().take(256 * 1024) } ?: ""
-            return HaResponse(code, text)
-        } finally {
-            conn.disconnect()
-        }
-    }
-}
 
 class HaSetupException(message: String, val cannotConnect: Boolean = false) : Exception(message)
 

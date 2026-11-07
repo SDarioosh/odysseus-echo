@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.roborazzi) // Odysseus fork: JVM screenshot tests (docs/odysseus/screenshots.md)
 }
 
 tasks.register("printVersionName") {
@@ -34,7 +35,7 @@ android {
     // it). major.minor.patch+odysseus.N gives major*10^7 + minor*10^5 + patch*10^3 + N, so a new
     // fork release (N+1) or a rebase onto a newer upstream always goes up, and every build of a
     // commit gets the same code. Starts at 1400016 for 0.14.0+odysseus.16 (above the old 52xx).
-    val odysseusVersionName = "0.14.0+odysseus.41"
+    val odysseusVersionName = "0.14.0+odysseus.46"
     val odysseusVersionCode = Regex("""(\d+)\.(\d+)\.(\d+)\+odysseus\.(\d+)""")
         .matchEntire(odysseusVersionName)
         ?.destructured
@@ -106,6 +107,8 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Odysseus fork: the screenshot tests (Robolectric) need the app's resources (fonts).
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -118,6 +121,28 @@ androidComponents {
     }
 }
 
+// Odysseus fork: screenshot tests (package ...screenshots, docs/odysseus/screenshots.md) run only
+// with -Pscreenshots, and then alone, so the plain unit tests stay fast and never see Robolectric.
+// Robolectric runs offline on the framework jar Gradle fetches (configuration robolectricSdk),
+// so it never downloads anything itself.
+val screenshotTests = providers.gradleProperty("screenshots").isPresent
+val robolectricSdk: Configuration by configurations.creating { isTransitive = false }
+tasks.withType<Test>().configureEach {
+    if (screenshotTests) {
+        filter { includeTestsMatching("com.msp1974.vacompanion.screenshots.*") }
+        maxHeapSize = "2g"
+        // Robolectric on SDK 36 under JDK 17+
+        jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
+        inputs.files(robolectricSdk)
+        val sdkDir = robolectricSdk.elements.map { it.first().asFile.parentFile.absolutePath }
+        doFirst {
+            systemProperty("robolectric.offline", "true")
+            systemProperty("robolectric.dependency.dir", sdkDir.get())
+        }
+    } else {
+        exclude("com/msp1974/vacompanion/screenshots/**")
+    }
+}
 
 dependencies {
 
@@ -162,6 +187,13 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json) // Ktor- To work with Serialization
     implementation(libs.ktor.client.content.negotiation) // Serialization
     testImplementation(libs.junit)
+    // Odysseus fork: JVM screenshot tests (docs/odysseus/screenshots.md), test-only
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    robolectricSdk(libs.robolectric.android.all)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.ui.test.junit4)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

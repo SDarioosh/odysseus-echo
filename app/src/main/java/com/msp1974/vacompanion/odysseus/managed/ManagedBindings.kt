@@ -8,6 +8,7 @@ import android.content.Context
 import com.msp1974.vacompanion.odysseus.followup.FollowUpSettings
 import com.msp1974.vacompanion.odysseus.home.HomeSettings
 import com.msp1974.vacompanion.odysseus.kiosk.KioskSettings
+import com.msp1974.vacompanion.odysseus.music.MusicSettings
 import com.msp1974.vacompanion.odysseus.record.PrivacyButtonMode
 import com.msp1974.vacompanion.odysseus.record.RecordButton
 import com.msp1974.vacompanion.odysseus.record.RecorderController
@@ -19,6 +20,7 @@ object ManagedBindings {
         KioskSettings.init(context)
         RecorderSettings.init(context)
         FollowUpSettings.init(context)
+        MusicSettings.init(context)
 
         ManagedSettings.registerBool("home.enabled", { HomeSettings.enabled }) { HomeSettings.enabled = it }
         ManagedSettings.registerInt("home.idle_seconds", { HomeSettings.idleSeconds }) { HomeSettings.idleSeconds = it }
@@ -41,5 +43,9 @@ object ManagedBindings {
         }
         ManagedSettings.registerBool(FollowUpSettings.KEY_ENABLED, { FollowUpSettings.enabled }) { FollowUpSettings.enabled = it }
         ManagedSettings.registerInt(FollowUpSettings.KEY_SECONDS, { FollowUpSettings.seconds }) { FollowUpSettings.seconds = it }
+
+        // C7: the Music page (odysseus/music/).
+        ManagedSettings.registerBool(MusicSettings.KEY_ENABLED, { MusicSettings.enabled }) { MusicSettings.enabled = it }
+        ManagedSettings.registerBool(MusicSettings.KEY_STAY_WHILE_PLAYING, { MusicSettings.stayWhilePlaying }) { MusicSettings.stayWhilePlaying = it }
     }
 }

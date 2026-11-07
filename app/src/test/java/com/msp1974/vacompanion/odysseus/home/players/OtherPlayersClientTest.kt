@@ -1,7 +1,7 @@
 package com.msp1974.vacompanion.odysseus.home.players
 
-import com.msp1974.vacompanion.odysseus.HaHttp
-import com.msp1974.vacompanion.odysseus.HaResponse
+import com.msp1974.vacompanion.odysseus.ha.HaHttp
+import com.msp1974.vacompanion.odysseus.ha.HaResponse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive

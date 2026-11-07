@@ -126,6 +126,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
             Text(status, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             HomeScreenSettings()
             com.msp1974.vacompanion.odysseus.home.today.TodaySettingsSection()
+            com.msp1974.vacompanion.odysseus.home.music.MusicSettingsSection() // Menu → Odysseus → Music (home/music/)
             KioskSettingsSection()
             com.msp1974.vacompanion.odysseus.lock.LockSettingsSection() // locked outside work hours (odysseus/lock/)
             com.msp1974.vacompanion.odysseus.update.UpdateSettingsSection()

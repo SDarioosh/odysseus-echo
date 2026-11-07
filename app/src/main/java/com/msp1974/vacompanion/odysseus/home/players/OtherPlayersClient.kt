@@ -6,8 +6,8 @@ package com.msp1974.vacompanion.odysseus.home.players
 //   POST /api/services/media_player/<service>   play, pause, next, previous, shuffle, repeat
 // HTTP goes through HaHttp so it is unit-tested with a fake (OtherPlayersClientTest).
 
-import com.msp1974.vacompanion.odysseus.HaHttp
-import com.msp1974.vacompanion.odysseus.UrlConnectionHaHttp
+import com.msp1974.vacompanion.odysseus.ha.HaHttp
+import com.msp1974.vacompanion.odysseus.ha.UrlConnectionHaHttp
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put

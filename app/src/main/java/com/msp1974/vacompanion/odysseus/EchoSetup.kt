@@ -26,6 +26,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,6 +65,8 @@ object EchoSetup {
     sealed interface State {
         data object Idle : State
         data object Starting : State
+        /** No Wi-Fi or Tailscale address yet (just after boot): looking again until one turns up. */
+        data object WaitingForNetwork : State
         /** QR shown; [phoneStep] says what the phone is doing, if anything. */
         data class Waiting(val url: String, val hasOther: Boolean, val expiresAt: Long, val phoneStep: String?) : State
         data class Running(val steps: List<Step>) : State
@@ -76,8 +80,10 @@ object EchoSetup {
     private class Session(
         val code: String,
         val oauthState: String,
-        val hosts: List<String>,
-        val tailscaleIp: String?,
+        var hosts: List<String>,
+        var tailscaleIp: String?,
+        /** The addresses [hosts] was chosen from: a kind that turns up later is added (watchAddresses). */
+        var found: SetupAddressWait.Addresses,
         var hostIndex: Int = 0,
         var typedHost: String? = null,
         var name: String = "",
@@ -89,6 +95,8 @@ object EchoSetup {
         var steps: List<Step> = emptyList(),
         /** The link from Odysseus was taken: a later or repeated one is ignored. */
         var odysseusLinked: Boolean = false,
+        /** A phone opened the page: the address it used stays (watchAddresses changes nothing after). */
+        var phoneSeen: Boolean = false,
     ) {
         val qrHost get() = hosts[hostIndex]
         /** The host in Odysseus's return URL and HA's client_id/redirect_uri. */
@@ -115,33 +123,80 @@ object EchoSetup {
         val gen = ++generation
         _state.value = State.Starting
         scope.launch {
-            val (ts, lan) = addresses()
-            val reverse = ts?.let { ip ->
-                val lookup = async { runCatching { InetAddress.getByName(ip).canonicalHostName }.getOrNull() }
-                withTimeoutOrNull(3000) { lookup.await() }
-            }
-            val hosts = EchoSetupRules.chooseHosts(ts, reverse, lan)
+            // Just after boot the app starts before Wi-Fi and Tailscale have addresses: look
+            // again until one turns up, instead of giving up on the first look.
+            val found = SetupAddressWait.await(
+                probe = {
+                    addresses().also { if (it.isEmpty && gen == generation) _state.value = State.WaitingForNetwork }
+                },
+                isCurrent = { gen == generation },
+                giveUpMs = TIMEOUT_MS,
+            )
             if (gen != generation) return@launch
-            if (hosts.isEmpty()) {
+            if (found == null) {
                 _state.value = State.Stopped("No network address: connect Wi-Fi or Tailscale first")
                 return@launch
             }
+            if (_state.value == State.WaitingForNetwork) _state.value = State.Starting
+            val ts = found.tailscale
+            val hosts = chooseHosts(found)
+            if (gen != generation) return@launch
             val socket = try {
                 ServerSocket().apply { reuseAddress = true; soTimeout = 1000; bind(InetSocketAddress(PORT)) }
             } catch (e: Exception) {
                 _state.value = State.Stopped("Couldn't open port $PORT: ${e.message}")
                 return@launch
             }
-            val s = Session(code = randomCode(), oauthState = randomCode(), hosts = hosts, tailscaleIp = ts,
+            val s = Session(code = randomCode(), oauthState = randomCode(), hosts = hosts, tailscaleIp = ts, found = found,
                 expiresAt = System.currentTimeMillis() + TIMEOUT_MS)
             if (gen != generation) { runCatching { socket.close() }; return@launch }
             server = socket
             session = s
             publish(s)
             Timber.i("Echo setup: serving on port $PORT (host ${s.qrHost})")
+            if (!SetupAddressWait.complete(found)) launch { watchAddresses(socket, s) }
             serve(socket, s)
         }
     }
+
+    private suspend fun chooseHosts(a: SetupAddressWait.Addresses): List<String> = coroutineScope {
+        val reverse = a.tailscale?.let { ip ->
+            val lookup = async { runCatching { InetAddress.getByName(ip).canonicalHostName }.getOrNull() }
+            withTimeoutOrNull(3000) { lookup.await() }
+        }
+        EchoSetupRules.chooseHosts(a.tailscale, reverse, a.lan)
+    }
+
+    /**
+     * While the QR code is shown, add an address that turns up later (Tailscale usually connects
+     * a little after Wi-Fi at boot), so the code shows the best one. Stops once the phone has
+     * started, the user picked another address, or setup ends. The setup code stays the same.
+     */
+    private suspend fun watchAddresses(socket: ServerSocket, s: Session) {
+        while (server === socket && session === s) {
+            delay(SetupAddressWait.WATCH_MS)
+            if (!synchronized(s) { canSwapAddress(s) }) return
+            val old = synchronized(s) { s.found }
+            val fresh = addresses()
+            if (!SetupAddressWait.gained(old, fresh)) continue
+            val merged = SetupAddressWait.Addresses(fresh.tailscale ?: old.tailscale, fresh.lan ?: old.lan)
+            val hosts = chooseHosts(merged)
+            val changed = synchronized(s) {
+                if (session !== s || !canSwapAddress(s) || hosts.isEmpty()) return
+                s.found = merged
+                s.tailscaleIp = merged.tailscale
+                (hosts != s.hosts).also { s.hosts = hosts }
+            }
+            if (changed) {
+                Timber.i("Echo setup: address now ${hosts.first()}")
+                publish(s)
+            }
+            if (SetupAddressWait.complete(merged)) return
+        }
+    }
+
+    /** Still on the first page, no phone has opened it yet and the user didn't pick another address. Call under `s`. */
+    private fun canSwapAddress(s: Session) = s.phase == Phase.FORM && !s.phoneSeen && s.hostIndex == 0 && s.typedHost == null
 
     /** The screen was left: stop, unless the Home Assistant job is running (it stops by itself after). */
     fun leave() {
@@ -157,7 +212,7 @@ object EchoSetup {
         session = null
         runCatching { sock?.close() }
         val st = _state.value
-        if (st is State.Waiting || st is State.Starting) _state.value = State.Stopped(reason)
+        if (st is State.Waiting || st is State.Starting || st is State.WaitingForNetwork) _state.value = State.Stopped(reason)
     }
 
     fun reset() { if (server == null && _state.value !is State.Running) _state.value = State.Idle }
@@ -177,7 +232,7 @@ object EchoSetup {
         Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(16).also { random.nextBytes(it) })
 
     /** Tailscale (100.64.0.0/10) and Wi-Fi/Ethernet private IPv4 addresses. */
-    private fun addresses(): Pair<String?, String?> {
+    private fun addresses(): SetupAddressWait.Addresses {
         var tailscale: String? = null
         var lan: String? = null
         runCatching {
@@ -191,7 +246,7 @@ object EchoSetup {
                 }
             }
         }
-        return tailscale to lan
+        return SetupAddressWait.Addresses(tailscale, lan)
     }
 
     private fun publish(s: Session) {
@@ -270,6 +325,7 @@ object EchoSetup {
             return respond(out, 404, EchoSetupPages.page("Not found",
                 "<p>This setup link isn't valid any more. On the Echo, open Menu → Odysseus → Set up with phone for a new one.</p>"))
         }
+        synchronized(s) { s.phoneSeen = true }
         val base = "/setup/${s.code}"
         when ("${req.method} ${req.path.removePrefix(base)}") {
             "GET " -> respond(out, 200, mainPage(s))

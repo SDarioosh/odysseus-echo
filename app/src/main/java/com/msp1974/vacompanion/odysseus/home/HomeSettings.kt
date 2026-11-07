@@ -27,6 +27,8 @@ object HomeSettings {
     private const val KEY_NIGHT_DARK_LUX = "home_night_dark_lux"
     private const val KEY_NIGHT_PRESET = "home_night_preset"
     private const val KEY_NIGHT_DIM = "home_night_dim"
+    private const val KEY_OTHER_PLAYERS = "home_other_players_enabled"
+    private const val KEY_OTHER_PLAYERS_ENTITY = "home_other_players_entity"
 
     const val DEFAULT_IDLE_SECONDS = 120
 
@@ -45,6 +47,8 @@ object HomeSettings {
     private var nightDarkLuxState by mutableFloatStateOf(NightRules.DEFAULT_DARK_LUX)
     private var nightPresetState by mutableStateOf(ClockPresets.NIGHTSTAND)
     private var nightDimState by mutableStateOf(true)
+    private var otherPlayersState by mutableStateOf(true)
+    private var otherPlayersEntityState by mutableStateOf("")
 
     /** Loads the stored values. Safe to call more than once. */
     fun init(context: Context) {
@@ -61,6 +65,8 @@ object HomeSettings {
         nightDarkLuxState = p.getFloat(KEY_NIGHT_DARK_LUX, NightRules.DEFAULT_DARK_LUX).coerceIn(0f, 1000f)
         nightPresetState = p.getString(KEY_NIGHT_PRESET, null)?.takeIf { ClockPresets.byId(it) != null } ?: ClockPresets.NIGHTSTAND
         nightDimState = p.getBoolean(KEY_NIGHT_DIM, true)
+        otherPlayersState = p.getBoolean(KEY_OTHER_PLAYERS, true)
+        otherPlayersEntityState = p.getString(KEY_OTHER_PLAYERS_ENTITY, "") ?: ""
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -143,6 +149,25 @@ object HomeSettings {
         set(value) {
             nightDimState = value
             prefs()?.edit()?.putBoolean(KEY_NIGHT_DIM, value)?.apply()
+        }
+
+    /**
+     * Music on other speakers (home/players/): while this Echo plays nothing, show and control
+     * what another Home Assistant media player plays.
+     */
+    var otherPlayersEnabled: Boolean
+        get() = otherPlayersState
+        set(value) {
+            otherPlayersState = value
+            prefs()?.edit()?.putBoolean(KEY_OTHER_PLAYERS, value)?.apply()
+        }
+
+    /** The media player to follow; blank = Auto (this Echo's room first, then the latest to start). */
+    var otherPlayersEntity: String
+        get() = otherPlayersEntityState
+        set(value) {
+            otherPlayersEntityState = value.trim()
+            prefs()?.edit()?.putString(KEY_OTHER_PLAYERS_ENTITY, otherPlayersEntityState)?.apply()
         }
 
     fun idleLabel(seconds: Int): String = when {

@@ -9,7 +9,9 @@ away, and the Echo goes back to the clock by itself.
   artist, artwork) with previous, play/pause and next buttons. The artwork is pushed by Music
   Assistant over the Sendspin connection, so it also shows when the Echo reaches it over Tailscale
   (`sendspin/README.md`). The song comes from Music Assistant through the
-  Sendspin player (Configuration → Sendspin). With nothing playing, the line is hidden.
+  Sendspin player (Configuration → Sendspin). While the Echo plays nothing itself, it shows the
+  song another speaker plays instead ([Music on other speakers](#music-on-other-speakers)). With
+  nothing playing anywhere, the line is hidden.
 - **Swipe right** (finger moves right) on the clock: the Home Assistant dashboard.
 - **Swipe left** on the dashboard: back to the clock.
 - **Swipe left** on the clock: the **Today page** (see below), when the device is linked to
@@ -30,6 +32,8 @@ Menu → Odysseus → **Home screen**. Stored on the Echo only, not sent to Home
 | Weather | on / off | on |
 | Weather entity | Auto, or one of Home Assistant's `weather.*` entities | Auto |
 | Today page | on / off (shown only while linked to Odysseus) | on |
+| Music on other speakers | on / off (also the dashboard's now-playing card) | on |
+| Speaker to follow | Auto (this room first), or one of the media players playing now | Auto |
 | Clock style | a preset, then fonts, colours and elements (below) | Classic |
 
 ## Clock style
@@ -127,6 +131,38 @@ under it.
   Home Assistant.
 - **Failures** hide nothing else: a failed refresh keeps the last reading for up to an hour, then
   the badge disappears. Logcat shows `Weather: ...` lines.
+
+## Music on other speakers
+
+The Echo's Sendspin player only hears about its own Music Assistant group, so music playing on
+other speakers never reached it: the clock and the now-playing card stayed empty. Now, while the
+Echo itself plays nothing, they show what another speaker plays, read from Home Assistant's
+`media_player.*` entities, and the buttons control that speaker.
+
+- **Which speaker** (*Auto*): media players that are playing or buffering, or paused in the last
+  15 minutes, with a title or artist. The Echo's own room (the HA `area` the integration pushes)
+  first, then playing before paused, then a Music Assistant entity before another entity of the
+  same speaker, then the one that changed last. A song playing on several entities (a group, a
+  speaker that also has a Music Assistant entity) counts once. *Speaker to follow* can pin one
+  entity instead; it shows only while that one plays or was paused in the last 15 minutes.
+- **The Echo's own music wins**: while its Sendspin player plays, nothing changes. While it is
+  paused, another speaker that is playing takes over the line and the card.
+- **Buttons**: play, pause, next, previous, shuffle and repeat, as far as the entity supports them
+  (`supported_features`), sent as `media_player.media_play`, `media_pause`, `media_next_track`,
+  `media_previous_track`, `shuffle_set`, `repeat_set`. The state is read again right after.
+- **Refresh**: every 4 seconds while the app is in front and the screen is on, and the clock or the
+  dashboard's now-playing card is turned on; not while locked, not with the setting off. Whatever
+  stops it forgets the speaker, so an old song doesn't flash up when the screen comes back, and a
+  read still under way when it stops is thrown away. One `POST /api/template` per read (a few hundred bytes per playing
+  speaker).
+- **Artwork**: the entity's `entity_picture`, through Home Assistant's own media proxy (it carries
+  its own access token). A picture URL on another host (Music Assistant's LAN address) may not load
+  over Tailscale; the music-note placeholder shows then.
+- **Home Assistant**: no change and no re-pairing. It uses the access token the Echo already
+  holds for the dashboard, like the weather. `/api/template` needs that user to be an
+  administrator (the weather needs the same).
+- **Failures**: a failed read keeps the last speaker for 30 seconds, then hides it. Logcat shows
+  `Other players: ...` lines.
 
 ## Today page
 
@@ -264,6 +300,9 @@ animation need no change.
 | `odysseus/home/weather/WeatherRepository.kt` | the process-wide weather state and refresh |
 | `odysseus/home/weather/WeatherBadge.kt` | the badge in the clock's top left |
 | `res/drawable/odysseus_mdi_*.xml` | weather icons from @mdi/js 7.4.47 (`assets/licenses/MDI-LICENSE.txt`) |
+| `odysseus/home/players/OtherPlayersRules.kt` | music on other speakers: parsing, which speaker, buttons → services. Plain Kotlin |
+| `odysseus/home/players/OtherPlayersClient.kt` | the Home Assistant calls for it (testable `HaHttp`) |
+| `odysseus/home/players/OtherPlayers.kt` | the process-wide state, polling, and where a button press goes |
 | `odysseus/home/today/TodayClient.kt` | contract C1: the call (testable `TodayHttp`) and lenient parsing |
 | `odysseus/home/today/TodayStore.kt` | what the page shows: not linked, loading, unreachable, ready/stale; the 2 h rule. Plain Kotlin |
 | `odysseus/home/today/TodayFormat.kt` | times in the device's zone, due tags, "and N more", what fits. Plain Kotlin |

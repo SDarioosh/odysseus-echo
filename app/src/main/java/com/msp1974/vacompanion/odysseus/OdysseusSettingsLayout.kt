@@ -42,6 +42,7 @@ import com.msp1974.vacompanion.odysseus.home.HomeSettings
 import com.msp1974.vacompanion.odysseus.kiosk.KioskSettings
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherClient
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherEntity
+import com.msp1974.vacompanion.odysseus.home.players.OtherPlayers
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherRepository
 import com.msp1974.vacompanion.odysseus.managed.ManagedNote
 import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
@@ -215,7 +216,47 @@ private fun HomeScreenSettings() {
             fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    OtherPlayersSettings()
     com.msp1974.vacompanion.odysseus.home.clock.ClockStyleSettingsSection(enabled) // fonts, colours, elements (home/clock/)
+}
+
+/** Music on other speakers (odysseus/home/players/): on/off and which Home Assistant media player. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun OtherPlayersSettings() {
+    val on = HomeSettings.otherPlayersEnabled
+    val chosen = HomeSettings.otherPlayersEntity
+    val seen = OtherPlayers.seen
+    Setting(
+        on, "Music on other speakers",
+        "While this Echo plays nothing, show the song another speaker plays, with play/pause, next and previous. " +
+            "Read from Home Assistant's media players.",
+    ) { HomeSettings.otherPlayersEnabled = it }
+    Text("Speaker to follow", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = chosen.isBlank(),
+            onClick = { HomeSettings.otherPlayersEntity = "" },
+            label = { Text("Auto (this room first)") },
+            enabled = on,
+        )
+        // The chosen player stays listed while it plays nothing.
+        val names = seen.associate { it.entityId to it.name }.toMutableMap()
+        if (chosen.isNotBlank() && chosen !in names) names[chosen] = chosen
+        names.forEach { (id, name) ->
+            FilterChip(
+                selected = chosen == id,
+                onClick = { HomeSettings.otherPlayersEntity = id },
+                label = { Text(name) },
+                enabled = on,
+            )
+        }
+    }
+    Text(
+        if (seen.isEmpty()) "Speakers appear here while they play something."
+        else "Listed: the speakers playing or paused now.",
+        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** Menu → Odysseus → Kiosk: coming back from other apps, reloading a failed dashboard (odysseus/kiosk/). */

@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.msp1974.vacompanion.odysseus.home.music.MusicRefresh
 import com.msp1974.vacompanion.odysseus.home.today.TodayDone
 import com.msp1974.vacompanion.odysseus.home.today.TodayRefresh
 import com.msp1974.vacompanion.odysseus.home.today.TodayRepository
@@ -119,6 +120,9 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
 
         // The Today page's data from Odysseus (today/).
         TodayRefresh(vaUiState.isNetworkConnected)
+
+        // The Music page's rooms from Home Assistant (music/): live while it shows, probed otherwise.
+        MusicRefresh(vaViewModel.deviceManager, vaUiState.isNetworkConnected, vaUiState.isServerConnected)
 
         // The clock's night look reads the light sensor while it's turned on (clock/NightMode).
         com.msp1974.vacompanion.odysseus.home.clock.NightMode.Driver(HomeSettings.enabled && HomeSettings.nightAuto)

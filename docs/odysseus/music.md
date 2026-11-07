@@ -2,8 +2,46 @@
 
 A native Music page on the home screen: what plays in each room, volume, transport, moving music
 between rooms, grouping rooms, and the Music Assistant (MA) library. Plan:
-`docs/odysseus/plans/2026-11-music.md` (contracts I1–I3, C7, C8; phases E10–E15). This document
-starts with the backend (E12); the page itself (E13) and library and search (E14) extend it.
+`docs/odysseus/plans/2026-11-music.md` (contracts I1–I3, C7, C8; phases E10–E15). The page and
+its tabs are E13; library and search (E14) add tabs.
+
+## What you see
+
+The Music page is right of the Today page on the home screen (right of the clock when the Today
+page is off): swipe left from the clock. It is offered only while the Music page is on, Home
+Assistant is signed in and Music Assistant has at least one player.
+
+- **A rail of tabs** on the left (icon and a short label); tap one to switch. The tab chosen is
+  kept until the app restarts. Default: **Playing**.
+- **Playing** (now playing): the selected room's player: big artwork, title, artist, progress,
+  previous / play-pause / next, shuffle, repeat and volume; what plays now and next and "N in the
+  queue"; a room chip to switch rooms. This device's own room may use the artwork Music Assistant
+  pushes over Sendspin.
+- **Rooms**: every Music Assistant room with what it plays and a volume control, this device
+  first, marked "This Echo". Tap a room to select it; "Move here" moves what plays in another room
+  to this one; "Group with…" joins rooms (only where the player can group).
+- **A line at the bottom** for a few seconds when an action fails: "Locked" while Lock mode is on
+  (the lock screen covers the page anyway), "Home Assistant offline", or the action and a short
+  reason.
+- **Home Assistant offline**: the last state stays, greyed, with "Home Assistant offline" at the
+  bottom.
+- **Idle**: like any page, back to the clock after the idle time, unless "Stay while playing
+  here" is on and something plays on this device.
+
+## Settings
+
+Menu → Odysseus → **Music**. Stored on the Echo (SharedPreferences `odysseus_music`), not sent
+to Home Assistant.
+
+| Setting | Choices | Default | Hub key (C7) |
+|---|---|---|---|
+| Music page | on / off (shown only while Music Assistant has players) | on | `music.enabled` |
+| Stay while playing here | on / off: the page doesn't go back to the clock while something plays on this device | off | `music.stay_while_playing` |
+| This device's player | Auto (shows the player found and how: player id, old player id, name, or a guess from the area), or one of the rooms | Auto | on-device only |
+
+Set by Odysseus (`docs/odysseus/managed-settings.md`): the switch is disabled with "Set by
+Odysseus" under it. A chosen player that Home Assistant no longer has is listed as "(gone)" with a
+warning; Auto is used until another is chosen.
 
 ## How it works: the backend
 
@@ -75,3 +113,70 @@ The room the page starts on (`RoomChoice.defaultRoom`): this device's room, else
 - `MusicSettings` (SharedPreferences `odysseus_music`): `enabled` (C7 `music.enabled`, default on),
   `stayWhilePlaying` (C7 `music.stay_while_playing`, default off), `selfOverride`, `lastRoom`. The two
   C7 keys are hub-managed (`docs/odysseus/managed-settings.md`).
+
+## How it works: the page
+
+Code: `app/src/main/java/com/msp1974/vacompanion/odysseus/home/music/`.
+
+- `MusicPage` (`HomePage`, id `music`) is in `HomePages.all` after Today while
+  `MusicSettings.enabled && MusicRepository.available`. It draws the rail from `MusicTabs.all`
+  (`MusicTabs.selectedId`, process-wide Compose state), the selected tab's content, and the
+  message line. It provides the home screen's `HomePageContext` to the tabs as
+  `LocalHomePageContext` (e.g. `.nowPlaying`, Sendspin's now playing). Nothing on the page scrolls
+  or drags horizontally: the home screen owns horizontal swipes.
+- **Idle** (C7): `MusicPage.idleExempt()` is true while "Stay while playing here" is on and this
+  device plays (Sendspin playing, or its own MA player's state says playing). `HomeNavigator`
+  doesn't go back to the clock from a page that is idle-exempt; the idle time restarts when it
+  stops.
+- **Refresh**: `MusicRefresh`, composed by `HomeHost`, installs `MusicRepository` over the app's
+  one Home Assistant client (`ensureMusicInstalled`, once per process), calls `attach()` while the
+  page is in view and `detach()` when it isn't (or the screen blanks), and while it isn't,
+  `probe()`s Home Assistant at once, every 10 min, and when Home Assistant or the network comes
+  back, so the page appears once Music Assistant has rooms.
+- **Actions** (`MusicActions`): `run(label) { backend -> … }` runs on a process-wide scope, so an
+  action finishes even when the page goes away; `control`, `transfer`, `group`, `ungroup`,
+  `select` and `queue` wrap it. A failure becomes `MusicActions.message` for 3 s
+  (`musicActionMessage`, pure and tested): `MusicLocked` → "Locked", an `IOException` → "Home
+  Assistant offline", a refused token → "sign in again", else the label and a short reason.
+- **Live data** (`MusicLive.kt`): `rememberPlayerState(roomId, sendspin)` collects
+  `backend.player(roomId)` while composed (this device's room gets Sendspin's pushed artwork);
+  `rememberRoomArt(state)` loads `artUrl` through `HaApi.bytes` (8 bitmaps cached), else the pushed
+  artwork. Home Assistant's states put `positionAtMs` on the wall clock, Sendspin's on
+  `elapsedRealtime`: pass `MusicActions.clockFor(state)` to `FullPlayer` / `Progress`.
+
+## Files
+
+| File | What |
+|---|---|
+| `odysseus/music/` | the backend: `MusicBackend`, `HaMusicBackend`, `HaMusicJson`, `SelfPlayer`, `RoomChoice`, `MusicRepository`, `MusicSettings`, `PlayerState` |
+| `odysseus/player/` | the shared player pieces (`FullPlayer`, `Progress`, `VolumeBar`, `RoomChip`, …) |
+| `odysseus/home/music/MusicPage.kt` | the page: rail, tab content, message line, idle exemption, `LocalHomePageContext` |
+| `odysseus/home/music/MusicTabs.kt` | `MusicTab`, the registry `MusicTabs.all`, the selected tab |
+| `odysseus/home/music/NowPlayingTab.kt`, `RoomsTab.kt` | the two tabs |
+| `odysseus/home/music/MusicActions.kt` | actions, error messages, `clockFor` |
+| `odysseus/home/music/MusicLive.kt` | `rememberPlayerState`, `rememberRoomArt`, the art cache |
+| `odysseus/home/music/MusicRefresh.kt` | install, attach/detach, probe |
+| `odysseus/home/music/MusicSettingsSection.kt` | Menu → Odysseus → Music |
+| `odysseus/home/HomePage.kt`, `HomeNavigator.kt`, `HomeScreenController.kt`, `HomeHost.kt` | the page list, `idleExempt`, `MusicRefresh` |
+| `app/src/test/.../odysseus/home/music/Music{Tabs,Actions}Test.kt`, `home/HomeNavigatorTest.kt` | tests of the registry, error texts, clocks, art cache and the idle exemption |
+
+## Adding a tab
+
+1. Write `@Composable fun MyTab(modifier: Modifier = Modifier)` in `odysseus/home/music/`. Read
+   `MusicRepository` (rooms, selected room, this device's room, reachable), `LocalHomePageContext`
+   and the helpers above; change things only through `MusicActions`.
+2. Add one entry to `MusicTabs.all`: `MusicTab("my_tab", "Short", Icons.Rounded.Something) {
+   MyTab(it) }`. Its place in the list is its place on the rail; keep labels to one short word.
+   About four tabs fit the Echo Show 5's rail.
+
+No other file changes.
+
+## Adding a backend
+
+1. Implement `MusicBackend` (`odysseus/music/MusicBackend.kt`): live `rooms` and `player(id)`,
+   throw `MusicLocked` from every call that changes what plays while `LockMode.isLocked`, and an
+   `IOException` (or `HaException`) when the server can't be reached, so the page says so.
+2. Install it with `MusicRepository.install(context, backend, signedIn, area)` in place of
+   `installHa` (`ensureMusicInstalled` in `MusicRefresh.kt`). The page, the tabs and the settings
+   don't change. `selfRoom` and `reachable` come from `HaMusicBackend` today; another backend that
+   knows them should offer the same flows.

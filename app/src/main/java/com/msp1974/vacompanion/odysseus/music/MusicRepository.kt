@@ -38,6 +38,10 @@ object MusicRepository {
     @Volatile var backend: MusicBackend? = null
         private set
 
+    /** Loads a Home Assistant path's bytes (player artwork); null until [installHa]. */
+    @Volatile var imageBytes: (suspend (String) -> ByteArray)? = null
+        private set
+
     private var signedIn: () -> Boolean = { false }
     private var area: () -> String? = { null }
     private var job: Job? = null
@@ -102,6 +106,7 @@ object MusicRepository {
             uuid = { config.uuid },
             selfOverride = { MusicSettings.selfOverride.ifBlank { null } },
         )
+        imageBytes = { path -> ha.bytes(path) }
         install(context, backend, signedIn = { config.refreshToken.isNotBlank() }, area = { config.area.ifBlank { null } })
     }
 

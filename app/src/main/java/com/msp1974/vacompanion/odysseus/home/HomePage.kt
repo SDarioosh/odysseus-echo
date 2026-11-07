@@ -11,6 +11,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import com.msp1974.vacompanion.odysseus.done.DoneMarks
 import com.msp1974.vacompanion.odysseus.done.DoneTarget
+import com.msp1974.vacompanion.odysseus.home.music.MusicPage
 import com.msp1974.vacompanion.odysseus.home.today.TodayPage
 import com.msp1974.vacompanion.odysseus.home.today.TodayView
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherNow
@@ -48,6 +49,13 @@ interface HomePage {
      */
     @Composable
     fun Content(context: HomePageContext, modifier: Modifier)
+
+    /**
+     * True while this page, when shown, should keep the screen from going back to the clock after
+     * the idle time (the Music page while music plays here). Read from HomeScreenController, so
+     * read only Compose state here and nothing slow.
+     */
+    fun idleExempt(): Boolean = false
 }
 
 object HomePages {
@@ -56,5 +64,9 @@ object HomePages {
      * can come and go with its setting (reads Compose state, so readers recompose).
      */
     val all: List<HomePage>
-        get() = if (TodayPage.available) listOf(ClockPage, TodayPage) else listOf(ClockPage)
+        get() = buildList {
+            add(ClockPage)
+            if (TodayPage.available) add(TodayPage)
+            if (MusicPage.available) add(MusicPage) // Odysseus fork: the Music page (home/music/)
+        }
 }

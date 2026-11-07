@@ -46,6 +46,10 @@ Full description in [docs/odysseus/home-screen.md](docs/odysseus/home-screen.md)
 
 Full description in [docs/odysseus/home-assistant-client.md](docs/odysseus/home-assistant-client.md). `odysseus/ha/` is the one way new code reaches Home Assistant: `HaClient.get(deviceManager)` is an `HaApi` (contract I1 in `HaApi.kt`: `template`, `call`, `states`, `watch`, `bytes`) over REST (`HaRestApi`, `HaHttp`) and a websocket (`HaSocket`, open only while `watch()` is collected). The pure parts (`HaEntities` decoding of `subscribe_entities`, `HaBackoff`, `withAuthRetry`: one token refresh per call on a 401) are unit-tested with fakes. `HaHttp`/`HaResponse`/`UrlConnectionHaHttp` live in `odysseus/ha/HaHttp.kt`.
 
+### Music page (Odysseus fork)
+
+Full description in [docs/odysseus/music.md](docs/odysseus/music.md). `odysseus/home/music/MusicPage` is the home page after Today (`HomePages.all`), offered while `MusicSettings.enabled && MusicRepository.available`; a rail of tabs from `MusicTabs.all` (Playing, Rooms; a new tab is one entry there). Tabs read `MusicRepository` (`odysseus/music/`, the backend over `odysseus/ha/`), `LocalHomePageContext`, `rememberPlayerState`/`rememberRoomArt` (`MusicLive.kt`), and change things only through `MusicActions` (process scope, failures as a short `message`: "Locked", "Home Assistant offline"). `MusicRefresh` (in `HomeHost`) installs the repository, attaches it while the page shows and probes otherwise; `HomePage.idleExempt()` keeps the page up while music plays here ("Stay while playing here").
+
 ### Kiosk (Odysseus fork)
 
 Full description in [docs/odysseus/kiosk.md](docs/odysseus/kiosk.md). `odysseus/kiosk/`: `ReturnToDashboard` (installed from `VACAApplication`) brings `MainActivity` back when another app has been in front for `KioskSettings.returnSeconds` (not while the screen is off); `DashboardAutoReload` (composed in `WebViewScreen`) reloads a dashboard whose page state is `ERROR` with a growing wait. The timing rules are plain Kotlin and unit-tested (`ReturnPolicy`, `ReloadBackoff`).

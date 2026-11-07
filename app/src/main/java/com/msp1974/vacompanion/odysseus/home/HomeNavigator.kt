@@ -27,6 +27,11 @@ class HomeNavigator(
     private val enabled: () -> Boolean,
     /** Idle time before going back to page 0; 0 or less = never. */
     private val idleTimeoutMs: () -> Long,
+    /**
+     * Whether the page at this index keeps the screen from going back to page 0 now (e.g. the
+     * Music page while music plays here, HomePage.idleExempt).
+     */
+    private val idleExempt: (Int) -> Boolean = { false },
 ) {
     var destination: HomeDestination = HomeDestination.Page(0)
         private set
@@ -82,19 +87,35 @@ class HomeNavigator(
         onUserActivity(nowMs)
     }
 
+    /** The page shown was idle-exempt when last asked; see [idleDeadlineMs]. */
+    private var wasExempt = false
+
     /**
      * When the idle timer will send the screen back to page 0, or null if it won't (already
-     * there, home screen off, or timeout "never").
+     * there, home screen off, timeout "never", or the page shown is idle-exempt now, e.g. the
+     * Music page while music plays here). When an exemption has ended, the first call that
+     * passes [nowMs] restarts the idle time from then, so the screen doesn't jump back the
+     * moment the music stops.
      */
-    fun idleDeadlineMs(): Long? {
+    fun idleDeadlineMs(nowMs: Long? = null): Long? {
         val timeout = idleTimeoutMs()
-        if (!active || timeout <= 0 || current() == HomeDestination.Page(0)) return null
+        if (!active || timeout <= 0) return null
+        val d = current()
+        if (d == HomeDestination.Page(0)) return null
+        if (d is HomeDestination.Page && idleExempt(d.index)) {
+            wasExempt = true
+            return null
+        }
+        if (wasExempt && nowMs != null) {
+            wasExempt = false
+            lastActivityMs = maxOf(lastActivityMs, nowMs)
+        }
         return lastActivityMs + timeout
     }
 
     /** Goes back to page 0 if the idle deadline has passed. Returns true if it moved. */
     fun checkIdle(nowMs: Long): Boolean {
-        val deadline = idleDeadlineMs() ?: return false
+        val deadline = idleDeadlineMs(nowMs) ?: return false
         if (nowMs < deadline) return false
         destination = HomeDestination.Page(0)
         return true

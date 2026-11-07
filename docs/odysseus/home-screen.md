@@ -14,8 +14,11 @@ away, and the Echo goes back to the clock by itself.
 - **Swipe left** on the dashboard: back to the clock.
 - **Swipe left** on the clock: the **Today page** (see below), when the device is linked to
   Odysseus. Swipe right to go back to the clock.
-- **Idle**: after 2 minutes without a touch, the dashboard (or the Today page) goes back to the
-  clock by itself.
+- **Swipe left** again: the **Music page** ([music.md](music.md)), when Home Assistant is signed
+  in and Music Assistant has players (right of the clock when the Today page is off).
+- **Idle**: after 2 minutes without a touch, the dashboard (or another page) goes back to the
+  clock by itself; the Music page stays while something plays on this device when its "Stay
+  while playing here" is on.
 - **Menu from the clock**: two-finger swipe up.
 - The listening indicator and the turn card show over the clock as they do over the dashboard.
 
@@ -30,6 +33,7 @@ Menu → Odysseus → **Home screen**. Stored on the Echo only, not sent to Home
 | Weather | on / off | on |
 | Weather entity | Auto, or one of Home Assistant's `weather.*` entities | Auto |
 | Today page | on / off (shown only while linked to Odysseus) | on |
+| Music page (Menu → Odysseus → Music, [music.md](music.md)) | on / off (shown only while Music Assistant has players) | on |
 | Clock style | a preset, then fonts, colours and elements (below) | Classic |
 
 ## Clock style
@@ -223,7 +227,9 @@ Where the screen is, left to right:
 
 - Swipe right shows what is to the left; swipe left shows what is to the right.
 - Swipe right on the dashboard, or left on the last page, does nothing and isn't consumed.
-- After the idle time without a touch, any other place goes back to page 0.
+- After the idle time without a touch, any other place goes back to page 0, unless the page
+  shown is idle-exempt now (`HomePage.idleExempt()`, the Music page while music plays here); the
+  idle time starts again when the exemption ends.
 - Home screen off, or no pages: always the dashboard; no swipe is consumed.
 
 `HomeScreenController` is the one process-wide holder of that state, as Compose state. It
@@ -282,6 +288,7 @@ animation need no change.
 | `odysseus/done/DoneClient.kt` | the Done/Undo requests (testable `DoneHttp`; `OdysseusLink.hubRequest`) |
 | `odysseus/done/DoneMarks.kt` | the optimistic Done state of the rows and the undo window. Plain Kotlin |
 | `odysseus/home/today/TodaySettingsSection.kt` | the "Today page" setting |
+| `odysseus/home/music/` | the Music page (files in [music.md](music.md#files)) |
 | `odysseus/home/HomeHost.kt` | draws the layers, swipes, animation, idle timer |
 | `odysseus/OdysseusSettingsLayout.kt` | the Home screen settings |
 | `MainActivity.kt`, `ui/layouts/WebViewLayout.kt` | hooks (marked `Odysseus fork`) |

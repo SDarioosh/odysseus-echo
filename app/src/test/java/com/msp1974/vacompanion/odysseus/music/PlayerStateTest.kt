@@ -19,5 +19,9 @@ class PlayerStateTest {
 
     @Test fun noDurationNoClamp() = assertEquals(1009.0, state(duration = null).positionNow(1_000_000)!!, 1e-9)
 
+    @Test fun advancesAtRate() = assertEquals(20.0, state().copy(rate = 2.0).positionNow(6_000)!!, 1e-9)
+
+    @Test fun neverBelowZero() = assertEquals(0.0, state(position = 1.0).copy(rate = -1.0).positionNow(10_000)!!, 1e-9)
+
     @Test fun nullWithoutPosition() = assertNull(state(position = null).positionNow(5_000))
 }

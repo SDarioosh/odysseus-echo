@@ -43,6 +43,16 @@ class SendspinPlayerStateTest {
         assertTrue(s.can.isEmpty())
     }
 
+    @Test fun speedBecomesRate() {
+        assertEquals(1.0, np.toPlayerState().rate, 1e-9) // speed not said
+        assertEquals(1.0, np.copy(speed = 0).toPlayerState().rate, 1e-9)
+        val fast = np.copy(speed = 1_500).toPlayerState()
+        assertEquals(1.5, fast.rate, 1e-9)
+        // Matches Sendspin's own position: 2 s at 1.5x from 42 s.
+        assertEquals(np.copy(speed = 1_500).positionNow(9_000) / 1000.0, fast.positionNow(9_000)!!, 1e-9)
+        assertEquals(45.0, fast.positionNow(9_000)!!, 1e-9)
+    }
+
     @Test fun playingNeedsActiveStream() {
         assertFalse(np.copy(active = false).toPlayerState().playing)
         assertFalse(np.copy(playing = false).toPlayerState().playing)

@@ -11,7 +11,7 @@ import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
 /**
  * This Sendspin state as a [PlayerState]. `playing` is "active and playing" (a stopped stream
  * shows the play button, as the clock always did); `positionAtMs` stays on Sendspin's clock
- * ([android.os.SystemClock.elapsedRealtime]); pushed artwork goes to `artwork`. Volume and mute
+ * ([android.os.SystemClock.elapsedRealtime]); pushed artwork goes to `artwork`; Sendspin's playback `speed` becomes `rate`. Volume and mute
  * aren't sent over this path, so they're never in `can`.
  */
 fun SendspinNowPlaying.toPlayerState(): PlayerState = PlayerState(
@@ -29,6 +29,7 @@ fun SendspinNowPlaying.toPlayerState(): PlayerState = PlayerState(
     volume = null,
     muted = false,
     can = SendspinControls.can(commands),
+    rate = if (speed > 0) speed / 1000.0 else 1.0,
 )
 
 /** The Sendspin command for [control] in this state, or null when the server doesn't take it. */

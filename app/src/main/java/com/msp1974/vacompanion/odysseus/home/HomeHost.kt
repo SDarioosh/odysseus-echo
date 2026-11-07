@@ -55,6 +55,7 @@ import com.msp1974.vacompanion.odysseus.home.music.MusicRefresh
 import com.msp1974.vacompanion.odysseus.home.today.TodayDone
 import com.msp1974.vacompanion.odysseus.home.today.TodayRefresh
 import com.msp1974.vacompanion.odysseus.home.today.TodayRepository
+import com.msp1974.vacompanion.odysseus.home.players.OtherPlayers
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherRepository
 import com.msp1974.vacompanion.ui.VAViewModel
 import kotlinx.coroutines.delay
@@ -134,6 +135,12 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
         // The Music page's rooms from Home Assistant (music/): live while it shows, probed otherwise.
         MusicRefresh(vaViewModel.deviceManager, vaUiState.isNetworkConnected, vaUiState.isServerConnected)
 
+        // Music on other speakers, read from Home Assistant (players/).
+        OtherPlayers.Driver(
+            vaViewModel.deviceManager, vaUiState.isNetworkConnected,
+            shown = HomeSettings.enabled || vaUiState.sendspinOverlayEnabled,
+        )
+
         // The clock's night look reads the light sensor while it's turned on (clock/NightMode).
         com.msp1974.vacompanion.odysseus.home.clock.NightMode.Driver(HomeSettings.enabled && HomeSettings.nightAuto)
 
@@ -143,6 +150,8 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
             val deviceId = vaViewModel.config.uuid
             val context = HomePageContext(
                 nowPlaying = vaUiState.sendspinNowPlaying,
+                // The clock's "This device" also shows another speaker's music while this one plays nothing (players/).
+                clockNowPlaying = OtherPlayers.nowPlaying(vaUiState.sendspinNowPlaying),
                 isNetworkConnected = vaUiState.isNetworkConnected,
                 isServerConnected = vaUiState.isServerConnected,
                 isDND = vaUiState.isDND,
@@ -152,6 +161,9 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
                 onTodayDone = { target, title, index -> TodayDone.markDone(target, title, index, deviceId) },
                 onTodayUndo = { target -> TodayDone.undo(target, deviceId) },
                 onSendspinCommand = vaViewModel::onSendspinCommand,
+                onClockCommand = { command ->
+                    OtherPlayers.command(vaUiState.sendspinNowPlaying, command, vaViewModel.deviceManager, vaViewModel::onSendspinCommand)
+                },
             )
             PageLayer(context, onOpenMenu = { vaViewModel.onOpenSettingsAction() })
         }

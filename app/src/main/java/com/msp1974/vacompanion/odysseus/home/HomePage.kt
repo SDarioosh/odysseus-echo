@@ -20,7 +20,13 @@ import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
 /** Everything a page may show or do. Add fields here when a new page needs more. */
 @Immutable
 data class HomePageContext(
+    /** This device's own Sendspin player (the Music page reads it as this device's). */
     val nowPlaying: SendspinNowPlaying = SendspinNowPlaying(),
+    /**
+     * What the clock shows for "Now playing from: This device": [nowPlaying], or another speaker's
+     * music while this device plays nothing (players/OtherPlayers). Null: [nowPlaying].
+     */
+    val clockNowPlaying: SendspinNowPlaying? = null,
     val isNetworkConnected: Boolean = true,
     /** Home Assistant is connected to this device. */
     val isServerConnected: Boolean = true,
@@ -37,6 +43,8 @@ data class HomePageContext(
     val onTodayUndo: (DoneTarget) -> Unit = {},
     /** Sends a Sendspin transport command ("play", "pause", "next", …). */
     val onSendspinCommand: (String) -> Unit = {},
+    /** Sends a transport command to what [clockNowPlaying] shows. Null: [onSendspinCommand]. */
+    val onClockCommand: ((String) -> Unit)? = null,
 )
 
 interface HomePage {

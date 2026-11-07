@@ -87,7 +87,8 @@ fun rememberClockMusic(source: NowPlayingSource, context: HomePageContext, follo
 
 @Composable
 private fun rememberDeviceMusic(context: HomePageContext): ClockMusic {
-    val np = context.nowPlaying
+    val np = context.clockNowPlaying ?: context.nowPlaying
+    val send = context.onClockCommand ?: context.onSendspinCommand
     val art = rememberArtwork(np)
     val state = if (np.hasContent) np.toPlayerState() else null
     return ClockMusic(
@@ -95,7 +96,7 @@ private fun rememberDeviceMusic(context: HomePageContext): ClockMusic {
         active = np.active && np.hasContent,
         artwork = art,
         backgroundDark = np.colors.backgroundDark,
-        onControl = { control, value -> np.commandFor(control, value)?.let(context.onSendspinCommand) },
+        onControl = { control, value -> np.commandFor(control, value)?.let(send) },
         onOpen = musicPageOpener(MusicRepository.selfRoom?.entityId),
         key = "device",
     )

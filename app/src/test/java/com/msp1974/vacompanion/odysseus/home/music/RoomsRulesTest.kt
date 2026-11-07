@@ -111,6 +111,37 @@ class RoomsRulesTest {
         assertEquals(emptyList<Room>(), RoomsRules.groupCandidates(a, rooms, states - b.entityId))
     }
 
+    /** Review: an MA group player containing the target isn't a source (as NowPlayingRules.moveFrom). */
+    @Test
+    fun maGroupContainingTargetIsNoTransferSource() {
+        val kitchen = room("kitchen")
+        val g = room("downstairs", group = true, members = listOf("kitchen", "living"))
+        val rooms = listOf(kitchen, g)
+        val states = mapOf(kitchen.entityId to state(), g.entityId to state("S", playing = true))
+        assertEquals(emptyList<Room>(), RoomsRules.transferSources(kitchen, rooms, states))
+        assertNull(NowPlayingRules.moveFrom(kitchen.entityId, rooms, setOf(g.entityId)))
+        // Nor is a member room a source for the MA group player that contains it.
+        val playingKitchen = states + (kitchen.entityId to state("S", playing = true))
+        assertEquals(emptyList<Room>(), RoomsRules.transferSources(g, rooms, playingKitchen))
+    }
+
+    /** Review: a member of another room's group offers no "Group with…" (it would act on its leader). */
+    @Test
+    fun memberCannotOpenGroupDialog() {
+        val leader = room("a", members = listOf("a", "b"))
+        val member = room("b", members = listOf("a", "b"))
+        val other = room("c")
+        val rooms = listOf(leader, member, other)
+        val states = mapOf(
+            leader.entityId to state(playing = true), member.entityId to state(playing = true),
+            other.entityId to state(),
+        )
+        assertTrue(RoomsRules.canGroup(member, states[member.entityId]))
+        assertEquals(emptyList<Room>(), RoomsRules.groupCandidates(member, rooms, states))
+        // The leader still can, with its member shown (ticked).
+        assertEquals(listOf(member, other), RoomsRules.groupCandidates(leader, rooms, states))
+    }
+
     @Test
     fun groupChanges() {
         assertEquals(listOf("b", "c") to emptyList<String>(), RoomsRules.groupChanges("a", emptyList(), setOf("b", "c")))

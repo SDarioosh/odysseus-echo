@@ -78,13 +78,15 @@ object RoomsRules {
 
     /**
      * The rooms whose music "Move music here" can bring to [target]: available, playing, not
-     * [target] itself, not grouped with it, and not a member of another room's group (its leader
-     * is the one to move). None when [target] itself is unavailable. [states]: the rooms' player
-     * states by entity id.
+     * [target] itself, not grouped with it, not a member of another room's group (its leader
+     * is the one to move), and not a Music Assistant group player that contains [target] (nor one
+     * [target] contains), as NowPlayingRules.moveFrom. None when [target] itself is unavailable.
+     * [states]: the rooms' player states by entity id.
      */
     fun transferSources(target: Room, rooms: List<Room>, states: Map<String, PlayerState?>): List<Room> =
         if (!target.available) emptyList() else rooms.filter { r ->
             r.entityId != target.entityId && r.available && !isMember(r) && !sameGroup(r, target) &&
+                target.entityId !in r.groupMembers && r.entityId !in target.groupMembers &&
                 states[r.entityId]?.playing == true
         }
 
@@ -94,10 +96,12 @@ object RoomsRules {
 
     /**
      * The rooms [leader] can be grouped with: other rooms that can group ([canGroup]); none when
-     * [leader] itself can't. Rooms already in its group are included (shown ticked).
+     * [leader] itself can't, or when it is a member of another room's group (its menu offers only
+     * "Leave group": changing the group from a member would act on its leader). Rooms already in
+     * its group are included (shown ticked).
      */
     fun groupCandidates(leader: Room, rooms: List<Room>, states: Map<String, PlayerState?>): List<Room> {
-        if (!canGroup(leader, states[leader.entityId])) return emptyList()
+        if (!canGroup(leader, states[leader.entityId]) || isMember(leader)) return emptyList()
         return rooms.filter { it.entityId != leader.entityId && canGroup(it, states[it.entityId]) }
     }
 

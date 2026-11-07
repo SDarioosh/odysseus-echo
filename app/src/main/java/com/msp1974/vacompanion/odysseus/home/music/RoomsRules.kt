@@ -79,10 +79,11 @@ object RoomsRules {
     /**
      * The rooms whose music "Move music here" can bring to [target]: available, playing, not
      * [target] itself, not grouped with it, and not a member of another room's group (its leader
-     * is the one to move). [states]: the rooms' player states by entity id.
+     * is the one to move). None when [target] itself is unavailable. [states]: the rooms' player
+     * states by entity id.
      */
     fun transferSources(target: Room, rooms: List<Room>, states: Map<String, PlayerState?>): List<Room> =
-        rooms.filter { r ->
+        if (!target.available) emptyList() else rooms.filter { r ->
             r.entityId != target.entityId && r.available && !isMember(r) && !sameGroup(r, target) &&
                 states[r.entityId]?.playing == true
         }

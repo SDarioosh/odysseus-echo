@@ -158,7 +158,7 @@ Code: `app/src/main/java/com/msp1974/vacompanion/odysseus/home/music/`.
   state (`toPlayerState()`, commands through `onSendspinCommand`, pushed artwork only) while
   Sendspin is active. Otherwise "Nothing playing in <room>", with its volume and "Move here from
   <room>" (`MusicActions.transfer`) when another available room plays (not a group containing
-  this one).
+  this one) and this room is available.
 - **Queue**: `MusicActions.queue` again when the room or the track changes: "Next: <title> —
   <artist>", "N in the queue". Hidden when the room has no queue.
 - **Room chip**: "<room> · This Echo ▾" ("This Echo?" when guessed from the area). A tap opens a
@@ -171,7 +171,7 @@ first with "This Echo" ("This Echo?" when guessed from the area): artwork, name,
 differs, and what plays ("Title — Artist", " · Paused"; else "Idle", "Off" or "Unavailable",
 greyed), play/pause and a compact volume bar. One column below 840 dp, 2 below 1200 dp, else 3;
 it scrolls vertically only. Tap a room to select it and open **Playing**. The ⋮ menu:
-**Move music here** (from a room that plays and isn't in this room's group; with several, pick
+**Move music here** (to an available room, from a room that plays and isn't in its group; with several, pick
 one), **Group with…** (ticks for the other available rooms whose player can group; unticked
 members are taken out), **Leave group** / **Ungroup**. Group leaders show "+N rooms", Music
 Assistant group players "Group of N". The tab collects each room's player state once.

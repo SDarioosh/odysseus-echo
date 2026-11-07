@@ -61,6 +61,9 @@ private val RAIL_WIDTH = 88.dp
 private val RAIL_ITEM_HEIGHT = 76.dp
 private val RAIL_ICON = 30.dp
 
+/** The message line's height and its gap to the bottom, kept free below the content while offline. */
+private val OFFLINE_LINE_SPACE = 52.dp
+
 object MusicPage : HomePage {
     override val id: String = "music"
 
@@ -87,7 +90,9 @@ object MusicPage : HomePage {
             Row(modifier.fillMaxSize()) {
                 Rail(selected.id)
                 Box(Modifier.weight(1f).fillMaxHeight()) {
-                    selected.content(Modifier.fillMaxSize().alpha(if (offline) 0.45f else 1f))
+                    // While offline the line stays: keep the tab's content clear of it.
+                    val bottom = if (offline) OFFLINE_LINE_SPACE else 0.dp
+                    selected.content(Modifier.fillMaxSize().padding(bottom = bottom).alpha(if (offline) 0.45f else 1f))
                     val line = MusicActions.message ?: if (offline) MUSIC_HA_OFFLINE else null
                     MessageLine(line, Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp))
                 }

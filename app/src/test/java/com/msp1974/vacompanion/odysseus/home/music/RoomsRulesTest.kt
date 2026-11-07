@@ -89,6 +89,8 @@ class RoomsRulesTest {
         // A room in the target's group isn't a source.
         assertEquals(listOf(target, playing), RoomsRules.transferSources(member, rooms, states))
         assertEquals(emptyList<Room>(), RoomsRules.transferSources(target, listOf(target, playing), emptyMap()))
+        // Nothing moves to an unavailable room.
+        assertEquals(emptyList<Room>(), RoomsRules.transferSources(off, rooms, states))
     }
 
     @Test

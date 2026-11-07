@@ -84,10 +84,11 @@ object NowPlayingRules {
 
     /**
      * The room "Move here" takes music from: the first available room other than [roomId] that
-     * plays ([playingIds]) and isn't a group containing [roomId]; null for none (no button).
+     * plays ([playingIds]) and isn't a group containing [roomId]; null for none (no button), and
+     * when [roomId] itself is unavailable.
      */
     fun moveFrom(roomId: String?, rooms: List<Room>, playingIds: Set<String>): String? {
-        if (roomId == null) return null
+        if (roomId == null || rooms.any { it.entityId == roomId && !it.available }) return null
         return rooms.firstOrNull {
             it.entityId != roomId && it.available && it.entityId in playingIds && roomId !in it.groupMembers
         }?.entityId

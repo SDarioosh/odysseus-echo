@@ -104,6 +104,8 @@ class NowPlayingRulesTest {
         assertEquals("lounge", NowPlayingRules.moveFrom("kitchen", rooms, setOf("kitchen", "group", "gone", "lounge")))
         assertNull(NowPlayingRules.moveFrom("kitchen", rooms, setOf("kitchen")))
         assertNull(NowPlayingRules.moveFrom(null, rooms, setOf("lounge")))
+        // Nothing moves to an unavailable room.
+        assertNull(NowPlayingRules.moveFrom("gone", rooms, setOf("lounge")))
     }
 
     @Test

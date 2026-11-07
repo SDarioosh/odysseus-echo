@@ -124,7 +124,8 @@ fun NowPlayingTab(modifier: Modifier = Modifier) {
             val bodyHeight = h - CHIP_ROW - 12.dp
             if (landscape) {
                 val artSize = min(bodyHeight, w * 0.45f)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // Centred in the height left: on a tablet the art is limited by the width.
+                Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Artwork(art, artSize, RoundedCornerShape(artSize * 0.06f))
                     Spacer(Modifier.width(PAD + 4.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {

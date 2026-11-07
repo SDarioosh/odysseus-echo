@@ -60,8 +60,11 @@ import com.msp1974.vacompanion.odysseus.player.Artwork
 import com.msp1974.vacompanion.odysseus.player.OnControl
 import com.msp1974.vacompanion.odysseus.player.VolumeBar
 
-/** Card width from which a room is one row (art, text, play, volume, menu); else two rows. */
-private val ONE_ROW_FROM = 560.dp
+/**
+ * Card width from which a room is one row (art, text, play, volume, menu); else two rows. Play,
+ * volume and menu take ~400 dp, so narrower one-row cards leave the room's text ~150 dp.
+ */
+private val ONE_ROW_FROM = 680.dp
 
 /** A dialog the tab shows: choose the room to move music from, or the rooms to group with. */
 private sealed interface RoomsDialog {

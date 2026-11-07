@@ -111,8 +111,7 @@ object OtherPlayersRules {
     fun candidates(snapshot: HaMediaSnapshot, area: String): List<HaMediaPlayer> {
         val room = area.trim().lowercase()
         return snapshot.players
-            .filter { it.title.isNotBlank() || it.artist.isNotBlank() }
-            .filter { it.playing || (it.state == "paused" && snapshot.haNow - it.changedAt <= PAUSED_KEEP_SEC) }
+            .filter { showable(it, snapshot.haNow) }
             .sortedWith(
                 compareByDescending<HaMediaPlayer> { room.isNotEmpty() && it.area.trim().lowercase() == room }
                     .thenByDescending { it.playing }
@@ -123,14 +122,18 @@ object OtherPlayersRules {
             .distinctBy { it.trackKey }
     }
 
+    /** Has a track, and is playing or was paused at most [PAUSED_KEEP_SEC] ago. */
+    fun showable(p: HaMediaPlayer, haNow: Double): Boolean =
+        (p.title.isNotBlank() || p.artist.isNotBlank()) &&
+            (p.playing || (p.state == "paused" && haNow - p.changedAt <= PAUSED_KEEP_SEC))
+
     /**
-     * The player to show: [chosen] (an entity id) when set, playing or paused, else the best
+     * The player to show: [chosen] (an entity id) when set and [showable], else the best
      * candidate. Null = nothing to show.
      */
     fun pick(snapshot: HaMediaSnapshot, area: String, chosen: String): HaMediaPlayer? {
         if (chosen.isNotBlank()) {
-            return snapshot.players.firstOrNull { it.entityId == chosen }
-                ?.takeIf { (it.title.isNotBlank() || it.artist.isNotBlank()) && (it.playing || it.state == "paused") }
+            return snapshot.players.firstOrNull { it.entityId == chosen }?.takeIf { showable(it, snapshot.haNow) }
         }
         return candidates(snapshot, area).firstOrNull()
     }

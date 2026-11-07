@@ -9,6 +9,7 @@ package com.msp1974.vacompanion.odysseus.home.players
 import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -19,6 +20,7 @@ import com.msp1974.vacompanion.device.DeviceManager
 import com.msp1974.vacompanion.odysseus.home.HomeSettings
 import com.msp1974.vacompanion.odysseus.lock.LockMode
 import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,8 +51,26 @@ object OtherPlayers {
     var seen by mutableStateOf<List<HaMediaPlayer>>(emptyList())
         private set
 
-    private var lastSuccessMs = 0L
+    @Volatile private var lastSuccessMs = 0L
     private var lastLoggedKey = ""
+
+    // The Driver run that may show results, 0 = none. A read that finishes after its run stopped
+    // (a button's re-read, a slow HTTP call) must not bring a speaker back. Touched on the main thread.
+    @Volatile private var activeRun = 0
+    private var runs = 0
+
+    private fun startRun(): Int {
+        runs += 1
+        activeRun = runs
+        return runs
+    }
+
+    /** Ends [run] unless a newer run has already started (its cleanup can come late). */
+    private fun stopRun(run: Int) {
+        if (activeRun != run) return
+        activeRun = 0
+        clear()
+    }
 
     /** What the clock and the card show: this Echo's own music, or another speaker's. */
     fun nowPlaying(own: SendspinNowPlaying): SendspinNowPlaying {
@@ -76,6 +96,8 @@ object OtherPlayers {
                 Timber.i("Other players: %s on %s", command, other.entityId)
                 delay(AFTER_COMMAND_MS)
                 refresh(deviceManager)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.w("Other players: %s on %s failed: %s", command, other.entityId, e.message)
             }
@@ -87,19 +109,27 @@ object OtherPlayers {
         lastSuccessMs = 0L
     }
 
-    /** Reads Home Assistant once. Never throws. */
-    suspend fun refresh(deviceManager: DeviceManager) = lock.withLock {
+    /**
+     * Reads Home Assistant once. Never throws (except cancellation). State is checked and written
+     * on the main thread, where runs start and stop, so a stopped run can't be written to.
+     */
+    suspend fun refresh(deviceManager: DeviceManager) = withContext(Dispatchers.Main.immediate) { lock.withLock {
+        if (activeRun == 0) return@withLock
         val nowMs = SystemClock.elapsedRealtime()
         try {
             val (client, token) = withContext(Dispatchers.IO) { session(deviceManager) }
             val snapshot = withContext(Dispatchers.IO) { client.snapshot(token) }
+            // HA's "now" is read during the request, so the position is anchored to its end.
+            val receivedMs = SystemClock.elapsedRealtime()
+            // Turned off, locked or left the screen while waiting for Home Assistant.
+            if (activeRun == 0) return@withLock
             val haBase = deviceManager.authenticationManager.getBaseUrl().toString().removeSuffix("/")
             seen = snapshot.players.filter { it.title.isNotBlank() || it.artist.isNotBlank() }
             val picked = OtherPlayersRules.pick(snapshot, deviceManager.config.area, HomeSettings.otherPlayersEntity)
             current = picked?.let { p ->
-                val next = OtherPlayersRules.toNowPlaying(p, snapshot.haNow, nowMs, haBase)
+                val next = OtherPlayersRules.toNowPlaying(p, snapshot.haNow, receivedMs, haBase)
                 val previous = current?.takeIf { it.entityId == p.entityId }?.nowPlaying
-                OtherPlayer(p.entityId, p.name, OtherPlayersRules.settle(previous, next, nowMs))
+                OtherPlayer(p.entityId, p.name, OtherPlayersRules.settle(previous, next, receivedMs))
             }
             lastSuccessMs = nowMs
             val key = picked?.let { "${it.entityId} ${it.state} ${it.trackKey}" } ?: ""
@@ -107,11 +137,13 @@ object OtherPlayers {
                 lastLoggedKey = key
                 Timber.i("Other players: %s", picked?.let { "${it.entityId} ${it.state} (area '${it.area}')" } ?: "none")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.w("Other players: refresh failed: %s", e.message)
             if (nowMs - lastSuccessMs > STALE_MS) current = null
         }
-    }
+    } }
 
     private suspend fun session(deviceManager: DeviceManager): Pair<OtherPlayersClient, String> {
         val config = deviceManager.config
@@ -123,23 +155,33 @@ object OtherPlayers {
     }
 
     /**
-     * Polls while the app is in front, the setting is on, the network is up and the Echo isn't
-     * locked. Composed once, in HomeHost, which is there whether or not the clock is turned on.
+     * Polls while the app is in front, the setting is on, something can show it ([shown]: the
+     * clock or the dashboard's now-playing card), the network is up and the Echo isn't locked.
+     * Composed once, in HomeHost, which is there whether or not the clock is turned on. Whatever
+     * stops it (including the screen going blank, which takes HomeHost away) clears the speaker,
+     * so an old song never shows when the screen comes back.
      */
     @Composable
-    fun Driver(deviceManager: DeviceManager, networkConnected: Boolean) {
-        val on = HomeSettings.otherPlayersEnabled && networkConnected && !LockMode.isLocked
+    fun Driver(deviceManager: DeviceManager, networkConnected: Boolean, shown: Boolean) {
+        val locked by LockMode.locked.collectAsState()
+        val on = HomeSettings.otherPlayersEnabled && shown && networkConnected && !locked
         val chosen = HomeSettings.otherPlayersEntity
         val lifecycle = LocalLifecycleOwner.current.lifecycle
         LaunchedEffect(on, chosen, lifecycle) {
             if (!on) {
+                activeRun = 0
                 clear()
                 return@LaunchedEffect
             }
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                while (true) {
-                    refresh(deviceManager)
-                    delay(POLL_MS)
+                val run = startRun()
+                try {
+                    while (true) {
+                        refresh(deviceManager)
+                        delay(POLL_MS)
+                    }
+                } finally {
+                    stopRun(run)
                 }
             }
         }

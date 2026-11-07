@@ -122,7 +122,10 @@ fun HomeHost(dashboard: @Composable () -> Unit) {
         TodayRefresh(vaUiState.isNetworkConnected)
 
         // Music on other speakers, read from Home Assistant (players/).
-        OtherPlayers.Driver(vaViewModel.deviceManager, vaUiState.isNetworkConnected)
+        OtherPlayers.Driver(
+            vaViewModel.deviceManager, vaUiState.isNetworkConnected,
+            shown = HomeSettings.enabled || vaUiState.sendspinOverlayEnabled,
+        )
 
         // The clock's night look reads the light sensor while it's turned on (clock/NightMode).
         com.msp1974.vacompanion.odysseus.home.clock.NightMode.Driver(HomeSettings.enabled && HomeSettings.nightAuto)

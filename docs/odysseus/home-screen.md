@@ -144,14 +144,16 @@ Echo itself plays nothing, they show what another speaker plays, read from Home 
   first, then playing before paused, then a Music Assistant entity before another entity of the
   same speaker, then the one that changed last. A song playing on several entities (a group, a
   speaker that also has a Music Assistant entity) counts once. *Speaker to follow* can pin one
-  entity instead; it shows only while that one plays or is paused.
+  entity instead; it shows only while that one plays or was paused in the last 15 minutes.
 - **The Echo's own music wins**: while its Sendspin player plays, nothing changes. While it is
   paused, another speaker that is playing takes over the line and the card.
 - **Buttons**: play, pause, next, previous, shuffle and repeat, as far as the entity supports them
   (`supported_features`), sent as `media_player.media_play`, `media_pause`, `media_next_track`,
   `media_previous_track`, `shuffle_set`, `repeat_set`. The state is read again right after.
-- **Refresh**: every 4 seconds while the app is in front and the screen is on, not while locked,
-  not with the setting off. One `POST /api/template` per read (a few hundred bytes per playing
+- **Refresh**: every 4 seconds while the app is in front and the screen is on, and the clock or the
+  dashboard's now-playing card is turned on; not while locked, not with the setting off. Whatever
+  stops it forgets the speaker, so an old song doesn't flash up when the screen comes back, and a
+  read still under way when it stops is thrown away. One `POST /api/template` per read (a few hundred bytes per playing
   speaker).
 - **Artwork**: the entity's `entity_picture`, through Home Assistant's own media proxy (it carries
   its own access token). A picture URL on another host (Music Assistant's LAN address) may not load

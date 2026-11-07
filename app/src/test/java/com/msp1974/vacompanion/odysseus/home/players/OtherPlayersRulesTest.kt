@@ -145,6 +145,14 @@ class OtherPlayersRulesTest {
     }
 
     @Test
+    fun aChosenPlayerPausedLongAgoIsNotShown() {
+        val s = snap(player("media_player.tv", state = "paused", changed = now - OtherPlayersRules.PAUSED_KEEP_SEC - 1))
+        assertNull(OtherPlayersRules.pick(s, "", "media_player.tv"))
+        val idle = snap(player("media_player.tv", state = "idle"))
+        assertNull(OtherPlayersRules.pick(idle, "", "media_player.tv"))
+    }
+
+    @Test
     fun commandsFollowSupportedFeatures() {
         val r = OtherPlayersRules
         assertEquals(emptySet<String>(), r.commands(player("media_player.a")))

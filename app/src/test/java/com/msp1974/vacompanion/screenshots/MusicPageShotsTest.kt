@@ -7,8 +7,10 @@ package com.msp1974.vacompanion.screenshots
 
 import android.app.Application
 import android.graphics.Bitmap
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableState
 import com.msp1974.vacompanion.odysseus.home.HomePageContext
+import com.msp1974.vacompanion.odysseus.home.LocalHomeStripPosition
 import com.msp1974.vacompanion.odysseus.home.music.MusicPage
 import com.msp1974.vacompanion.odysseus.home.music.MusicTabs
 import com.msp1974.vacompanion.odysseus.music.Control
@@ -192,5 +194,15 @@ class MusicPageShotsTest(private val screen: Screen, private val mode: Mode) {
     @Test fun roomsOffline() {
         setUp(KITCHEN, MusicTabs.ROOMS, reachable = false)
         page("rooms-offline")
+    }
+
+    /** Composed beside the clock, out of sight (HomeHost's strip on page 0): the rail only, no player followed. */
+    @Test fun besideTheClock() {
+        setUp(KITCHEN, MusicTabs.NOW_PLAYING)
+        shots.capture("music/beside-clock") {
+            CompositionLocalProvider(LocalHomeStripPosition provides { 0f }) {
+                MusicPage.Content(HomePageContext(), androidx.compose.ui.Modifier)
+            }
+        }
     }
 }

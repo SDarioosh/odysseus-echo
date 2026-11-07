@@ -68,7 +68,11 @@ itself can show the kitchen's music. It applies to every now-playing look and to
 background. It's stored in the style JSON (`nowPlayingFrom`: `device`/`room`; missing or unknown
 means This device) and kept when a preset or the night look is picked. A tap on the element opens
 the Music page. `clock/ClockNowPlaying.kt` turns either source into one `ClockMusic` and owns the
-20 s "Paused" linger; it follows the room only while the clock shows it.
+20 s "Paused" linger (per source and room: switching drops the previous track at once); it
+follows the room only while the clock shows it and the style draws music (a visible now-playing
+element or the cover-art background). With *Selected room* and no Music page, the setting says
+"Needs the Music page and Home Assistant". Sendspin's playback speed moves the progress
+(`PlayerState.rate`).
 
 **Elements**, each on/off, at one of nine places (a 3×3 grid: top/middle/bottom × left/centre/right),
 with a size (S, M, L, XL) and a look where it has several. Elements at the same place stack top to
@@ -261,6 +265,11 @@ home screen when the swipe is long. Turn the home screen off if a dashboard need
 
 Pages must not handle horizontal swipes; `HomeHost` does. Navigation, idle return and the
 animation need no change.
+
+`HomeHost` composes the page shown and the one after it (so a swipe can reveal it), so a page that
+follows something live (a Home Assistant subscription) should stay idle while it is out of sight:
+read `LocalHomeStripPosition` (the strip's position, null outside `HomeHost`) in a
+`derivedStateOf`, as the Music page does (`MusicPageLive`).
 
 ## Files
 

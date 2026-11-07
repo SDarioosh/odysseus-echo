@@ -139,7 +139,14 @@ Code: `app/src/main/java/com/msp1974/vacompanion/odysseus/home/music/`.
   one Home Assistant client (`ensureMusicInstalled`, once per process), calls `attach()` while the
   page is in view and `detach()` when it isn't (or the screen blanks), and while it isn't,
   `probe()`s Home Assistant at once, every 10 min, and when Home Assistant or the network comes
-  back, so the page appears once Music Assistant has rooms.
+  back, so the page appears once Music Assistant has rooms. When the rooms it had are gone (Home
+  Assistant restarted and Music Assistant is still loading) it asks again after 30 s, 60 s,
+  120 s… up to 10 min (`MusicProbeSchedule`, tested), so the page comes back soon.
+- **Off-screen**: `HomeHost` also composes the page next to the one shown (e.g. while the clock
+  shows). Out of sight the page draws only its rail on an empty surface and follows no player
+  (`MusicPageLive`, tested, from `LocalHomeStripPosition`): its tabs come in once 2 % of it is on
+  screen or the home screen is going to it, so the first frames of a swipe may show the empty
+  surface and the states arrive a moment later.
 - **Actions** (`MusicActions`): `run(label) { backend -> … }` runs on a process-wide scope, so an
   action finishes even when the page goes away; `control`, `transfer`, `group`, `ungroup`,
   `select` and `queue` wrap it. A failure becomes `MusicActions.message` for 3 s
@@ -148,7 +155,9 @@ Code: `app/src/main/java/com/msp1974/vacompanion/odysseus/home/music/`.
 - **Live data** (`MusicLive.kt`): `rememberPlayerState(roomId, sendspin)` collects
   `backend.player(roomId)` while composed (this device's room gets Sendspin's pushed artwork);
   `rememberRoomArt(state)` loads `artUrl` through `HaApi.bytes` (8 bitmaps cached), else the pushed
-  artwork. Home Assistant's states put `positionAtMs` on the wall clock, Sendspin's on
+  artwork (never the previous track's art while a new one loads). The volume bar shows the last
+  volume it sent until the player reports it back (2 s at most), so quick taps add up. Home
+  Assistant's states put `positionAtMs` on the wall clock, Sendspin's on
   `elapsedRealtime`: pass `MusicActions.clockFor(state)` to `FullPlayer` / `Progress`.
 
 ### Now playing
@@ -178,9 +187,10 @@ first with "This Echo" ("This Echo?" when guessed from the area): artwork, name,
 differs, and what plays ("Title — Artist", " · Paused"; else "Idle", "Off" or "Unavailable",
 greyed), play/pause and a compact volume bar. One column below 840 dp, 2 below 1200 dp, else 3;
 it scrolls vertically only. Tap a room to select it and open **Playing**. The ⋮ menu:
-**Move music here** (to an available room, from a room that plays and isn't in its group; with several, pick
-one), **Group with…** (ticks for the other available rooms whose player can group; unticked
-members are taken out), **Leave group** / **Ungroup**. Group leaders show "+N rooms", Music
+**Move music here** (to an available room, from a room that plays and isn't in its group, nor a
+Music Assistant group player containing it; with several, pick one), **Group with…** (ticks for
+the other available rooms whose player can group; unticked members are taken out; not on a room
+that is a member of another room's group), **Leave group** / **Ungroup**. Group leaders show "+N rooms", Music
 Assistant group players "Group of N". The tab collects each room's player state once.
 
 Known limits: `PlayerState` has no Home Assistant state text, so "Off" is inferred (no title, no

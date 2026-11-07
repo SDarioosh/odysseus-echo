@@ -43,7 +43,7 @@ class MusicImagesTest {
     @Test
     fun diskKeepsTheNewestFiles() {
         var now = 1_000_000L
-        val disk = DiskCache(tmp.root, maxFiles = 3, clock = { now })
+        val disk = DiskCache(tmp.root, maxFiles = 3, clock = { now }, trimEvery = 1)
         for (i in 1..3) {
             now += 1_000
             disk.write("https://hub.example.test/music/image?u=$i", byteArrayOf(i.toByte()))
@@ -57,6 +57,33 @@ class MusicImagesTest {
         assertNull(disk.read("https://hub.example.test/music/image?u=2"))
         assertArrayEquals(byteArrayOf(3), disk.read("https://hub.example.test/music/image?u=3"))
         assertArrayEquals(byteArrayOf(4), disk.read("https://hub.example.test/music/image?u=4"))
+    }
+
+    @Test
+    fun diskTrimsOnTheFirstWriteThenEveryNth() {
+        var now = 1_000_000L
+        // An old folder over the limit is trimmed by the first write.
+        val old = DiskCache(tmp.root, maxFiles = 100, clock = { now }, trimEvery = 1000)
+        for (i in 1..5) {
+            now += 1_000
+            old.write("https://hub.example.test/music/image?u=$i", byteArrayOf(i.toByte()))
+        }
+        assertEquals(5, old.count())
+        val disk = DiskCache(tmp.root, maxFiles = 3, clock = { now }, trimEvery = 4)
+        now += 1_000
+        disk.write("https://hub.example.test/music/image?u=6", byteArrayOf(6))
+        assertEquals(3, disk.count())
+        // The next three writes aren't trimmed; the fourth is.
+        for (i in 7..9) {
+            now += 1_000
+            disk.write("https://hub.example.test/music/image?u=$i", byteArrayOf(i.toByte()))
+        }
+        assertEquals(6, disk.count())
+        now += 1_000
+        disk.write("https://hub.example.test/music/image?u=10", byteArrayOf(10))
+        assertEquals(3, disk.count())
+        assertArrayEquals(byteArrayOf(10), disk.read("https://hub.example.test/music/image?u=10"))
+        assertNull(disk.read("https://hub.example.test/music/image?u=7"))
     }
 
     @Test

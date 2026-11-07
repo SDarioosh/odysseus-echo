@@ -74,10 +74,19 @@ class ByteLru<V : Any>(private val maxBytes: Long, private val sizeOf: (V) -> Lo
 }
 
 /**
- * Raw image bytes on disk in [dir], one file per key (its sha256), at most [maxFiles]: writing one
- * more deletes the least recently used (by modification time; a read touches the file).
+ * Raw image bytes on disk in [dir], one file per key (its sha256), about [maxFiles]: the first write
+ * and every [trimEvery]th after it delete the least recently used beyond [maxFiles] (by
+ * modification time; a read touches the file), so the folder holds at most [maxFiles] + [trimEvery]
+ * - 1 files and isn't listed on every write. Blocking: call it off the main thread.
  */
-class DiskCache(private val dir: File, private val maxFiles: Int = 200, private val clock: () -> Long = System::currentTimeMillis) {
+class DiskCache(
+    private val dir: File,
+    private val maxFiles: Int = 200,
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val trimEvery: Int = 20,
+) {
+    private var writes = 0
+
     fun fileOf(key: String): File = File(dir, sha256(key))
 
     fun read(key: String): ByteArray? {
@@ -101,7 +110,7 @@ class DiskCache(private val dir: File, private val maxFiles: Int = 200, private 
                 return
             }
             f.setLastModified(clock())
-            trim()
+            if (writes++ % trimEvery.coerceAtLeast(1) == 0) trim()
         } catch (e: IOException) {
             Timber.d("Music: image cache write failed: %s", e.message)
         }
@@ -177,8 +186,11 @@ object MusicImages {
         return loads.withPermit {
             memory.get(key(url, size))?.let { return@withPermit it }
             try {
-                val bytes = disk?.read(url) ?: fetch(url)?.also { if (it.size <= DISK_MAX_BYTES) disk?.write(url, it) }
-                val bitmap = bytes?.let { withContext(Dispatchers.Default) { decode(it, size) } }
+                // Disk, hashing and decoding are blocking: never on the main thread.
+                val bitmap = withContext(Dispatchers.IO) {
+                    val bytes = disk?.read(url) ?: fetch(url)?.also { if (it.size <= DISK_MAX_BYTES) disk?.write(url, it) }
+                    bytes?.let { decode(it, size) }
+                }
                 if (bitmap == null) synchronized(failed) { failed[url] = System.currentTimeMillis() }
                 bitmap?.also { memory.put(key(url, size), it) }
             } catch (e: CancellationException) {
@@ -245,6 +257,9 @@ fun rememberMusicImage(url: String?, size: Dp): Bitmap? {
     MusicImages.init(LocalContext.current)
     val px = with(LocalDensity.current) { size.roundToPx() }
     val bitmap by produceState(MusicImages.cached(url, px), url, px) {
+        // produceState keeps its value when the keys change (a recycled row, another detail):
+        // start again from this url's bitmap, never the previous one.
+        value = MusicImages.cached(url, px)
         if (value == null) value = MusicImages.load(url, px)
     }
     return bitmap

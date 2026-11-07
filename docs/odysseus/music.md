@@ -237,7 +237,9 @@ Playing; Next and Add say "Plays next in X" / "Added to the queue in X".
 
 `MusicImages.kt` (`MusicImagesTest`): an in-memory LRU of decoded bitmaps capped at 16 MB
 (`ByteLru`) over a 200-file disk cache in `cacheDir/music_images/` (`DiskCache`, least recently
-used out, keyed by the sha256 of the URL). Library and search thumbnails are hub URLs (C8,
+used out, keyed by the sha256 of the URL; trimmed on the first write and every 20th after, so it
+can briefly hold up to 219). Disk, hashing and decoding run on `Dispatchers.IO`. A thumbnail
+starts again from its own URL when a row or detail is reused for another item. Library and search thumbnails are hub URLs (C8,
 `/music/image`), fetched only when they start with the linked voice base, with the Odysseus
 bearer, no redirects, `image/*` up to 5 MB. HA paths (`/api/…`) go through `HaApi.bytes`.
 Anything else isn't fetched. Decoded down to 64/128/256/512 px; at most 4 loads at once; a

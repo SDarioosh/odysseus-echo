@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -130,11 +131,14 @@ fun LibraryTab(modifier: Modifier = Modifier) {
 
     val detail = LibraryState.stack.lastOrNull()
     if (detail != null) {
-        MediaDetailView(
-            detail,
-            onBack = { LibraryState.stack.removeAt(LibraryState.stack.lastIndex) },
-            onOpen = open, onMenu = menu, modifier = modifier,
-        )
+        // A new composition per item: its scroll, retry count and loads never carry over (artist → album).
+        key(detail.uri) {
+            MediaDetailView(
+                detail,
+                onBack = { LibraryState.stack.removeAt(LibraryState.stack.lastIndex) },
+                onOpen = open, onMenu = menu, modifier = modifier,
+            )
+        }
     } else {
         Column(modifier) {
             LibraryBar()

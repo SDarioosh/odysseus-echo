@@ -238,7 +238,12 @@ fun rememberDetail(item: MediaItem, attempt: Int): DetailLoad {
     val load by produceState<DetailLoad>(
         MusicDetails.cache.get(item.uri)?.let { DetailLoad.Loaded(it) } ?: DetailLoad.Loading, item.uri, backend, attempt,
     ) {
-        if (value is DetailLoad.Loaded) return@produceState
+        // produceState keeps its value when the keys change: start again from this item's cache,
+        // never the previous item's detail.
+        MusicDetails.cache.get(item.uri)?.let {
+            value = DetailLoad.Loaded(it)
+            return@produceState
+        }
         if (backend == null) {
             value = DetailLoad.Failed(MUSIC_HA_OFFLINE)
             return@produceState

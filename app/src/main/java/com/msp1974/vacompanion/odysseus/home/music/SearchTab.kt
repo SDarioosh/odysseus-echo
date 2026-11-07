@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -117,11 +118,14 @@ fun SearchTab(modifier: Modifier = Modifier) {
 
     val detail = SearchState.stack.lastOrNull()
     if (detail != null) {
-        MediaDetailView(
-            detail,
-            onBack = { SearchState.stack.removeAt(SearchState.stack.lastIndex) },
-            onOpen = open, onMenu = menu, modifier = modifier,
-        )
+        // A new composition per item: its scroll, retry count and loads never carry over (artist → album).
+        key(detail.uri) {
+            MediaDetailView(
+                detail,
+                onBack = { SearchState.stack.removeAt(SearchState.stack.lastIndex) },
+                onOpen = open, onMenu = menu, modifier = modifier,
+            )
+        }
     } else {
         Column(modifier.imePadding()) {
             SearchField()

@@ -48,6 +48,12 @@ Odysseus, the page asks for the Home Assistant address.
 3. Else its Tailscale IP. Home Assistant refuses a sign-in for a 100.x address, so the page
    then asks for the Echo's Tailscale name (Tailscale admin console → Machines).
 
+Just after boot Wi-Fi and Tailscale often have no address yet. The Echo then shows "Waiting
+for a network address" and looks again every second (every 3 seconds after 10 tries) until one
+turns up; it gives up only after 10 minutes. An address that turns up after the QR code is shown
+(usually Tailscale, a few seconds after Wi-Fi) replaces it if it's better, until a phone opens
+the page or you tap **Other address** (`odysseus/SetupAddressWait.kt`).
+
 **Other address** on the Echo switches between them. Home Assistant gets the same address
 for the Echo. If it can't connect to a name, the Echo tries its Tailscale IP.
 

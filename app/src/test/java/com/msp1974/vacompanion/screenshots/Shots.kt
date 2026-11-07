@@ -15,10 +15,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import android.content.ComponentName
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.AndroidComposeTestRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onRoot
+import androidx.test.ext.junit.rules.ActivityScenarioRule
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.roborazziSystemPropertyOutputDirectory
 import com.msp1974.vacompanion.ui.theme.AppTheme
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
+import org.junit.runners.model.Statement
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import java.io.File
 
 /**
@@ -50,9 +60,7 @@ fun shot(
     density: String = "mdpi",
     content: @Composable () -> Unit,
 ) {
-    val orientation = if (widthDp >= heightDp) "land" else "port"
-    val night = if (mode.dark) "night" else "notnight"
-    RuntimeEnvironment.setQualifiers("w${widthDp}dp-h${heightDp}dp-$orientation-$night-$density")
+    setScreenQualifiers(widthDp, heightDp, mode, density)
     val file = File(roborazziSystemPropertyOutputDirectory(), "$name.png")
     file.parentFile?.mkdirs()
     captureRoboImage(file.path) {
@@ -77,4 +85,63 @@ fun gradientArt(size: Int = 256, from: Int = 0xFFE06C75.toInt(), to: Int = 0xFF6
     val paint = Paint().apply { shader = LinearGradient(0f, 0f, size.toFloat(), size.toFloat(), from, to, Shader.TileMode.CLAMP) }
     Canvas(bitmap).drawRect(0f, 0f, size.toFloat(), size.toFloat(), paint)
     return bitmap
+}
+
+private fun setScreenQualifiers(widthDp: Int, heightDp: Int, mode: Mode, density: String) {
+    val orientation = if (widthDp >= heightDp) "land" else "port"
+    val night = if (mode.dark) "night" else "notnight"
+    RuntimeEnvironment.setQualifiers("w${widthDp}dp-h${heightDp}dp-$orientation-$night-$density")
+}
+
+/**
+ * For screens that load their data in effects (LaunchedEffect, produceState collecting a flow):
+ * [shot] captures the first frame, before any effect ran, and Compose's UI dispatcher is
+ * process-wide, so after the first test of a JVM a plain activity no longer recomposes at all.
+ * This rule renders through the Compose test rule (its own frame clock) instead: one [screen] and
+ * [mode] per test (use it with ParameterizedRobolectricTestRunner over [Screen.all] x [Mode]).
+ *
+ * ```
+ * @get:Rule val shots = SettledShot(screen, mode)
+ * @Test fun page() = shots.capture("music/page") { MusicPage.Content(...) }
+ * ```
+ */
+class SettledShot(private val screen: Screen, private val mode: Mode) : TestRule {
+    val compose: AndroidComposeTestRule<ActivityScenarioRule<ComponentActivity>, ComponentActivity> =
+        createAndroidComposeRule<ComponentActivity>()
+
+    private val setup = TestRule { base, _ ->
+        object : Statement() {
+            override fun evaluate() {
+                setScreenQualifiers(screen.widthDp, screen.heightDp, mode, screen.density)
+                val app = RuntimeEnvironment.getApplication()
+                shadowOf(app.packageManager).addActivityIfNotPresent(ComponentName(app, ComponentActivity::class.java))
+                base.evaluate()
+            }
+        }
+    }
+
+    override fun apply(base: Statement, description: org.junit.runner.Description): Statement =
+        RuleChain.outerRule(setup).around(compose).apply(base, description)
+
+    /**
+     * Sets [content] in the app's theme, lets [settleMs] of frame time pass (effects run, flows
+     * emit, the content recomposes) and saves `<name>-<screen>-<mode>.png`.
+     */
+    fun capture(name: String, settleMs: Long = 500, content: @Composable () -> Unit) {
+        val file = File(roborazziSystemPropertyOutputDirectory(), "$name-${screen.name}-${mode.name.lowercase()}.png")
+        file.parentFile?.mkdirs()
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            AppTheme(darkMode = mode.dark, dynamicColor = false) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+            }
+        }
+        compose.mainClock.advanceTimeBy(settleMs)
+        compose.onRoot().captureRoboImage(file)
+    }
+
+    companion object {
+        /** Parameters for ParameterizedRobolectricTestRunner: every [Screen] in both [Mode]s. */
+        fun parameters(): List<Array<Any>> = Screen.all.flatMap { s -> Mode.entries.map { m -> arrayOf<Any>(s, m) } }
+    }
 }

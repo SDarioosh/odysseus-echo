@@ -71,6 +71,14 @@ The helpers (`Shots.kt`):
 - `shot(name, widthDp, heightDp, mode, density = "mdpi") { ... }`: any window size.
 - `gradientArt(size = 256)`: fictional cover art (a gradient `Bitmap`).
 
+- `SettledShot(screen, mode)`: a JUnit rule for screens that load their data in effects
+  (`LaunchedEffect`, `produceState` collecting a flow). `shot` captures the first frame, before any
+  effect ran; and Compose's UI dispatcher is process-wide, so after the first test in a JVM a
+  plain activity doesn't recompose at all. The rule renders through the Compose test rule (its
+  own frame clock), lets 500 ms of frame time pass, then captures: one screen and theme per
+  test, with `ParameterizedRobolectricTestRunner` over `SettledShot.parameters()`. Example:
+  `MusicPageShotsTest` (the Music page over a fake `MusicBackend`).
+
 The content is drawn inside `AppTheme` on the theme's background, filling the window. Use only
 fictional data ("Harbour Lights" by "The Fictional Band"). Code that reads the clock should take
 a fixed one (as `FullPlayer(clock = { 0L })`), so images don't change from run to run.

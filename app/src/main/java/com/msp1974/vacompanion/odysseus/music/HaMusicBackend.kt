@@ -60,6 +60,16 @@ class HaMusicBackend(
 
         /** A player that appears or goes away runs the template again, at most this often. */
         const val RELOAD_MIN_GAP_MS = 10_000L
+
+        /**
+         * After Home Assistant refused the template (a token that isn't admin), rooms come from
+         * /api/states and the template is tried again only after this long: each refusal is a
+         * failed login at HA (its IP-ban counter).
+         */
+        const val TEMPLATE_RETRY_MS = 6 * 60 * 60_000L
+
+        /** What library, search and detail say while the template is refused (no MA config entry). */
+        const val NEEDS_ADMIN = "Library needs an admin Home Assistant sign-in"
     }
 
     private sealed interface Ev {
@@ -72,6 +82,11 @@ class HaMusicBackend(
     @Volatile private var rows: List<RoomRow> = emptyList()
     @Volatile private var states: Map<String, HaState> = emptyMap()
     @Volatile private var entryId: String? = null
+    /** When HA last refused the template (401/403), or null. */
+    @Volatile private var templateRefusedAtMs: Long? = null
+
+    private fun templateRefused(): Boolean =
+        templateRefusedAtMs?.let { clock() - it < TEMPLATE_RETRY_MS } == true
 
     private val _self = MutableStateFlow<SelfMatch?>(null)
     /** This device's own player (I3), as of the last rooms update. */
@@ -165,19 +180,27 @@ class HaMusicBackend(
     }
 
     private suspend fun loadRows(): List<RoomRow> = loadLock.withLock {
-        val loaded = try {
-            HaMusicJson.parseRooms(ha.template(HaMusicJson.ROOMS_TEMPLATE))
-        } catch (e: HaException) {
-            if (e.code != 401 && e.code != 403) throw e
-            // Not an admin token: no template. The players are still in /api/states.
-            Timber.w("Music: template refused (%d), reading states", e.code)
-            HaMusicJson.roomRowsFromStates(ha.states { HaMusicJson.isMaPlayerState(it) })
+        val loaded = if (templateRefused()) {
+            statesRows()
+        } else {
+            try {
+                HaMusicJson.parseRooms(ha.template(HaMusicJson.ROOMS_TEMPLATE)).also { templateRefusedAtMs = null }
+            } catch (e: HaException) {
+                if (e.code != 401 && e.code != 403) throw e
+                // Not an admin token: no template (asked again after TEMPLATE_RETRY_MS). The
+                // players are still in /api/states.
+                Timber.w("Music: template refused (%d), reading states", e.code)
+                templateRefusedAtMs = clock()
+                statesRows()
+            }
         }
         loaded.firstNotNullOfOrNull { it.entry }?.let { entryId = it }
         rows = loaded
         _reachable.value = true
         loaded
     }
+
+    private suspend fun statesRows() = HaMusicJson.roomRowsFromStates(ha.states { HaMusicJson.isMaPlayerState(it) })
 
     /** Recomputes this device's player and the rooms from the last rows and states. */
     private fun publish(): List<Room> {
@@ -214,8 +237,10 @@ class HaMusicBackend(
     /** MA's config entry id, from the rooms template (run once if it hasn't run yet). */
     private suspend fun entry(): String {
         entryId?.let { return it }
+        if (templateRefused()) throw HaException(NEEDS_ADMIN)
         loadRows()
-        return entryId ?: throw HaException("Music Assistant isn't set up in Home Assistant")
+        entryId?.let { return it }
+        throw HaException(if (templateRefused()) NEEDS_ADMIN else "Music Assistant isn't set up in Home Assistant")
     }
 
     override suspend fun library(kind: MediaKind, order: LibraryOrder, favoritesOnly: Boolean,

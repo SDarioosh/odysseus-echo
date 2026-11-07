@@ -143,6 +143,35 @@ class HaMusicBackendTest {
     }
 
     @Test
+    fun aRefusedTemplateIsNotAskedAgainAndTheLibraryFailsAtOnce() = runBlocking {
+        ha.templateAnswer = { throw HaException("Unauthorized", 401) }
+        val b = backend()
+        repeat(3) { b.loadRooms() }
+        for (load in listOf<suspend () -> Unit>(
+            { b.library(MediaKind.ALBUM, LibraryOrder.NAME, false, 0) },
+            { b.search("lantern", setOf(MediaKind.TRACK)) },
+            { b.detail(MediaItem("library://album/21", MediaKind.ALBUM, "Harbour Lights", "", null)) },
+        )) {
+            try {
+                load(); fail()
+            } catch (e: HaException) {
+                assertEquals(HaMusicBackend.NEEDS_ADMIN, e.message)
+            }
+        }
+        // One refusal at HA (each is a failed login there), no MA call without a config entry.
+        assertEquals(1, ha.templates.size)
+        assertTrue(ha.calls.isEmpty())
+
+        // Asked again after TEMPLATE_RETRY_MS (e.g. the device signed in as an admin since).
+        ha.templateAnswer = { MusicFixtures.text("rooms_template.json") }
+        now.addAndGet(HaMusicBackend.TEMPLATE_RETRY_MS)
+        b.loadRooms()
+        assertEquals(2, ha.templates.size)
+        b.library(MediaKind.ALBUM, LibraryOrder.NAME, false, 0)
+        assertEquals(1, ha.calls.size)
+    }
+
+    @Test
     fun aNewKeyFallsBackToTheAreaGuess() = runBlocking {
         clientId = "a-new-key-id"
         val b = backend()

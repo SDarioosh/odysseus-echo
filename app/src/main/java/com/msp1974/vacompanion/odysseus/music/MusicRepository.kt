@@ -157,7 +157,16 @@ object MusicRepository {
     fun setSelfOverride(entityId: String?) {
         MusicSettings.selfOverride = entityId ?: ""
         val b = backend as? HaMusicBackend ?: return
-        scope.launch { runCatching { update(b.loadRooms()) } }
+        scope.launch { runCatching { reloadSelf(b) } }
+    }
+
+    /** Runs the rooms once and takes this device's player and the rooms from it (also while detached). */
+    internal suspend fun reloadSelf(b: HaMusicBackend): List<Room> {
+        val list = b.loadRooms()
+        selfRoom = b.self.value
+        reachable = true
+        update(list)
+        return list
     }
 
     /**
@@ -175,12 +184,11 @@ object MusicRepository {
         if (lastProbeMs != 0L && now - lastProbeMs < minAgeMs) return@withLock
         lastProbeMs = now
         try {
-            val list = if (b is HaMusicBackend) {
-                b.loadRooms().also { selfRoom = b.self.value; reachable = true }
+            if (b is HaMusicBackend) {
+                reloadSelf(b)
             } else {
-                withTimeoutOrNull(PROBE_TIMEOUT_MS) { b.rooms.first { it.isNotEmpty() } } ?: emptyList()
+                update(withTimeoutOrNull(PROBE_TIMEOUT_MS) { b.rooms.first { it.isNotEmpty() } } ?: emptyList())
             }
-            update(list)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

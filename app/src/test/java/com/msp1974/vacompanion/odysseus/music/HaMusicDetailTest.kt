@@ -50,20 +50,71 @@ class HaMusicDetailTest {
     fun artistKeepsOnlyItsOwnAlbumsAndTracks() {
         val d = HaMusicDetail.parseArtist(MusicFixtures.json("detail_artist_search.json"), artist, image)
         assertTrue(d.listed)
-        // The provider copy of the same album (same name) is dropped; another artist's album too.
-        assertEquals(listOf("library://album/21"), d.albums.map { it.uri })
+        // Another artist's album is dropped; a different version ("(Deluxe)") of the album is kept.
+        assertEquals(listOf("library://album/21", "fictional://album/x21"), d.albums.map { it.uri })
         assertEquals("HUB<http://192.168.1.20:8095/imageproxy/al21>", d.albums[0].imageUrl)
         assertEquals(listOf("library://track/301", "library://track/450"), d.tracks.map { it.uri })
         assertEquals("Copper Sky (Live)", d.tracks[1].name)
     }
 
     @Test
-    fun albumMergesBothAnswersInTrackOrder() {
+    fun albumMergesBothAnswersInTheOrderFound() {
         val d = HaMusicDetail.parseAlbum(
             listOf(MusicFixtures.json("detail_album_search.json"), MusicFixtures.json("detail_album_library.json")), album, image,
         )
-        assertEquals(listOf("library://track/301", "library://track/302", "library://track/303"), d.tracks.map { it.uri })
+        // MA's order (HA gives no track numbers), each track once.
+        assertEquals(listOf("library://track/303", "library://track/301", "library://track/302"), d.tracks.map { it.uri })
         assertTrue(d.albums.isEmpty())
+    }
+
+    private fun track(uri: String, name: String, album: String, albumUri: String, artist: String, version: String = "") =
+        """{"uri":"$uri","media_type":"track","name":"$name","version":"$version",
+            "album":{"uri":"$albumUri","name":"$album"},"artists":[{"name":"$artist"}]}"""
+
+    @Test
+    fun albumKeepsTracksThatShareABaseName() {
+        val glass = MediaItem("library://album/1", MediaKind.ALBUM, "Glass Rooms", "Fictional Band", null)
+        val r = Json.parseToJsonElement("""{"tracks":[
+            ${track("library://track/1", "Long Song (Parts I-V)", "Glass Rooms", "library://album/1", "Fictional Band")},
+            ${track("library://track/2", "Interlude", "Glass Rooms", "library://album/1", "Fictional Band")},
+            ${track("library://track/3", "Long Song (Parts VI-IX)", "Glass Rooms", "library://album/1", "Fictional Band")},
+            ${track("library://track/4", "Shine", "Glass Rooms", "library://album/1", "Fictional Band", version = "Part 1")},
+            ${track("library://track/5", "Shine", "Glass Rooms", "library://album/1", "Fictional Band", version = "Part 2")},
+            ${track("library://track/6", "Intro", "Glass Rooms", "library://album/1", "Fictional Band")},
+            ${track("library://track/7", "Intro (Reprise)", "Glass Rooms", "library://album/1", "Fictional Band")},
+            ${track("library://track/2", "Interlude", "Glass Rooms", "library://album/1", "Fictional Band")}
+        ]}""")
+        assertEquals(
+            listOf("Long Song (Parts I-V)", "Interlude", "Long Song (Parts VI-IX)", "Shine (Part 1)", "Shine (Part 2)", "Intro", "Intro (Reprise)"),
+            HaMusicDetail.parseAlbum(listOf(r), glass, image).tracks.map { it.name },
+        )
+    }
+
+    @Test
+    fun albumLeavesOutANamesakeAlbumOfAnotherArtist() {
+        val hits = MediaItem("library://album/1", MediaKind.ALBUM, "Greatest Hits", "Fictional Band", null)
+        val r = Json.parseToJsonElement("""{"tracks":[
+            ${track("spotify://track/a", "Song A", "Greatest Hits", "spotify://album/x", "Fictional Band")},
+            ${track("spotify://track/b", "Song B", "Greatest Hits", "spotify://album/y", "Other Band")},
+            ${track("library://track/c", "Song C", "Greatest Hits", "library://album/1", "Guest Singer")}
+        ]}""")
+        // Same uri: always this album (a guest's track); same name: only with one of its artists.
+        assertEquals(listOf("Song A", "Song C"), HaMusicDetail.parseAlbum(listOf(r), hits, image).tracks.map { it.name })
+    }
+
+    @Test
+    fun artistKeepsLiveVersionsOfASong() {
+        val band = MediaItem("library://artist/1", MediaKind.ARTIST, "Fictional Band", "", null)
+        val r = Json.parseToJsonElement("""{"tracks":[
+            ${track("library://track/1", "Copper Sky", "A", "library://album/1", "Fictional Band")},
+            ${track("library://track/2", "Copper Sky", "B", "library://album/2", "Fictional Band", version = "Live")},
+            ${track("library://track/3", "Copper Sky", "C", "library://album/3", "Fictional Band", version = "Remix")},
+            ${track("library://track/1", "Copper Sky", "A", "library://album/1", "Fictional Band")}
+        ]}""")
+        assertEquals(
+            listOf("Copper Sky", "Copper Sky (Live)", "Copper Sky (Remix)"),
+            HaMusicDetail.parseArtist(r, band, image).tracks.map { it.name },
+        )
     }
 
     @Test
@@ -99,7 +150,7 @@ class HaMusicBackendDetailTest {
         ha.answers["music_assistant.search"] = { MusicFixtures.json("detail_album_search.json") }
         ha.answers["music_assistant.get_library"] = { throw IllegalStateException("fictional failure") }
         val d = backend().detail(MediaItem("library://album/21", MediaKind.ALBUM, "Harbour Lights", "", null))
-        assertEquals(listOf("library://track/301", "library://track/303"), d.tracks.map { it.uri })
+        assertEquals(listOf("library://track/303", "library://track/301"), d.tracks.map { it.uri })
     }
 
     @Test

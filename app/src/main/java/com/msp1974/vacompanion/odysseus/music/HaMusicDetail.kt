@@ -4,7 +4,9 @@ package com.msp1974.vacompanion.odysseus.music
 // docs/odysseus/music.md "Library"). HA exposes no "albums of an artist" or "tracks of an album /
 // playlist" action, only `search` and `get_library`, so an artist's albums and tracks and an
 // album's tracks are found by name and then kept only when they really belong (the artist among
-// their artists, the album as their album; by uri or by name). Pure, unit-tested
+// their artists, by uri or by name; the album as their album by uri, or by name and one of the
+// album's artists). Kept in the order MA returns them: HA's MA answers carry no track or disc
+// numbers. Pure, unit-tested
 // (HaMusicDetailTest); HaMusicBackend.detail does the calls.
 
 import kotlinx.serialization.json.JsonArray
@@ -14,7 +16,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
@@ -41,7 +42,6 @@ object HaMusicDetail {
     private fun JsonElement?.obj(): JsonObject? = this as? JsonObject
     private fun JsonElement?.arr(): JsonArray? = this as? JsonArray
     private fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull
-    private fun JsonElement?.num(): Double? = (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.doubleOrNull
 
     private val TRAILING_VERSION = Regex("""\s*[(\[][^()\[\]]*[)\]]\s*$""")
 
@@ -109,14 +109,37 @@ object HaMusicDetail {
     fun byArtist(o: JsonObject, artist: MediaItem): Boolean =
         o["artists"].arr()?.any { sameAs(it.obj(), artist) } == true
 
-    /** True when [o]'s album is [album]. */
-    fun onAlbum(o: JsonObject, album: MediaItem): Boolean = sameAs(o["album"].obj(), album)
+    /**
+     * True when [o]'s album is [album]: the same uri, or the same loose name and one of [o]'s
+     * artists (or its album's) among the album's (its subtitle, MA's artists joined by ", "), so a
+     * namesake album ("Greatest Hits") of another artist isn't mixed in. An album without artists
+     * matches by name alone.
+     */
+    fun onAlbum(o: JsonObject, album: MediaItem): Boolean {
+        val ref = o["album"].obj() ?: return false
+        val uri = ref["uri"].str()
+        if (!uri.isNullOrBlank() && uri == album.uri) return true
+        if (!sameAs(ref, album)) return false
+        val albumArtists = artistNames(album.subtitle)
+        if (albumArtists.isEmpty()) return true
+        val theirs = (o["artists"].arr().orEmpty() + ref["artists"].arr().orEmpty())
+            .mapNotNull { norm(it.obj()?.get("name").str()).ifEmpty { null } }
+        return theirs.any { it in albumArtists }
+    }
 
-    /** Keeps the first of items with the same uri or the same loose name (library and provider copies). */
+    /** The loose names in a subtitle of artists joined by ", " (and the whole, for names with a comma). */
+    private fun artistNames(subtitle: String): Set<String> =
+        (subtitle.split(", ") + subtitle).map { norm(it) }.filter { it.isNotEmpty() }.toSet()
+
+    /**
+     * Keeps the first of items with the same uri or the same exact name (version included: "Intro"
+     * and "Intro (Reprise)", "Song (Live)" and "Song" are different items; a library and a provider
+     * copy of one are not).
+     */
     private fun distinct(items: List<MediaItem>): List<MediaItem> {
         val uris = HashSet<String>()
         val names = HashSet<String>()
-        return items.filter { uris.add(it.uri) && names.add(norm(it.name)) }
+        return items.filter { uris.add(it.uri) && names.add(it.name.trim().lowercase()) }
     }
 
     /** An artist's albums and tracks from an `artistCall` answer, in MA's order. */
@@ -134,17 +157,11 @@ object HaMusicDetail {
 
     /**
      * An album's tracks from the answers of `albumSearchCall` and `albumLibraryCall` (either may be
-     * missing): those on [album], disc and track order when MA gives the numbers, else as found.
+     * missing): those on [album], in the order found (HA's MA answers have no track numbers).
      */
     fun parseAlbum(responses: List<JsonElement>, album: MediaItem, image: (String) -> String?): MediaDetail {
         val found = responses.flatMap { r -> objects(r, "tracks") }.filter { onAlbum(it, album) }
-        val numbered = found.mapIndexed { i, o ->
-            Triple(o, (o["disc_number"].num() ?: 0.0) * 10_000 + (o["track_number"].num() ?: 0.0), i)
-        }
-        val ordered = if (found.any { it["track_number"].num() != null }) {
-            numbered.sortedWith(compareBy({ it.second }, { it.third })).map { it.first }
-        } else found
-        val tracks = ordered.mapNotNull { HaMusicJson.item(it, image) }.filter { it.kind == MediaKind.TRACK }
+        val tracks = found.mapNotNull { HaMusicJson.item(it, image) }.filter { it.kind == MediaKind.TRACK }
         return MediaDetail(tracks = distinct(tracks), listed = true)
     }
 }

@@ -284,7 +284,9 @@ object HaMusicJson {
         val out = linkedMapOf<MediaKind, List<MediaItem>>()
         for (kind in MediaKind.entries) {
             if (kind !in kinds) continue
-            out[kind] = o?.get(SEARCH_KEYS.getValue(kind)).arr()?.mapNotNull { item(it, image) }?.filter { it.kind == kind } ?: emptyList()
+            // One row per uri: the page keys its rows by kind and uri.
+            out[kind] = o?.get(SEARCH_KEYS.getValue(kind)).arr()?.mapNotNull { item(it, image) }
+                ?.filter { it.kind == kind }?.distinctBy { it.uri } ?: emptyList()
         }
         return out
     }

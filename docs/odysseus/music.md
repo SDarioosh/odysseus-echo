@@ -213,8 +213,11 @@ stay rows). Artists and albums open a detail view (Back, Play, More…).
 "tracks of" call. An artist is one `search` by its name (albums and tracks, 25 each), keeping
 items whose artists include it (uri or loose name, case and "(version)" ignored). An album is a
 `search` for tracks (50) plus `get_library` tracks with `search` = the album name (100), keeping
-tracks on that album, in disc and track order when MA gives the numbers. Limits: it may miss
-tracks or include a namesake. Playlists' tracks can't be listed through HA, so playlists (and
+tracks on that album: the same album uri, or the same loose name and one of the album's artists
+(so another artist's namesake album isn't mixed in). Items are listed once per uri and exact name
+with its version ("Intro" and "Intro (Reprise)", a song and its "(Live)" stay apart), in the order
+MA returns them: HA's MA answers carry no track or disc numbers. Limits: it may miss tracks, and
+a namesake album by the same artist is mixed in. Playlists' tracks can't be listed through HA, so playlists (and
 radio, podcasts, audiobooks) open the play menu.
 
 ### Search

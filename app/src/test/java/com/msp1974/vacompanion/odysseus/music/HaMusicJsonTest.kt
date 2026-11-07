@@ -174,6 +174,16 @@ class HaMusicJsonTest {
     }
 
     @Test
+    fun searchListsEachUriOnce() {
+        val r = HaMusicJson.parseSearch(Json.parseToJsonElement("""{"tracks":[
+            {"media_type":"track","uri":"library://track/1","name":"Lantern Song"},
+            {"media_type":"track","uri":"library://track/1","name":"Lantern Song"},
+            {"media_type":"track","uri":"library://track/2","name":"Lantern Song","version":"Live"}]}"""),
+            setOf(MediaKind.TRACK), hub)
+        assertEquals(listOf("library://track/1", "library://track/2"), r[MediaKind.TRACK]!!.map { it.uri })
+    }
+
+    @Test
     fun parsesTheQueue() {
         val q = HaMusicJson.parseQueue(MusicFixtures.json("queue.json"), "media_player.kitchen_echo", hub)!!
         assertEquals(42, q.count)

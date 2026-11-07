@@ -57,11 +57,10 @@ fun rememberRoomArt(state: PlayerState?): Bitmap? {
     val url = state?.artUrl
     val loader = MusicRepository.imageBytes
     val loaded by produceState(url?.let { MusicArt.cache.get(it) }, url, loader) {
-        if (url == null || loader == null) {
-            value = null
-            return@produceState
-        }
-        MusicArt.cache.get(url)?.let { value = it; return@produceState }
+        // Never the previous room's or track's art while the new one loads: the cached image or
+        // none (then the state's own artwork or the placeholder).
+        value = url?.let { MusicArt.cache.get(it) }
+        if (url == null || loader == null || value != null) return@produceState
         value = MusicArt.load(url, loader)
     }
     return loaded ?: state?.artwork

@@ -93,6 +93,8 @@ turns the app's processing off by default and sends the front-end's audio as it 
 
 ## adb commands (fresh device)
 
+Setting up another new Echo? Follow [new-echo-runbook.md](new-echo-runbook.md): the steps below in order, with checks, for an agent.
+
 If more than one device is attached, use `adb -s <serial>`. Everything below can be undone with adb (undo column). Steps 12–20 are
 scripted in `scripts/odysseus/setup_device.sh`. `P=com.msp1974.vacompanion.odysseus`.
 

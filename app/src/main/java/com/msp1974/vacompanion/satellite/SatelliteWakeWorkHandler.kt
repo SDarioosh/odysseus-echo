@@ -208,8 +208,13 @@ abstract class SatelliteWakeWorkHandler(
                                         rawLevel?.let { l -> config.wakeLevelCalibration.addReading(l) }
                                         Timber.i("Wake level calibration reading: raw ${rawLevel?.let { l -> "%.1f".format(l) }} dBFS")
                                         detectionCooldowns[it.detection.wakeWordId] = now
+                                    } else if (com.msp1974.vacompanion.odysseus.wakeword.WakeClips.isTraining) {
+                                        // Fork: a training take, not a wake (odysseus/wakeword/WakeClips.kt)
+                                        com.msp1974.vacompanion.odysseus.wakeword.WakeClips.onWake(it.detection.score)
+                                        detectionCooldowns[it.detection.wakeWordId] = now
                                     } else {
                                         Timber.i("Wake word detected: ${it.detection.wakeWord} (mic level $levelText)")
+                                        com.msp1974.vacompanion.odysseus.wakeword.WakeClips.onWake(it.detection.score) // Fork: missed-wake clips (odysseus/wakeword/WakeClips.kt)
                                         wakeWordDetected(it.detection)
                                         detectionCooldowns[it.detection.wakeWordId] = now
                                     }

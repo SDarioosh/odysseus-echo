@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -38,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -69,6 +71,14 @@ private val FLICK_VELOCITY = 800.dp
 
 /** A two-finger swipe up longer than this opens the menu. */
 private val MENU_SWIPE_DISTANCE = 100.dp
+
+/**
+ * Where the page strip is now (in page widths, page i = i, the dashboard -1), for a page that
+ * should stay idle while it is only composed beside the one shown (MusicPage); null outside
+ * HomeHost (e.g. a screenshot of one page). Read it in a derivedStateOf: it changes every frame
+ * of a swipe.
+ */
+val LocalHomeStripPosition = staticCompositionLocalOf<(() -> Float)?> { null }
 
 private fun HomeDestination.position(): Float = when (this) {
     HomeDestination.Dashboard -> -1f
@@ -174,6 +184,8 @@ private fun PageLayer(context: HomePageContext, onOpenMenu: () -> Unit) {
     // The pages within one width of the strip's position: at most two at a time.
     val firstVisible by remember { derivedStateOf { floor(offset.value).toInt() } }
 
+    val stripPosition: () -> Float = remember(offset) { { offset.value } }
+
     val touchSlop = LocalViewConfiguration.current.touchSlop
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val widthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
@@ -247,7 +259,9 @@ private fun PageLayer(context: HomePageContext, onOpenMenu: () -> Unit) {
                             // Opaque, so the dashboard never shows through a page.
                             .background(MaterialTheme.colorScheme.background)
                     ) {
-                        page.Content(context, Modifier.fillMaxSize())
+                        CompositionLocalProvider(LocalHomeStripPosition provides stripPosition) {
+                            page.Content(context, Modifier.fillMaxSize())
+                        }
                     }
                 }
             }

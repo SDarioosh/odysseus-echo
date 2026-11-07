@@ -8,6 +8,9 @@ package com.msp1974.vacompanion.odysseus.home.music
 // px, 960×480 dp at mdpi) with up to four tabs on the rail, and for tablets (1280×800 and up): from
 // 1100×600 dp a compact Now playing for the selected room stays on the right beside every tab but
 // Playing (MusicLayout). The page doesn't scroll or drag horizontally: HomeHost owns horizontal swipes.
+// HomeHost also composes the page beside the one shown (e.g. while the clock shows): it then draws
+// only the rail on an empty surface and follows no player (MusicPageLive), so nothing watches Home
+// Assistant off-screen. The tabs come in as soon as a swipe or goTo moves the strip towards it.
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -36,6 +39,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,10 +52,15 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.msp1974.vacompanion.odysseus.home.HomeDestination
 import com.msp1974.vacompanion.odysseus.home.HomePage
 import com.msp1974.vacompanion.odysseus.home.HomePageContext
+import com.msp1974.vacompanion.odysseus.home.HomePages
+import com.msp1974.vacompanion.odysseus.home.HomeScreenController
+import com.msp1974.vacompanion.odysseus.home.LocalHomeStripPosition
 import com.msp1974.vacompanion.odysseus.music.MusicRepository
 import com.msp1974.vacompanion.odysseus.music.MusicSettings
+import kotlin.math.abs
 
 /**
  * The home screen's [HomePageContext] inside the Music page, for its tabs (their content takes
@@ -64,6 +73,25 @@ val LocalHomePageContext = compositionLocalOf { HomePageContext() }
  * room only selects it (the pane shows it) instead of switching to the Playing tab.
  */
 val LocalMusicSidePane = compositionLocalOf { false }
+
+/**
+ * When the Music page draws its tabs (and so follows Home Assistant): while it is where the home
+ * screen is going, or at least [MIN_VISIBLE] of it is on screen. Composed beside the page shown
+ * but out of sight, it draws only a placeholder. Pure (MusicPageLiveTest).
+ */
+object MusicPageLive {
+    /** The share of the page that must be on screen: a few pixels of a swipe bring it in. */
+    const val MIN_VISIBLE = 0.02f
+
+    /**
+     * [isDestination]: the home screen is on (or going to) the page. [stripPosition]: HomeHost's
+     * strip (LocalHomeStripPosition), null outside HomeHost (always live). [pageIndex]: the page's
+     * place in HomePages.all, -1 when it isn't there (live).
+     */
+    fun isLive(isDestination: Boolean, stripPosition: Float?, pageIndex: Int): Boolean =
+        isDestination || stripPosition == null || pageIndex < 0 ||
+            1f - abs(stripPosition - pageIndex) >= MIN_VISIBLE
+}
 
 private val RAIL_WIDTH = 88.dp
 private val RAIL_ITEM_HEIGHT = 76.dp
@@ -86,6 +114,23 @@ object MusicPage : HomePage {
 
     @Composable
     override fun Content(context: HomePageContext, modifier: Modifier) {
+        // Only beside the page shown, out of sight: the rail on an empty surface, no player followed.
+        val index = HomePages.all.indexOf(this)
+        val position = LocalHomeStripPosition.current
+        val live by remember(position, index) {
+            derivedStateOf {
+                MusicPageLive.isLive(HomeScreenController.destination == HomeDestination.Page(index), position?.invoke(), index)
+            }
+        }
+        if (!live) {
+            Row(modifier.fillMaxSize()) { Rail(MusicTabs.selected.id) }
+            return
+        }
+        LiveContent(context, modifier)
+    }
+
+    @Composable
+    private fun LiveContent(context: HomePageContext, modifier: Modifier) {
         // "Plays here": Sendspin plays, or this device's MA player says it plays.
         val self = rememberPlayerState(MusicRepository.selfRoom?.entityId)
         val playing = (context.nowPlaying.active && context.nowPlaying.playing) || self?.playing == true

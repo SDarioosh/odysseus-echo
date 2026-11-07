@@ -105,4 +105,32 @@ class SelfPlayerTest {
         assertNull(matchSelf(null, uuid, "", null, all))
         assertNull(matchSelf(clientId, uuid, "Kitchen", null, emptyList()))
     }
+
+    // Two Echos in one area: the AREA guess never claims the other one's Sendspin player.
+    private val otherKey = "Q2xhc3NpY2FsLWZpY3Rpb25hbC1rZXktb2YtZWNoby1B".take(43)
+
+    @Test
+    fun areaGuessSkipsAnotherEchosSendspinPlayer() {
+        assertEquals(43, otherKey.length)
+        val echoA = c("echo_a", "Echo A", "Kitchen", playerId = otherKey)
+        assertNull(matchSelf("this-echos-new-key", uuid, "Kitchen", null, listOf(echoA)))
+        val legacyA = c("echo_a", "Echo A", "Kitchen", playerId = "vaca-another-uuid")
+        assertNull(matchSelf(null, uuid, "Kitchen", null, listOf(legacyA)))
+        val namedA = c("echo_a", "VACA another-uuid Sendspin Player", "Kitchen", playerId = "ma_x")
+        assertNull(matchSelf(null, uuid, "Kitchen", null, listOf(namedA)))
+        // With a speaker beside it, the speaker is the one guess.
+        val speaker = c("kitchen_speaker", "Kitchen Speaker", "Kitchen", playerId = "ma_kitchen01")
+        assertEquals(
+            SelfMatch("media_player.kitchen_speaker", How.AREA),
+            matchSelf("this-echos-new-key", uuid, "Kitchen", null, listOf(echoA, speaker)),
+        )
+    }
+
+    @Test
+    fun otherVacaPlayerShapes() {
+        assertTrue(isOtherVacaPlayer(c("a", playerId = otherKey), emptySet()))
+        assertFalse(isOtherVacaPlayer(c("a", playerId = otherKey), setOf(otherKey)))
+        assertFalse(isOtherVacaPlayer(c("a", "Kitchen Speaker", playerId = "ma_kitchen01"), emptySet()))
+        assertFalse(isOtherVacaPlayer(c("a", "Kitchen Speaker"), emptySet()))
+    }
 }

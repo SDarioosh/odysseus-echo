@@ -47,10 +47,31 @@ fun matchSelf(clientId: String?, uuid: String, area: String?, override: String?,
             return SelfMatch(it.entityId, How.NAME, stale)
         }
     }
-    // 4. A guess: the one single player in this device's area.
+    // 4. A guess: the one single player in this device's area that isn't another VACA device's.
     if (!area.isNullOrBlank()) {
-        candidates.filter { it.type == "player" && it.area.trim().equals(area.trim(), ignoreCase = true) }
-            .singleOrNull()?.let { return SelfMatch(it.entityId, How.AREA, stale) }
+        val mine = setOfNotNull(clientId?.takeIf { it.isNotBlank() }, uuid.takeIf { it.isNotBlank() }?.let(::legacyPlayerId))
+        candidates.filter {
+            it.type == "player" && it.area.trim().equals(area.trim(), ignoreCase = true) &&
+                !isOtherVacaPlayer(it, mine)
+        }.singleOrNull()?.let { return SelfMatch(it.entityId, How.AREA, stale) }
     }
     return null
+}
+
+private val VACA_NAME = Regex("""VACA .+ Sendspin Player""", RegexOption.IGNORE_CASE)
+private val SENDSPIN_KEY_ID = Regex("""[A-Za-z0-9_-]{43}""")
+private val LEGACY_ID = Regex("""vaca-.+""")
+
+/**
+ * True when [c] looks like another VACA device's Sendspin player, so the AREA guess doesn't claim
+ * it (two Echos in one room): MA's default name for one (`VACA <uuid> Sendspin Player`), or a
+ * `music_assistant` id shaped like a Sendspin client id (43 characters of base64url, derived from
+ * the device key) or the legacy `vaca-<uuid>`, other than this device's own ids [mine]. Other MA
+ * players have `music_assistant` ids too (e.g. MA's own player ids), which are not of that shape.
+ */
+fun isOtherVacaPlayer(c: Candidate, mine: Set<String>): Boolean {
+    val maIds = c.ids.filter { it.size >= 2 && it[0] == MA_DOMAIN }.map { it[1] }
+    if (maIds.any { it in mine }) return false
+    return VACA_NAME.matches(c.name.trim()) ||
+        maIds.any { SENDSPIN_KEY_ID.matches(it) || LEGACY_ID.matches(it) }
 }

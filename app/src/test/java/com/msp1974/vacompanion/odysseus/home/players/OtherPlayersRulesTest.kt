@@ -59,6 +59,33 @@ class OtherPlayersRulesTest {
         assertEquals("off", tv.repeat)
     }
 
+    /** The answer a real Home Assistant (2026.2) gave to PLAYERS_TEMPLATE for fictional players. */
+    @Test
+    fun parsesARealHomeAssistantAnswer() {
+        val json = """{"now": 1794017529.342714, "players": [
+            {"album": "Demo Album", "area": null, "artist": "Demo Band", "changed": 1794017524.052082,
+             "duration": 215, "features": 4127295, "id": "media_player.kitchen", "ma": true,
+             "name": "Kitchen speaker", "picture": "/api/media_player_proxy/media_player.kitchen?token=abc&cache=1",
+             "position": 42, "position_at": 1794017524.0, "repeat": "all", "shuffle": false,
+             "state": "playing", "title": "Fictional Song"},
+            {"album": null, "area": null, "artist": null, "changed": 1794017524.058815, "duration": null,
+             "features": 16437, "id": "media_player.office", "ma": false, "name": "Office", "picture": null,
+             "position": null, "position_at": null, "repeat": null, "shuffle": null, "state": "paused",
+             "title": "Another Song"},
+            {"album": null, "area": null, "artist": null, "changed": 1794017524.073189, "duration": null,
+             "features": 0, "id": "media_player.bare", "ma": false, "name": "bare", "picture": null,
+             "position": null, "position_at": null, "repeat": null, "shuffle": null, "state": "playing",
+             "title": null}
+        ]}"""
+        val s = OtherPlayersRules.parse(Json.parseToJsonElement(json))!!
+        assertEquals(listOf("media_player.kitchen", "media_player.office"), OtherPlayersRules.candidates(s, "").map { it.entityId })
+        val kitchen = OtherPlayersRules.pick(s, "", "")!!
+        val np = OtherPlayersRules.toNowPlaying(kitchen, s.haNow, 0L, "http://ha.local:8123")
+        assertEquals(47_342L, np.positionMs)
+        assertTrue(setOf("play", "pause", "next", "previous", "shuffle", "repeat_all").all { it in np.commands })
+        assertEquals(setOf("play", "pause", "previous", "next"), OtherPlayersRules.commands(s.players[1]))
+    }
+
     @Test
     fun parseRejectsOtherShapes() {
         assertNull(OtherPlayersRules.parse(Json.parseToJsonElement("[]")))

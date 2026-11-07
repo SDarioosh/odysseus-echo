@@ -6,9 +6,9 @@ package com.msp1974.vacompanion.odysseus.home.weather
 //   POST /api/services/weather/get_forecasts?return_response  today's high and low
 // HTTP goes through HaHttp so it is unit-tested with a fake (WeatherClientTest).
 
-import com.msp1974.vacompanion.odysseus.HaHttp
-import com.msp1974.vacompanion.odysseus.HaResponse
-import com.msp1974.vacompanion.odysseus.UrlConnectionHaHttp
+import com.msp1974.vacompanion.odysseus.ha.HaHttp
+import com.msp1974.vacompanion.odysseus.ha.HaResponse
+import com.msp1974.vacompanion.odysseus.ha.UrlConnectionHaHttp
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject

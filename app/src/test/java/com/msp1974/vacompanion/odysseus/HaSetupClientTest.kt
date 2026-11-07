@@ -1,5 +1,7 @@
 package com.msp1974.vacompanion.odysseus
 
+import com.msp1974.vacompanion.odysseus.ha.HaHttp
+import com.msp1974.vacompanion.odysseus.ha.HaResponse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

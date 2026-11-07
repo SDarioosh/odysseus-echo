@@ -9,6 +9,7 @@ package com.msp1974.vacompanion.odysseus.home.clock
 // the list, so turning one on brings it back where it was. Presets are complete styles; picking
 // one replaces the current style, and any change after that is kept as the user's own.
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -129,12 +130,25 @@ data class ClockTheme(
     val dim: Float = 1f,
 )
 
+/**
+ * Where the clock's now-playing element (and the cover-art background) takes its music from:
+ * this device's own Sendspin player, or the Music page's selected room (MusicRepository). Stored
+ * as "device" / "room"; anything else reads as [DEVICE].
+ */
+@Serializable
+enum class NowPlayingSource(val label: String) {
+    @SerialName("device") DEVICE("This device"),
+    @SerialName("room") ROOM("Selected room"),
+}
+
 @Serializable
 data class ClockStyle(
     /** The preset this style started from. */
     val preset: String = ClockPresets.CLASSIC,
     val theme: ClockTheme = ClockTheme(useAppColors = true),
     val elements: List<ClockElement> = emptyList(),
+    /** "Now playing from" (a device choice more than a look: kept when a preset is picked). */
+    val nowPlayingFrom: NowPlayingSource = NowPlayingSource.DEVICE,
 ) {
     fun element(type: ElementType): ClockElement = elements.firstOrNull { it.type == type } ?: ClockElement(type, visible = false)
 
@@ -152,8 +166,12 @@ data class ClockStyle(
         return copy(elements = list)
     }
 
-    /** Same as its preset (nothing changed since it was picked). */
-    val isPresetUnchanged: Boolean get() = ClockPresets.byId(preset)?.let { normalized(it) == this } ?: false
+    /** Same as its preset (nothing changed since it was picked). "Now playing from" doesn't count. */
+    val isPresetUnchanged: Boolean
+        get() = ClockPresets.byId(preset)?.let { normalized(it).copy(nowPlayingFrom = nowPlayingFrom) == this } ?: false
+
+    /** [preset] (picked in the settings, or the night look) with this style's "Now playing from" kept. */
+    fun keepingSourceIn(preset: ClockStyle): ClockStyle = preset.copy(nowPlayingFrom = nowPlayingFrom)
 
     companion object {
         /** Every element type exactly once (first entry wins); missing ones are added hidden. */

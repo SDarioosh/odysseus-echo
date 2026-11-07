@@ -14,7 +14,8 @@ class ManagedKeysTest {
                 "home.enabled": true, "home.idle_seconds": 0, "home.weather_enabled": false,
                 "today.enabled": true, "kiosk.return_seconds": 600, "kiosk.auto_reload": false,
                 "record.enabled": true, "record.clock_button": false, "record.privacy_button": "mute",
-                "followup.enabled": true, "followup.seconds": 8}}""",
+                "followup.enabled": true, "followup.seconds": 8,
+                "music.enabled": false, "music.stay_while_playing": true}}""",
         )!!
         assertEquals(7L, r.version)
         assertEquals(ManagedKeys.all.keys, r.values.keys)
@@ -22,6 +23,8 @@ class ManagedKeysTest {
         assertEquals(600, r.values["kiosk.return_seconds"])
         assertEquals("mute", r.values["record.privacy_button"])
         assertEquals(false, r.values["kiosk.auto_reload"])
+        assertEquals(false, r.values["music.enabled"])
+        assertEquals(true, r.values["music.stay_while_playing"])
         assertTrue(r.ignored.isEmpty())
     }
 

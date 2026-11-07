@@ -100,13 +100,13 @@ fun ClockStyleSettingsSection(enabled: Boolean) {
             val selected = style.preset == p.preset
             FilterChip(
                 selected = selected, enabled = enabled,
-                onClick = { HomeSettings.clockStyle = p },
+                onClick = { HomeSettings.clockStyle = style.keepingSourceIn(p) },
                 label = { Text(ClockPresets.label(p.preset) + if (selected && !style.isPresetUnchanged) " (changed)" else "") },
             )
         }
     }
     if (!style.isPresetUnchanged) {
-        OutlinedButton(enabled = enabled, onClick = { ClockPresets.byId(style.preset)?.let { HomeSettings.clockStyle = it } }) {
+        OutlinedButton(enabled = enabled, onClick = { ClockPresets.byId(style.preset)?.let { HomeSettings.clockStyle = style.keepingSourceIn(it) } }) {
             Text("Undo my changes to ${ClockPresets.label(style.preset)}")
         }
     }
@@ -132,6 +132,23 @@ fun ClockStyleSettingsSection(enabled: Boolean) {
     ColorRow("Accent", theme.accent, enabled) { c -> setColor { it.copy(accent = c!!) } }
     ColorRow("Cards", theme.panel, enabled) { c -> setColor { it.copy(panel = c!!) } }
 
+    Label("Now playing from")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        NowPlayingSource.entries.forEach { src ->
+            FilterChip(
+                selected = style.nowPlayingFrom == src, enabled = enabled,
+                onClick = { update { it.copy(nowPlayingFrom = src) } }, label = { Text(src.label) },
+            )
+        }
+    }
+    Text(
+        if (style.nowPlayingFrom == NowPlayingSource.ROOM) {
+            "The room chosen on the Music page (Music Assistant through Home Assistant), e.g. the kitchen's music on a tablet that plays none itself."
+        } else {
+            "What this device plays itself (Sendspin)."
+        },
+        fontSize = 13.sp, color = colors.onSurfaceVariant,
+    )
     Row(verticalAlignment = Alignment.CenterVertically) {
         Switch(checked = theme.artworkBackground, enabled = enabled, onCheckedChange = { v -> updateTheme { it.copy(artworkBackground = v) } })
         Text("Cover art as the background while music plays", fontSize = 15.sp, color = colors.onSurface, modifier = Modifier.padding(start = 14.dp))

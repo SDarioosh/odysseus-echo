@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,13 +32,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -74,12 +71,8 @@ import com.msp1974.vacompanion.odysseus.player.BarPlayer
 import com.msp1974.vacompanion.odysseus.player.FullPlayer
 import com.msp1974.vacompanion.odysseus.player.LinePlayer
 import com.msp1974.vacompanion.odysseus.player.MiniPlayer
-import com.msp1974.vacompanion.odysseus.player.OnControl
 import com.msp1974.vacompanion.odysseus.player.PillPlayer
 import com.msp1974.vacompanion.odysseus.player.RowPlayer
-import com.msp1974.vacompanion.odysseus.player.commandFor
-import com.msp1974.vacompanion.odysseus.player.toPlayerState
-import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -96,17 +89,14 @@ data class ClockFrame(
     val baseTimeSize: TextUnit,
     val nowMs: Long,
     val is24h: Boolean,
-    val artwork: Bitmap?,
+    /** The now-playing element's music, from the style's source (ClockNowPlaying.kt). */
+    val music: ClockMusicShown = ClockMusicShown(false, ClockMusic.NONE),
 ) {
     val today: TodayData? get() = (page.today as? TodayView.Ready)?.data
 }
 
 /** Text alignment for multi-line elements: follows the column of their anchor. */
 private val LocalClockAlign = compositionLocalOf { TextAlign.Center }
-
-// A pause normally ends the Sendspin stream, so the track lingers a while to let it be resumed
-// (same as ui/components/NowPlayingOverlay.kt).
-private const val PAUSED_LINGER_MS = 20_000L
 
 private fun TextUnit.times(f: Float): TextUnit = (value * f).sp
 
@@ -307,56 +297,36 @@ fun rememberArtwork(nowPlaying: SendspinNowPlaying): Bitmap? {
 }
 
 /**
- * Shows [content] while a track plays, keeps it dimmed as "Paused" for a while after the stream
- * stops, then animates it away (as the original clock did).
+ * The now-playing element in the look [element] asks for, over [ClockFrame.music] (this device's
+ * Sendspin player or the selected room): shown while a track plays, kept dimmed as "Paused" for a
+ * while after it stops, then animated away (as the original clock did). A tap beside its buttons
+ * opens the Music page while it's offered.
  */
 @Composable
-private fun Lingering(nowPlaying: SendspinNowPlaying, content: @Composable (SendspinNowPlaying) -> Unit) {
-    var visible by remember { mutableStateOf(nowPlaying.active && nowPlaying.hasContent) }
-    LaunchedEffect(nowPlaying.active, nowPlaying.hasContent) {
-        if (nowPlaying.active && nowPlaying.hasContent) {
-            visible = true
-        } else {
-            delay(PAUSED_LINGER_MS)
-            visible = false
-        }
-    }
-    var shown by remember { mutableStateOf(nowPlaying) }
-    shown = if (nowPlaying.hasContent) nowPlaying else shown.copy(active = false, playing = false)
+private fun NowPlayingElement(element: ClockElement, frame: ClockFrame) {
+    val shown = frame.music
     AnimatedVisibility(
-        visible = visible && shown.hasContent,
+        visible = shown.visible,
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
     ) {
-        Box(Modifier.alpha(if (shown.active) 1f else 0.6f)) { content(shown) }
-    }
-}
-
-@Composable
-fun nowPlayingVisible(nowPlaying: SendspinNowPlaying): Boolean {
-    var visible by remember { mutableStateOf(nowPlaying.active && nowPlaying.hasContent) }
-    LaunchedEffect(nowPlaying.active, nowPlaying.hasContent) {
-        if (nowPlaying.active && nowPlaying.hasContent) visible = true else { delay(PAUSED_LINGER_MS); visible = false }
-    }
-    return visible
-}
-
-@Composable
-private fun NowPlayingElement(element: ClockElement, frame: ClockFrame) {
-    val onCommand = frame.page.onSendspinCommand
-    Lingering(frame.page.nowPlaying) { np ->
-        // The shared player pieces (odysseus/player/) over the neutral state; their controls go
-        // back as the same Sendspin commands. "Paused" follows Sendspin's stream, as before.
-        val state = np.toPlayerState()
-        val onControl: OnControl = { control, value -> np.commandFor(control, value)?.let(onCommand) }
-        val paused = !np.active
-        when (element.style) {
-            Variants.NP_PILL -> PillPlayer(state, frame.artwork, onControl, element.scale, paused)
-            Variants.NP_MINI -> MiniPlayer(state, frame.artwork, onControl, element.scale, paused)
-            Variants.NP_LINE -> LinePlayer(state, onControl, element.scale, paused)
-            Variants.NP_BAR -> BarPlayer(state, onControl, paused) { BarCounts(frame) }
-            Variants.NP_FULL -> FullPlayer(state, frame.artwork, onControl, element.scale, paused)
-            else -> RowPlayer(state, frame.artwork, onControl, paused)
+        val music = shown.music
+        val state = music.state ?: return@AnimatedVisibility
+        val paused = !music.active
+        val open = music.onOpen
+        Box(
+            Modifier
+                .alpha(if (music.active) 1f else 0.6f)
+                .then(if (open != null) Modifier.clickable(onClickLabel = "Open the Music page", onClick = open) else Modifier),
+        ) {
+            when (element.style) {
+                Variants.NP_PILL -> PillPlayer(state, music.artwork, music.onControl, element.scale, paused)
+                Variants.NP_MINI -> MiniPlayer(state, music.artwork, music.onControl, element.scale, paused)
+                Variants.NP_LINE -> LinePlayer(state, music.onControl, element.scale, paused)
+                Variants.NP_BAR -> BarPlayer(state, music.onControl, paused) { BarCounts(frame) }
+                Variants.NP_FULL -> FullPlayer(state, music.artwork, music.onControl, element.scale, paused, music.clock)
+                else -> RowPlayer(state, music.artwork, music.onControl, paused)
+            }
         }
     }
 }

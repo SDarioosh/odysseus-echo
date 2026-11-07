@@ -102,6 +102,12 @@ event, counts; plain Kotlin), `ClockTheming.kt` (hands the style's colours and t
 `MaterialTheme`, so shared pieces like the weather badge and the Done rows follow it; the
 background, with the cover art blurred by drawing a 12×12 copy scaled up, since Android 11 has no
 blur effect), `ClockElements.kt` (one composable per element) and `ClockStyleSettingsSection.kt`.
+The now-playing looks are the shared player pieces of `odysseus/player/` (`RowPlayer`, `PillPlayer`,
+`MiniPlayer`, `LinePlayer`, `BarPlayer`, `FullPlayer`, built from `Artwork`, `Transport`,
+`TitleArtist`, `Progress`), drawn over the neutral `music/PlayerState`: `ClockElements` turns the
+Sendspin state into one (`toPlayerState`) and sends their controls back as the same Sendspin
+commands (`commandFor`); it keeps the clock's own parts, `rememberArtwork`, `nowPlayingVisible`
+and the 20 s "Paused" linger.
 `ClockPage` lays the elements out in three full-height columns (left, middle, right): each
 column's top elements, then its middle ones centred in the space left, then its bottom ones, so
 elements on the same side never overlap (a column that is too full pushes its bottom ones off the
@@ -256,6 +262,7 @@ animation need no change.
 | `odysseus/home/clock/ClockToday.kt` | next event, open counts, headline for the clock. Plain Kotlin |
 | `odysseus/home/clock/ClockTheming.kt` | fonts, colours handed to Material, the background |
 | `odysseus/home/clock/ClockElements.kt` | one composable per element and look |
+| `odysseus/player/` | the shared player pieces over `music/PlayerState`, Sendspin mapping, `PlayerMetrics`, `VolumeBar`, `RoomChip` |
 | `odysseus/home/clock/NightRules.kt`, `NightMode.kt` | the night look: when (plain Kotlin), light sensor, backlight |
 | `odysseus/home/clock/ClockStyleSettingsSection.kt` | Menu → Odysseus → Home screen → Clock style |
 | `res/font/clock_*.ttf` | the clock fonts (SIL OFL, `assets/licenses/*-OFL.txt`) |

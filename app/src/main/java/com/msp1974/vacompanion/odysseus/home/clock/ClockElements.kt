@@ -10,10 +10,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,23 +26,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -52,12 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -86,6 +70,15 @@ import com.msp1974.vacompanion.odysseus.home.weather.WeatherNow
 import com.msp1974.vacompanion.odysseus.home.weather.drawableFor
 import com.msp1974.vacompanion.sendspin.SendspinArtwork
 import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
+import com.msp1974.vacompanion.odysseus.player.BarPlayer
+import com.msp1974.vacompanion.odysseus.player.FullPlayer
+import com.msp1974.vacompanion.odysseus.player.LinePlayer
+import com.msp1974.vacompanion.odysseus.player.MiniPlayer
+import com.msp1974.vacompanion.odysseus.player.OnControl
+import com.msp1974.vacompanion.odysseus.player.PillPlayer
+import com.msp1974.vacompanion.odysseus.player.RowPlayer
+import com.msp1974.vacompanion.odysseus.player.commandFor
+import com.msp1974.vacompanion.odysseus.player.toPlayerState
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.time.Instant
@@ -348,231 +341,33 @@ fun nowPlayingVisible(nowPlaying: SendspinNowPlaying): Boolean {
     return visible
 }
 
-private fun subtitle(np: SendspinNowPlaying) = listOfNotNull(
-    np.artist.takeIf { it.isNotBlank() }, "Paused".takeIf { !np.active },
-).joinToString(" · ")
-
 @Composable
 private fun NowPlayingElement(element: ClockElement, frame: ClockFrame) {
     val onCommand = frame.page.onSendspinCommand
     Lingering(frame.page.nowPlaying) { np ->
+        // The shared player pieces (odysseus/player/) over the neutral state; their controls go
+        // back as the same Sendspin commands. "Paused" follows Sendspin's stream, as before.
+        val state = np.toPlayerState()
+        val onControl: OnControl = { control, value -> np.commandFor(control, value)?.let(onCommand) }
+        val paused = !np.active
         when (element.style) {
-            Variants.NP_PILL -> PillPlayer(np, frame.artwork, onCommand, element.scale)
-            Variants.NP_MINI -> MiniPlayer(np, frame.artwork, onCommand, element.scale)
-            Variants.NP_LINE -> LinePlayer(np, onCommand, element.scale)
-            Variants.NP_BAR -> BarPlayer(np, onCommand, frame)
-            Variants.NP_FULL -> FullPlayer(np, frame.artwork, onCommand, element.scale)
-            else -> RowPlayer(np, frame.artwork, onCommand)
+            Variants.NP_PILL -> PillPlayer(state, frame.artwork, onControl, element.scale, paused)
+            Variants.NP_MINI -> MiniPlayer(state, frame.artwork, onControl, element.scale, paused)
+            Variants.NP_LINE -> LinePlayer(state, onControl, element.scale, paused)
+            Variants.NP_BAR -> BarPlayer(state, onControl, paused) { BarCounts(frame) }
+            Variants.NP_FULL -> FullPlayer(state, frame.artwork, onControl, element.scale, paused)
+            else -> RowPlayer(state, frame.artwork, onControl, paused)
         }
     }
 }
 
+/** The open counts at the far end of the now-playing bar. */
 @Composable
-private fun Artwork(bitmap: Bitmap?, size: Dp, shape: Shape) {
-    Box(
-        modifier = Modifier.size(size).clip(shape).background(MaterialTheme.colorScheme.secondaryContainer),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap.asImageBitmap(), contentDescription = "Album artwork",
-                contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize(),
-            )
-        } else {
-            Icon(
-                Icons.Rounded.MusicNote, contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(size * 0.5f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun Transport(np: SendspinNowPlaying, onCommand: (String) -> Unit, size: Dp = 24.dp, skips: Boolean = true, tint: Color = MaterialTheme.colorScheme.onBackground) {
-    val paused = !np.active || !np.playing
-    if (skips) SkipButton(Icons.Rounded.SkipPrevious, "Previous track", "previous" in np.commands, size, tint) { onCommand("previous") }
-    val command = if (paused) "play" else "pause"
-    if (command in np.commands) {
-        IconButton(onClick = { onCommand(command) }) {
-            Icon(
-                if (paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
-                contentDescription = if (paused) "Play" else "Pause", tint = tint, modifier = Modifier.size(size),
-            )
-        }
-    }
-    if (skips) SkipButton(Icons.Rounded.SkipNext, "Next track", "next" in np.commands, size, tint) { onCommand("next") }
-}
-
-@Composable
-private fun SkipButton(icon: ImageVector, description: String, enabled: Boolean, size: Dp, tint: Color, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled) {
-        Icon(icon, contentDescription = description, tint = tint.copy(alpha = if (enabled) 1f else 0.38f), modifier = Modifier.size(size))
-    }
-}
-
-@Composable
-private fun TitleArtist(np: SendspinNowPlaying, titleSize: TextUnit, artistSize: TextUnit, modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
-    Column(modifier) {
-        Text(
-            np.title.ifBlank { "Unknown track" }, fontSize = titleSize, fontWeight = FontWeight.Medium,
-            color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
-        val sub = subtitle(np)
-        if (sub.isNotEmpty()) {
-            Text(sub, fontSize = artistSize, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-/** The original clock's row: artwork, title and artist, previous / play-pause / next. */
-@Composable
-private fun RowPlayer(np: SendspinNowPlaying, art: Bitmap?, onCommand: (String) -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(top = 16.dp).widthIn(max = 480.dp).fillMaxWidth(),
-    ) {
-        Artwork(art, 56.dp, RoundedCornerShape(8.dp))
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                np.title.ifBlank { "Unknown track" }, style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-            val sub = subtitle(np)
-            if (sub.isNotEmpty()) {
-                Text(
-                    sub, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Transport(np, onCommand)
-    }
-}
-
-@Composable
-private fun PillPlayer(np: SendspinNowPlaying, art: Bitmap?, onCommand: (String) -> Unit, s: Float) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .widthIn(max = (300 * s).dp)
-            .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.09f), RoundedCornerShape(50))
-            .padding(start = 6.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-    ) {
-        Artwork(art, (42 * s).dp, CircleShape)
-        Spacer(Modifier.width(12.dp))
-        TitleArtist(np, 16.sp.times(s), 13.sp.times(s), Modifier.weight(1f, fill = false))
-        Transport(np, onCommand, (24 * s).dp, skips = false)
-    }
-}
-
-@Composable
-private fun MiniPlayer(np: SendspinNowPlaying, art: Bitmap?, onCommand: (String) -> Unit, s: Float) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.widthIn(max = (420 * s).dp)) {
-        Artwork(art, (48 * s).dp, RoundedCornerShape(10.dp))
-        Spacer(Modifier.width(12.dp))
-        TitleArtist(np, 15.sp.times(s), 14.sp.times(s), Modifier.weight(1f, fill = false))
-        Spacer(Modifier.width(4.dp))
-        Transport(np, onCommand, (22 * s).dp)
-    }
-}
-
-@Composable
-private fun LinePlayer(np: SendspinNowPlaying, onCommand: (String) -> Unit, s: Float) {
-    val colors = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.widthIn(max = (520 * s).dp)) {
-        Text("♪ ", fontSize = 16.sp.times(s), color = colors.primary)
-        Text(
-            np.title.ifBlank { "Unknown track" }, fontSize = 16.sp.times(s), fontWeight = FontWeight.Bold,
-            color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
-        )
-        val sub = subtitle(np)
-        if (sub.isNotEmpty()) {
-            Text(" — $sub", fontSize = 16.sp.times(s), color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        }
-        Transport(np, onCommand, (22 * s).dp, skips = false, tint = colors.primary)
-    }
-}
-
-/** A status bar along the bottom edge (drawn by ClockPage outside the page padding). */
-@Composable
-private fun BarPlayer(np: SendspinNowPlaying, onCommand: (String) -> Unit, frame: ClockFrame) {
-    val colors = MaterialTheme.colorScheme
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().height(44.dp).background(colors.surfaceVariant),
-    ) {
-        Box(Modifier.fillMaxHeight().background(colors.primary).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-            Text(if (np.active) "♪ PLAYING" else "♪ PAUSED", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.background, maxLines = 1)
-        }
-        Text(
-            listOf(np.artist, np.title.ifBlank { "Unknown track" }).filter { it.isNotBlank() }.joinToString(" — "),
-            fontSize = 15.sp, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 14.dp).weight(1f, fill = false),
-        )
-        Transport(np, onCommand, 20.dp)
-        Spacer(Modifier.weight(1f))
-        frame.today?.let { data ->
-            val (t, a) = ClockToday.counts(data)
-            val label = ClockToday.countsLabel(t, a)
-            if (label.isNotEmpty()) Text(label, fontSize = 15.sp, color = colors.tertiary, maxLines = 1, modifier = Modifier.padding(end = 16.dp))
-        }
-    }
-}
-
-@Composable
-private fun FullPlayer(np: SendspinNowPlaying, art: Bitmap?, onCommand: (String) -> Unit, s: Float) {
-    val colors = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Artwork(art, (130 * s).dp, RoundedCornerShape(14.dp))
-        Spacer(Modifier.width(22.dp))
-        Column(Modifier.weight(1f)) {
-            Text("NOW PLAYING", fontSize = 13.sp, letterSpacing = 3.sp, color = colors.onSurfaceVariant, maxLines = 1)
-            Text(
-                np.title.ifBlank { "Unknown track" }, fontSize = 30.sp.times(s), fontWeight = FontWeight.SemiBold,
-                color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-            val sub = listOfNotNull(
-                np.artist.takeIf { it.isNotBlank() }, np.album.takeIf { it.isNotBlank() }, "Paused".takeIf { !np.active },
-            ).joinToString(" · ")
-            if (sub.isNotEmpty()) Text(sub, fontSize = 18.sp.times(s), color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (np.durationMs > 0) Progress(np)
-        }
-        Spacer(Modifier.width(12.dp))
-        val paused = !np.active || !np.playing
-        SkipButton(Icons.Rounded.SkipPrevious, "Previous track", "previous" in np.commands, 34.dp, colors.onBackground) { onCommand("previous") }
-        val command = if (paused) "play" else "pause"
-        if (command in np.commands) {
-            Box(
-                modifier = Modifier.size(60.dp).background(colors.onBackground, CircleShape).clip(CircleShape).clickable { onCommand(command) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    if (paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
-                    contentDescription = if (paused) "Play" else "Pause", tint = colors.background, modifier = Modifier.size(34.dp),
-                )
-            }
-        }
-        SkipButton(Icons.Rounded.SkipNext, "Next track", "next" in np.commands, 34.dp, colors.onBackground) { onCommand("next") }
-    }
-}
-
-/** The song's progress, redrawn every second while it plays. */
-@Composable
-private fun Progress(np: SendspinNowPlaying) {
-    var now by remember { mutableLongStateOf(android.os.SystemClock.elapsedRealtime()) }
-    LaunchedEffect(np.playing, np.positionAtMs) {
-        while (np.playing) {
-            now = android.os.SystemClock.elapsedRealtime()
-            delay(1_000)
-        }
-        now = android.os.SystemClock.elapsedRealtime()
-    }
-    val f = (np.positionNow(now).toFloat() / np.durationMs).coerceIn(0f, 1f)
-    val colors = MaterialTheme.colorScheme
-    Box(Modifier.padding(top = 12.dp).fillMaxWidth().height(4.dp).background(colors.onBackground.copy(alpha = 0.2f), RoundedCornerShape(2.dp))) {
-        Box(Modifier.fillMaxWidth(f).height(4.dp).background(colors.onBackground, RoundedCornerShape(2.dp)))
+private fun BarCounts(frame: ClockFrame) {
+    frame.today?.let { data ->
+        val (t, a) = ClockToday.counts(data)
+        val label = ClockToday.countsLabel(t, a)
+        if (label.isNotEmpty()) Text(label, fontSize = 15.sp, color = MaterialTheme.colorScheme.tertiary, maxLines = 1, modifier = Modifier.padding(end = 16.dp))
     }
 }
 

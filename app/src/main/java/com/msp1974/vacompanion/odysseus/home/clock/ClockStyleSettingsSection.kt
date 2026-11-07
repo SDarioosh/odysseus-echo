@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.msp1974.vacompanion.odysseus.home.HomeSettings
+import com.msp1974.vacompanion.odysseus.home.music.MusicPage
 
 private val SIZES = listOf(0.8f to "S", 1f to "M", 1.25f to "L", 1.5f to "XL")
 private val WEIGHTS = listOf(200 to "Thin", 300 to "Light", 400 to "Regular", 500 to "Medium")
@@ -149,6 +150,9 @@ fun ClockStyleSettingsSection(enabled: Boolean) {
         },
         fontSize = 13.sp, color = colors.onSurfaceVariant,
     )
+    if (style.nowPlayingFrom == NowPlayingSource.ROOM && !MusicPage.available) {
+        Text("Needs the Music page and Home Assistant", fontSize = 13.sp, color = colors.error)
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Switch(checked = theme.artworkBackground, enabled = enabled, onCheckedChange = { v -> updateTheme { it.copy(artworkBackground = v) } })
         Text("Cover art as the background while music plays", fontSize = 15.sp, color = colors.onSurface, modifier = Modifier.padding(start = 14.dp))

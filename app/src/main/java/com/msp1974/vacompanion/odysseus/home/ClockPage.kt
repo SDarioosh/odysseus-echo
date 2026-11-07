@@ -47,6 +47,7 @@ import com.msp1974.vacompanion.odysseus.home.clock.ClockBackground
 import com.msp1974.vacompanion.odysseus.home.clock.ClockElementView
 import com.msp1974.vacompanion.odysseus.home.clock.ClockFrame
 import com.msp1974.vacompanion.odysseus.home.clock.ClockThemed
+import com.msp1974.vacompanion.odysseus.home.clock.showsMusic
 import com.msp1974.vacompanion.odysseus.home.clock.ElementType
 import com.msp1974.vacompanion.odysseus.home.clock.Variants
 import com.msp1974.vacompanion.odysseus.home.clock.rememberClockMusic
@@ -84,7 +85,7 @@ object ClockPage : HomePage {
         val now = rememberMinuteClock()
         val is24h = DateFormat.is24HourFormat(LocalContext.current)
         // Fork: this device's Sendspin player or the Music page's selected room (clock/ClockNowPlaying.kt).
-        val music = rememberClockMusicShown(rememberClockMusic(style.nowPlayingFrom, context))
+        val music = rememberClockMusicShown(rememberClockMusic(style.nowPlayingFrom, context, follow = showsMusic(style)))
         val playing = music.visible
 
         ClockThemed(theme) {

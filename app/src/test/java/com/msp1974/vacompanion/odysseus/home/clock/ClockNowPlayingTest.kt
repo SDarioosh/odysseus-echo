@@ -43,4 +43,22 @@ class ClockNowPlayingTest {
         assertTrue(shown.state != null)
         assertFalse(shown.active)
     }
+
+    @Test
+    fun `another room or source drops the last track at once`() {
+        val last = ClockMusic(track(true), active = true, artwork = null, key = "room:media_player.kitchen")
+        assertNull(lingered(ClockMusic.NONE.copy(key = "room:media_player.office"), last).state)
+        assertNull(lingered(ClockMusic.NONE.copy(key = "device"), last).state)
+        // The same room still lingers.
+        assertEquals("Harbour Lights", lingered(ClockMusic.NONE.copy(key = last.key), last).state?.title)
+    }
+
+    @Test
+    fun `the clock follows music only when it draws it`() {
+        val none = ClockStyle(elements = listOf(ClockElement(ElementType.TIME)))
+        assertFalse(showsMusic(none))
+        assertFalse(showsMusic(none.copy(elements = none.elements + ClockElement(ElementType.NOW_PLAYING, visible = false))))
+        assertTrue(showsMusic(none.copy(elements = none.elements + ClockElement(ElementType.NOW_PLAYING))))
+        assertTrue(showsMusic(none.copy(theme = ClockTheme(artworkBackground = true))))
+    }
 }

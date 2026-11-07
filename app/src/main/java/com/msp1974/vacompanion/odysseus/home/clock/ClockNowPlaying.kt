@@ -5,8 +5,9 @@ package com.msp1974.vacompanion.odysseus.home.clock
 // selected room (MusicRepository, docs/odysseus/music.md). Both become one ClockMusic over the
 // neutral PlayerState, so every look (row, pill, mini, line, bar, big player) and the Album
 // preset's blurred background draw either. The selected room's state is followed only while the
-// clock shows it (rememberPlayerState collects MusicBackend.player; MusicRefresh in HomeHost
-// installs the backend), so the Music page needn't be attached. A tap opens the Music page.
+// clock shows it and its style draws music (showsMusic: a now-playing element or the cover-art
+// background; rememberPlayerState collects MusicBackend.player; MusicRefresh in HomeHost installs
+// the backend), so the Music page needn't be attached. A tap opens the Music page.
 
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
@@ -51,6 +52,8 @@ data class ClockMusic(
     val onControl: OnControl = { _, _ -> },
     /** A tap on the element: opens the Music page; null while the page isn't offered. */
     val onOpen: (() -> Unit)? = null,
+    /** Where the music comes from ("device", or "room:" and the room): the linger never crosses a change. */
+    val key: String = "",
 ) {
     companion object {
         val NONE = ClockMusic(state = null, active = false, artwork = null)
@@ -64,11 +67,22 @@ data class ClockMusic(
  */
 data class ClockMusicShown(val visible: Boolean, val music: ClockMusic)
 
-/** [ClockMusic] for [source]: this device's Sendspin player or the Music page's selected room. */
+/**
+ * True when [style] draws the music at all: a visible now-playing element, or the cover-art
+ * background. Otherwise the clock follows no player (no Home Assistant subscription). Pure.
+ */
+fun showsMusic(style: ClockStyle): Boolean =
+    style.theme.artworkBackground || style.elements.any { it.visible && it.type == ElementType.NOW_PLAYING }
+
+/**
+ * [ClockMusic] for [source]: this device's Sendspin player or the Music page's selected room;
+ * [ClockMusic.NONE] without following either when [follow] is false ([showsMusic]).
+ */
 @Composable
-fun rememberClockMusic(source: NowPlayingSource, context: HomePageContext): ClockMusic = when (source) {
-    NowPlayingSource.ROOM -> rememberRoomMusic(context)
-    NowPlayingSource.DEVICE -> rememberDeviceMusic(context)
+fun rememberClockMusic(source: NowPlayingSource, context: HomePageContext, follow: Boolean = true): ClockMusic = when {
+    !follow -> ClockMusic.NONE
+    source == NowPlayingSource.ROOM -> rememberRoomMusic(context)
+    else -> rememberDeviceMusic(context)
 }
 
 @Composable
@@ -83,6 +97,7 @@ private fun rememberDeviceMusic(context: HomePageContext): ClockMusic {
         backgroundDark = np.colors.backgroundDark,
         onControl = { control, value -> np.commandFor(control, value)?.let(context.onSendspinCommand) },
         onOpen = musicPageOpener(MusicRepository.selfRoom?.entityId),
+        key = "device",
     )
 }
 
@@ -99,6 +114,7 @@ private fun rememberRoomMusic(context: HomePageContext): ClockMusic {
         artwork = art,
         onControl = { control, value -> roomId?.let { MusicActions.control(it, control, value) } },
         onOpen = musicPageOpener(roomId),
+        key = "room:${roomId.orEmpty()}",
     )
 }
 
@@ -116,11 +132,14 @@ private fun musicPageOpener(roomId: String?): (() -> Unit)? {
     }
 }
 
-/** [music] with the 20 s "Paused" linger (as the original clock did). */
+/**
+ * [music] with the 20 s "Paused" linger (as the original clock did). A new source or room
+ * ([ClockMusic.key]) starts afresh: the previous one's track doesn't linger.
+ */
 @Composable
 fun rememberClockMusicShown(music: ClockMusic): ClockMusicShown {
-    var visible by remember { mutableStateOf(music.active) }
-    LaunchedEffect(music.active) {
+    var visible by remember(music.key) { mutableStateOf(music.active) }
+    LaunchedEffect(music.key, music.active) {
         if (music.active) {
             visible = true
         } else {
@@ -137,10 +156,10 @@ fun rememberClockMusicShown(music: ClockMusic): ClockMusicShown {
 
 /**
  * What to draw: [music] while it has a track; else [last]'s track, stopped (not playing, not
- * active). Pure.
+ * active), when it came from the same source and room ([ClockMusic.key]). Pure.
  */
 fun lingered(music: ClockMusic, last: ClockMusic): ClockMusic = when {
     music.state != null -> music
-    last.state != null -> last.copy(state = last.state.copy(playing = false), active = false)
+    last.state != null && last.key == music.key -> last.copy(state = last.state.copy(playing = false), active = false)
     else -> ClockMusic.NONE
 }

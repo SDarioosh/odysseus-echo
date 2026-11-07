@@ -5,6 +5,7 @@ package com.msp1974.vacompanion.odysseus.ha
 //   POST /api/services/<domain>/<service>           call() (?return_response only when asked:
 //                                                   HA answers 400 to it for a service without one)
 //   GET  /api/states                                states()
+//   GET  /api/states/<entity_id>                    statesOf() (one per id; 404 = no such entity)
 //   GET  <path>                                     bytes() (≤ 8 MB)
 // Every request goes through withAuthRetry: one token refresh on a 401, no more.
 // HaClient uses it for everything the websocket doesn't do. Tested with a fake HaHttp
@@ -51,10 +52,26 @@ class HaRestApi(
     override suspend fun states(filter: (HaState) -> Boolean): List<HaState> =
         HaEntities.fromRestList(send("GET", "/api/states", null).body).filter(filter)
 
-    /** REST only: polls GET /api/states every 5 s. HaClient's watch() uses the websocket. */
+    override suspend fun statesOf(entityIds: Set<String>): Map<String, HaState> {
+        val out = LinkedHashMap<String, HaState>()
+        for (id in entityIds.sorted()) {
+            if (!ENTITY_ID.matches(id)) continue
+            val r = try {
+                send("GET", "/api/states/$id", null)
+            } catch (e: HaException) {
+                if (e.code == 404) continue
+                throw e
+            }
+            val o = runCatching { json.parseToJsonElement(r.body) as? JsonObject }.getOrNull() ?: continue
+            HaEntities.fromRest(o)?.let { out[it.entityId] = it }
+        }
+        return out
+    }
+
+    /** REST only: polls GET /api/states/<id> every 5 s. HaClient's watch() uses the websocket. */
     override fun watch(entityIds: Set<String>): Flow<Map<String, HaState>> = flow {
         while (true) {
-            emit(states { it.entityId in entityIds }.associateBy { it.entityId })
+            emit(statesOf(entityIds))
             delay(pollMs)
         }
     }
@@ -91,6 +108,7 @@ class HaRestApi(
         const val MAX_BODY = 2 * 1024 * 1024
         const val MAX_BYTES = 8 * 1024 * 1024
         private val NAME = Regex("[a-z0-9_]+")
+        private val ENTITY_ID = Regex("[a-z0-9_]+\\.[a-z0-9_]+")
 
         /** A path on Home Assistant itself: starts with one "/", no scheme, host or "..". */
         fun checkPath(path: String) {

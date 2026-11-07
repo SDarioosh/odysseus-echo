@@ -9,7 +9,9 @@ package com.msp1974.vacompanion.odysseus.ha
 //   {"id":N,"type":"ping"} every 30 s                       → pong
 // A dropped connection is reopened after 1, 2, 4 … 30 s (HaBackoff). auth_invalid gets one
 // immediate retry with a refreshed token; a second one stops reconnecting until the next
-// watch() starts (repeated invalid logins count toward Home Assistant's IP ban).
+// watch() starts (repeated invalid logins count toward Home Assistant's IP ban), and so does a
+// refused sign-in (HaAuth.token throwing HA_AUTH_FAILED). A CancellationException from the transport
+// while the loop is still active is a closed socket, not the loop's end (guarded()).
 // The transport is an interface, so all of this is unit-tested with a fake (HaSocketTest); the
 // real one is KtorHaSocketTransport.
 
@@ -17,7 +19,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -123,11 +127,8 @@ class HaSocket(
             if (stop != null) {
                 stop.cancel()
             } else if (s != null && w.session === s) {
-                s.subscriptions.remove(w.subscriptionId)
-                val sub = w.subscriptionId
-                scope.launch {
-                    runCatching { sendNew(s) { id -> message(id, "unsubscribe_events") { put("subscription", sub) } } }
-                }
+                // A subscribe still queued sees the watcher gone and sends nothing (subscribe()).
+                unsubscribe(s, w, w.subscriptionId)
             }
         }
     }.conflate()
@@ -160,8 +161,16 @@ class HaSocket(
         while (scope.isActive) {
             var s: Session? = null
             try {
-                val token = auth.token(refreshToken)
-                val conn = transport.connect(wsUrl(auth.baseUrl()))
+                val token = try {
+                    auth.token(refreshToken)
+                } catch (e: HaException) {
+                    if (e.code != HA_AUTH_FAILED) throw e
+                    // Sign-in refused (e.g. invalid_grant): retrying only adds failed logins.
+                    log("HA ws: ${e.message}; not reconnecting")
+                    notifyDown()
+                    return
+                }
+                val conn = guarded { transport.connect(wsUrl(auth.baseUrl())) }
                 try {
                     withTimeoutOrNull(replyTimeoutMs) { authenticate(conn, token) }
                         ?: throw IOException("no answer to auth in time")
@@ -182,7 +191,8 @@ class HaSocket(
                 }
                 log("HA ws: closed by Home Assistant")
             } catch (e: CancellationException) {
-                throw e
+                if (!currentCoroutineContext().isActive) throw e
+                log("HA ws: closed (${e.message})") // the transport's, not this loop's
             } catch (e: HaException) {
                 if (e.code == 401 && !refreshToken) {
                     log("HA ws: auth_invalid, retrying once with a refreshed token")
@@ -206,10 +216,10 @@ class HaSocket(
     }
 
     private suspend fun authenticate(conn: HaSocketConnection, token: String) {
-        val first = conn.receive()?.let(::parse) ?: throw IOException("closed before auth")
+        val first = guarded { conn.receive() }?.let(::parse) ?: throw IOException("closed before auth")
         if (first.type() != "auth_required") throw IOException("unexpected ${first.type()} before auth")
-        conn.send(buildJsonObject { put("type", "auth"); put("access_token", token) }.toString())
-        val reply = conn.receive()?.let(::parse) ?: throw IOException("closed during auth")
+        guarded { conn.send(buildJsonObject { put("type", "auth"); put("access_token", token) }.toString()) }
+        val reply = guarded { conn.receive() }?.let(::parse) ?: throw IOException("closed during auth")
         when (reply.type()) {
             "auth_ok" -> Unit
             "auth_invalid" -> throw HaException("auth_invalid: ${(reply["message"] as? JsonPrimitive)?.content}", 401)
@@ -237,7 +247,7 @@ class HaSocket(
 
     private suspend fun readLoop(s: Session) {
         while (true) {
-            val text = s.conn.receive() ?: return
+            val text = guarded { s.conn.receive() } ?: return
             when (val el = runCatching { json.parseToJsonElement(text) }.getOrNull()) {
                 is JsonObject -> dispatch(s, el)
                 is JsonArray -> el.forEach { (it as? JsonObject)?.let { o -> dispatch(s, o) } }
@@ -286,11 +296,27 @@ class HaSocket(
             if (w.session === s || w !in watchers) return
             w.session = s
         }
-        sendNew(s) { id ->
+        var sub = 0
+        sendNewOrSkip(s) { id ->
+            // The watcher may have left while this waited for the send lock: nothing to send.
+            if (!isWatching(w)) return@sendNewOrSkip null
+            sub = id
             w.subscriptionId = id
             w.states = emptyMap()
             s.subscriptions[id] = w
             message(id, "subscribe_entities") { putJsonArray("entity_ids") { w.entityIds.sorted().forEach { add(JsonPrimitive(it)) } } }
+        }
+        // It left while the subscribe went out: its awaitClose may have missed the id.
+        if (sub != 0 && !isWatching(w)) unsubscribe(s, w, sub)
+    }
+
+    private fun isWatching(w: Watcher) = synchronized(lock) { w in watchers }
+
+    /** Ends [w]'s subscription [sub] on [s], once (whoever removes it from the map sends it). */
+    private fun unsubscribe(s: Session, w: Watcher, sub: Int) {
+        if (sub == 0 || s.subscriptions.remove(sub, w).not()) return
+        scope.launch {
+            runCatching { sendNew(s) { id -> message(id, "unsubscribe_events") { put("subscription", sub) } } }
         }
     }
 
@@ -299,10 +325,14 @@ class HaSocket(
         val reply = CompletableDeferred<JsonObject>()
         var sent = 0
         try {
-            sendNew(s) { id ->
-                sent = id
-                s.pending[id] = reply
-                build(id)
+            try {
+                sendNew(s) { id ->
+                    sent = id
+                    s.pending[id] = reply
+                    build(id)
+                }
+            } catch (e: IOException) {
+                throw HaSocketClosed() // the send failed: nothing went out
             }
             if (session !== s) throw IOException("Home Assistant websocket closed")
             return withTimeoutOrNull(replyTimeoutMs) { reply.await() }
@@ -312,11 +342,30 @@ class HaSocket(
         }
     }
 
-    private suspend fun sendNew(s: Session, build: (Int) -> JsonObject) {
+    private suspend fun sendNew(s: Session, build: (Int) -> JsonObject) = sendNewOrSkip(s, build)
+
+    /** Takes a new id and sends what [build] makes of it; nothing (and no id) when it makes null. */
+    private suspend fun sendNewOrSkip(s: Session, build: (Int) -> JsonObject?) {
         sendLock.withLock {
-            val id = ++lastId
-            s.conn.send(build(id).toString())
+            val msg = build(lastId + 1) ?: return
+            lastId++
+            guarded { s.conn.send(msg.toString()) }
         }
+    }
+
+    /**
+     * Runs a transport call. A CancellationException or ClosedSendChannelException from the
+     * transport (Ktor's send on a closed session) while this coroutine is still active is a closed
+     * socket (IOException), not this coroutine's cancellation: that would end the reconnect loop for
+     * good and reach callers as a cancellation.
+     */
+    private suspend fun <T> guarded(block: suspend () -> T): T = try {
+        block()
+    } catch (e: ClosedSendChannelException) {
+        throw IOException("Home Assistant websocket closed", e)
+    } catch (e: CancellationException) {
+        if (!currentCoroutineContext().isActive) throw e
+        throw IOException("Home Assistant websocket closed", e)
     }
 
     private fun message(id: Int, type: String, body: JsonObjectBuilder.() -> Unit) =

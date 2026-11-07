@@ -8,13 +8,14 @@ package com.msp1974.vacompanion.odysseus.ha
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.Reader
 import java.net.HttpURLConnection
 import java.net.URL
 
 data class HaResponse(val code: Int, val body: String)
 
 fun interface HaHttp {
-    /** [contentType] null = no body. Throws on network errors. */
+    /** [contentType] null = no body. Throws on network errors, and HaException when the answer is over the body cap. */
     fun call(method: String, url: String, bearer: String?, contentType: String?, body: String?): HaResponse
 }
 
@@ -50,21 +51,30 @@ object UrlConnectionHaHttp : HaHttp, HaBytesHttp {
             }
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val text = stream?.bufferedReader()?.use { reader ->
-                val out = StringBuilder()
-                val buf = CharArray(8192)
-                while (out.length < maxChars) {
-                    val n = reader.read(buf, 0, minOf(buf.size, maxChars - out.length))
-                    if (n < 0) break
-                    out.appendRange(buf, 0, n)
-                }
-                out.toString()
-            } ?: ""
+            val text = stream?.bufferedReader()?.use { readText(it, maxChars, url) } ?: ""
             return HaResponse(code, text)
         } finally {
             conn.disconnect()
         }
     }
+
+    /** [reader]'s text; HaException when it is longer than [maxChars] (cut short it would be invalid JSON). */
+    fun readText(reader: Reader, maxChars: Int, url: String): String {
+        val out = StringBuilder()
+        val buf = CharArray(8192)
+        while (true) {
+            val n = reader.read(buf, 0, minOf(buf.size, maxChars - out.length + 1))
+            if (n < 0) break
+            out.appendRange(buf, 0, n)
+            if (out.length > maxChars) throw HaException(tooLarge(url, maxChars))
+        }
+        return out.toString()
+    }
+
+    /** The error for an answer over the cap (without the query, which may carry user text). */
+    fun tooLarge(url: String, maxChars: Int): String =
+        "Home Assistant's answer to ${url.substringBefore('?').substringAfter("://").substringAfter('/', "")
+            .let { "/$it" }} is larger than ${maxChars / 1024} KB"
 
     override fun get(url: String, bearer: String?, maxBytes: Int): HaBytes {
         val conn = open("GET", url, bearer, "*/*")

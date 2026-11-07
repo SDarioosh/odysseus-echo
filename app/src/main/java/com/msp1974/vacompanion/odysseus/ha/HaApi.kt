@@ -21,6 +21,9 @@ interface HaApi {
                      returnResponse: Boolean = false): JsonElement?
     /** GET /api/states, filtered. */
     suspend fun states(filter: (HaState) -> Boolean = { true }): List<HaState>
+    /** The states of [entityIds] only (REST: one GET /api/states/<id> each; unknown ids left out). */
+    suspend fun statesOf(entityIds: Set<String>): Map<String, HaState> =
+        states { it.entityId in entityIds }.associateBy { it.entityId }
     /** Live states of [entityIds] (websocket subscribe_entities; REST polling every 5 s
      *  as the fallback). Hot while collected; closes the socket when nobody collects. */
     fun watch(entityIds: Set<String>): Flow<Map<String, HaState>>

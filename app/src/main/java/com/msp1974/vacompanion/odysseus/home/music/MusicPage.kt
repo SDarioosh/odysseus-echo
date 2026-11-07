@@ -5,8 +5,9 @@ package com.msp1974.vacompanion.odysseus.home.music
 // the right, and one line at the bottom for a failed action (MusicActions.message) or "Home
 // Assistant offline" (the last state is then shown greyed). Offered only while the Music page is
 // on and Music Assistant has rooms (MusicRepository.available). Sized for the Echo Show 5 (960×480
-// px, about 790×395 dp) with up to four tabs on the rail, and for tablets (1280×800 and up). The
-// page doesn't scroll or drag horizontally: HomeHost owns horizontal swipes.
+// px, 960×480 dp at mdpi) with up to four tabs on the rail, and for tablets (1280×800 and up): from
+// 1100×600 dp a compact Now playing for the selected room stays on the right beside every tab but
+// Playing (MusicLayout). The page doesn't scroll or drag horizontally: HomeHost owns horizontal swipes.
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -15,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -57,6 +59,12 @@ import com.msp1974.vacompanion.odysseus.music.MusicSettings
  */
 val LocalHomePageContext = compositionLocalOf { HomePageContext() }
 
+/**
+ * True while the tab is drawn beside the Now playing pane (MusicLayout.sidePane): e.g. a tap on a
+ * room only selects it (the pane shows it) instead of switching to the Playing tab.
+ */
+val LocalMusicSidePane = compositionLocalOf { false }
+
 private val RAIL_WIDTH = 88.dp
 private val RAIL_ITEM_HEIGHT = 76.dp
 private val RAIL_ICON = 30.dp
@@ -87,14 +95,36 @@ object MusicPage : HomePage {
         val offline = !MusicRepository.reachable
         val selected = MusicTabs.selected
         CompositionLocalProvider(LocalHomePageContext provides context) {
-            Row(modifier.fillMaxSize()) {
-                Rail(selected.id)
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    // While offline the line stays: keep the tab's content clear of it.
-                    val bottom = if (offline) OFFLINE_LINE_SPACE else 0.dp
-                    selected.content(Modifier.fillMaxSize().padding(bottom = bottom).alpha(if (offline) 0.45f else 1f))
-                    val line = MusicActions.message ?: if (offline) MUSIC_HA_OFFLINE else null
-                    MessageLine(line, Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp))
+            BoxWithConstraints(modifier.fillMaxSize()) {
+                // Tablets: the tab on the left, Now playing for the selected room on the right (MusicLayout).
+                val pane = MusicLayout.sidePane(maxWidth.value, maxHeight.value, selected.id)
+                val paneWidth = MusicLayout.paneWidthDp(maxWidth.value).dp
+                Row(Modifier.fillMaxSize()) {
+                    Rail(selected.id)
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        // While offline the line stays: keep the tab's content clear of it.
+                        val bottom = if (offline) OFFLINE_LINE_SPACE else 0.dp
+                        val dim = Modifier.fillMaxSize().padding(bottom = bottom).alpha(if (offline) 0.45f else 1f)
+                        Row(Modifier.fillMaxSize()) {
+                            CompositionLocalProvider(LocalMusicSidePane provides pane) {
+                                selected.content(if (pane) Modifier.weight(1f).then(dim) else dim)
+                            }
+                            if (pane) {
+                                Box(
+                                    Modifier
+                                        .width(paneWidth)
+                                        .fillMaxHeight()
+                                        .padding(bottom = bottom)
+                                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.04f))
+                                        .alpha(if (offline) 0.45f else 1f),
+                                ) {
+                                    NowPlayingTab(Modifier.fillMaxSize(), compact = true)
+                                }
+                            }
+                        }
+                        val line = MusicActions.message ?: if (offline) MUSIC_HA_OFFLINE else null
+                        MessageLine(line, Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp))
+                    }
                 }
             }
         }

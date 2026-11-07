@@ -2,7 +2,8 @@ package com.msp1974.vacompanion.odysseus.home.music
 
 // Odysseus fork: the Music page's "Rooms" tab: every Music Assistant room with what it plays,
 // volume, move here and grouping (docs/odysseus/music.md, "Rooms"). One column on the Echo, a grid
-// of cards from 840 dp; scrolls vertically only (the home screen owns horizontal drags). The rules
+// of cards from 840 dp (beside a tablet's Now playing pane: by card width, MusicLayout); scrolls
+// vertically only (the home screen owns horizontal drags). The rules
 // are in RoomsRules (pure, tested); every change goes through MusicActions.
 
 import androidx.compose.foundation.background
@@ -81,9 +82,11 @@ fun RoomsTab(modifier: Modifier = Modifier) {
         room.entityId to key(room.entityId) { rememberPlayerState(room.entityId, sendspin) }
     }
     var dialog by remember { mutableStateOf<RoomsDialog?>(null) }
+    val beside = LocalMusicSidePane.current
 
     BoxWithConstraints(modifier) {
-        val columns = RoomsRules.columns(maxWidth.value)
+        // Beside the tablet's Now playing pane the list is narrower: columns by card width there.
+        val columns = if (beside) MusicLayout.roomColumnsBesidePane(maxWidth.value) else RoomsRules.columns(maxWidth.value)
         val cardWidth = (maxWidth - 32.dp - 12.dp * (columns - 1)) / columns
         if (rooms.isEmpty()) {
             Text(
@@ -137,6 +140,7 @@ private fun RoomCard(
 ) {
     val colors = MaterialTheme.colorScheme
     val selected = room.entityId == MusicRepository.selectedRoomId
+    val beside = LocalMusicSidePane.current
     val shape = RoundedCornerShape(16.dp)
     val art = rememberRoomArt(state)
     val onControl: OnControl = { control, value -> MusicActions.control(room.entityId, control, value) }
@@ -150,7 +154,8 @@ private fun RoomCard(
             .border(if (selected) 2.dp else 1.dp, if (selected) colors.primary else colors.onBackground.copy(alpha = 0.12f), shape)
             .clickable {
                 MusicActions.select(room.entityId)
-                MusicTabs.selectedId = MusicTabs.NOW_PLAYING
+                // Beside the Now playing pane the pane shows it; else open the Playing tab.
+                if (!beside) MusicTabs.selectedId = MusicTabs.NOW_PLAYING
             }
             .alpha(if (room.available) 1f else 0.5f)
             .padding(horizontal = 12.dp, vertical = 8.dp),

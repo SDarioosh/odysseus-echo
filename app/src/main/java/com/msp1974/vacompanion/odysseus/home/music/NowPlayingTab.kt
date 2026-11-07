@@ -76,8 +76,12 @@ import kotlinx.coroutines.delay
 private val PAD = 20.dp
 private val CHIP_ROW = 44.dp
 
+/**
+ * The Playing tab, and (with [compact]) the Now playing pane beside the other tabs on a tablet
+ * (MusicPage, MusicLayout): one column, artwork over the track, at the pane's text sizes.
+ */
 @Composable
-fun NowPlayingTab(modifier: Modifier = Modifier) {
+fun NowPlayingTab(modifier: Modifier = Modifier, compact: Boolean = false) {
     val context = LocalHomePageContext.current
     val roomId = MusicRepository.selectedRoomId
     val rooms = MusicRepository.rooms
@@ -117,27 +121,55 @@ fun NowPlayingTab(modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.padding(PAD)) {
         val w = maxWidth
         val h = maxHeight
-        val landscape = w > h * 1.2f
-        Column(Modifier.fillMaxSize()) {
-            NowPlayingRoomRow(roomId, playing = state?.playing == true && view !is NowPlayingView.Nothing)
-            Spacer(Modifier.height(12.dp))
-            val bodyHeight = h - CHIP_ROW - 12.dp
-            if (landscape) {
-                val artSize = min(bodyHeight, w * 0.45f)
-                // Centred in the height left: on a tablet the art is limited by the width.
-                Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Artwork(art, artSize, RoundedCornerShape(artSize * 0.06f))
-                    Spacer(Modifier.width(PAD + 4.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                        Details(view, state, roomId, queue, onControl, large = w >= 900.dp)
+        val landscape = !compact && w > h * 1.2f
+        val bodyHeight = h - CHIP_ROW - 12.dp
+        if (landscape) {
+            // Art and details as one block, centred; on a tablet the room chip sits just above it
+            // (not at the top of a tall, mostly empty page) and the block keeps a readable width.
+            // Text and controls grow with the screen: 1.3× on a tablet, 1.6× on a large one.
+            val s = when {
+                w >= 1500.dp && h >= 900.dp -> 1.6f
+                w >= 900.dp -> 1.3f
+                else -> 1f
+            }
+            val large = s > 1f
+            val artSize = min(bodyHeight, w * if (large) 0.4f else 0.45f)
+            val blockWidth = if (large) min(w, artSize + PAD + 4.dp + (480 * s).dp) else w
+            val tall = h - artSize > 200.dp
+            Column(
+                Modifier.fillMaxSize(),
+                verticalArrangement = if (tall) Arrangement.Center else Arrangement.Top,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Column(Modifier.width(blockWidth).then(if (tall) Modifier else Modifier.weight(1f))) {
+                    NowPlayingRoomRow(roomId, playing = state?.playing == true && view !is NowPlayingView.Nothing)
+                    Spacer(Modifier.height(if (tall) 20.dp else 12.dp))
+                    Row(
+                        Modifier.fillMaxWidth().then(if (tall) Modifier else Modifier.weight(1f)),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Artwork(art, artSize, RoundedCornerShape(artSize * 0.06f))
+                        Spacer(Modifier.width(PAD + 4.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                            Details(view, state, roomId, queue, onControl, s)
+                        }
                     }
                 }
-            } else {
-                val artSize = min(w * 0.6f, bodyHeight * 0.42f)
+            }
+        } else {
+            // The pane: the chip, art and track as one centred block. Portrait: the chip on top.
+            Column(
+                Modifier.fillMaxSize(),
+                verticalArrangement = if (compact) Arrangement.Center else Arrangement.Top,
+                horizontalAlignment = if (compact) Alignment.CenterHorizontally else Alignment.Start,
+            ) {
+                NowPlayingRoomRow(roomId, playing = state?.playing == true && view !is NowPlayingView.Nothing, centred = compact)
+                Spacer(Modifier.height(if (compact) 16.dp else 12.dp))
+                val artSize = if (compact) min(w, bodyHeight * 0.46f) else min(w * 0.6f, bodyHeight * 0.42f)
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Artwork(art, artSize, RoundedCornerShape(artSize * 0.06f))
                     Spacer(Modifier.height(PAD))
-                    Details(view, state, roomId, queue, onControl, large = w >= 600.dp)
+                    Details(view, state, roomId, queue, onControl, if (!compact && w >= 600.dp) 1.3f else 1f)
                 }
             }
         }
@@ -152,10 +184,9 @@ private fun Details(
     roomId: String?,
     queue: QueueSummary?,
     onControl: OnControl,
-    large: Boolean,
+    s: Float,
 ) {
     val colors = MaterialTheme.colorScheme
-    val s = if (large) 1.3f else 1f
     if (view is NowPlayingView.Nothing) {
         NothingPlaying(roomId, state, onControl, s)
         return
@@ -307,11 +338,14 @@ private fun rememberPlayingRooms(ids: List<String>): Set<String> {
 
 /** The room chip ("Kitchen · This Echo ▾"); a tap opens a vertical list of the rooms. */
 @Composable
-private fun NowPlayingRoomRow(roomId: String?, playing: Boolean) {
+private fun NowPlayingRoomRow(roomId: String?, playing: Boolean, centred: Boolean = false) {
     val rooms = MusicRepository.rooms
     val self = MusicRepository.selfRoom
     var open by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().height(CHIP_ROW), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().height(CHIP_ROW), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (centred) Arrangement.Center else Arrangement.Start,
+    ) {
         val room = rooms.firstOrNull { it.entityId == roomId }
         val label = room?.let { NowPlayingRules.roomLabel(it, self) } ?: "Choose a room"
         Box {

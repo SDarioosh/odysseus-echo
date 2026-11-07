@@ -72,6 +72,8 @@ object ManagedKeys {
         ManagedKey.Choice("record.privacy_button", setOf("record", "mute")),
         ManagedKey.Bool("followup.enabled"),
         ManagedKey.IntRange("followup.seconds", 3, 15),
+        ManagedKey.Bool("music.enabled"),
+        ManagedKey.Bool("music.stay_while_playing"),
     ).associateBy { it.key }
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }

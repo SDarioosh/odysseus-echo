@@ -17,6 +17,7 @@ object HomeScreenController {
         pageCount = { HomePages.all.size },
         enabled = { HomeSettings.enabled },
         idleTimeoutMs = { HomeSettings.idleSeconds * 1000L },
+        idleExempt = { index -> HomePages.all.getOrNull(index)?.idleExempt() == true },
     )
 
     // Bumped on every navigator change so Compose re-reads `destination`.
@@ -33,11 +34,14 @@ object HomeScreenController {
             return navigator.current()
         }
 
-    /** When the idle timer fires (elapsedRealtime), or null. Read like [destination]. */
+    /**
+     * When the idle timer fires (elapsedRealtime), or null. Read like [destination]; a page's
+     * idleExempt() reads Compose state too, so the deadline comes back when it ends.
+     */
     val idleDeadlineMs: Long?
         get() {
             version; HomeSettings.enabled; HomeSettings.idleSeconds
-            return navigator.idleDeadlineMs()
+            return navigator.idleDeadlineMs(now())
         }
 
     fun onUserActivity() {

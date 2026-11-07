@@ -111,3 +111,36 @@ class ClockStyleTest {
         ClockColor.PALETTE.forEach { assertTrue(it, ClockColor.parse(it) != null) }
     }
 }
+
+class ClockStyleSourceTest {
+    @Test
+    fun `old saved styles read as this device`() {
+        val old = """{"preset":"midnight","elements":[{"type":"TIME"}]}"""
+        assertEquals(NowPlayingSource.DEVICE, ClockStyleCodec.decode(old).nowPlayingFrom)
+        assertEquals(NowPlayingSource.DEVICE, ClockStyleCodec.decode(null).nowPlayingFrom)
+    }
+
+    @Test
+    fun `the source round-trips through json`() {
+        val s = ClockStyle.normalized(ClockPresets.album).copy(nowPlayingFrom = NowPlayingSource.ROOM)
+        val json = ClockStyleCodec.encode(s)
+        assertTrue(json, json.contains("\"nowPlayingFrom\":\"room\""))
+        assertEquals(s, ClockStyleCodec.decode(json))
+    }
+
+    @Test
+    fun `an unknown source reads as this device and keeps the rest`() {
+        val s = ClockStyleCodec.decode("""{"preset":"paper","nowPlayingFrom":"garden"}""")
+        assertEquals(NowPlayingSource.DEVICE, s.nowPlayingFrom)
+        assertEquals(ClockPresets.PAPER, s.preset)
+    }
+
+    @Test
+    fun `the source isn't a change to the preset and survives picking another`() {
+        val s = ClockStyle.normalized(ClockPresets.midnight).copy(nowPlayingFrom = NowPlayingSource.ROOM)
+        assertTrue(s.isPresetUnchanged)
+        val picked = s.keepingSourceIn(ClockPresets.sunset)
+        assertEquals(NowPlayingSource.ROOM, picked.nowPlayingFrom)
+        assertEquals(ClockPresets.SUNSET, picked.preset)
+    }
+}

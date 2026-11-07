@@ -47,10 +47,11 @@ import com.msp1974.vacompanion.odysseus.home.clock.ClockBackground
 import com.msp1974.vacompanion.odysseus.home.clock.ClockElementView
 import com.msp1974.vacompanion.odysseus.home.clock.ClockFrame
 import com.msp1974.vacompanion.odysseus.home.clock.ClockThemed
+import com.msp1974.vacompanion.odysseus.home.clock.showsMusic
 import com.msp1974.vacompanion.odysseus.home.clock.ElementType
 import com.msp1974.vacompanion.odysseus.home.clock.Variants
-import com.msp1974.vacompanion.odysseus.home.clock.nowPlayingVisible
-import com.msp1974.vacompanion.odysseus.home.clock.rememberArtwork
+import com.msp1974.vacompanion.odysseus.home.clock.rememberClockMusic
+import com.msp1974.vacompanion.odysseus.home.clock.rememberClockMusicShown
 import kotlinx.coroutines.delay
 
 // Redraw just after the minute changes, so the clock never shows the old minute.
@@ -65,25 +66,36 @@ object ClockPage : HomePage {
         // The night look (clock/NightMode) while the room is dark, if turned on.
         val night = HomeSettings.nightAuto && NightMode.active
         val style = if (night) {
-            remember(HomeSettings.nightPreset) { ClockStyle.normalized(ClockPresets.byId(HomeSettings.nightPreset) ?: ClockPresets.nightstand) }
+            val own = HomeSettings.clockStyle
+            // Fork: the night preset keeps the own style's "Now playing from" (clock/ClockStyle.kt).
+            remember(HomeSettings.nightPreset, own.nowPlayingFrom) {
+                own.keepingSourceIn(ClockStyle.normalized(ClockPresets.byId(HomeSettings.nightPreset) ?: ClockPresets.nightstand))
+            }
         } else {
             HomeSettings.clockStyle
         }
         if (night && HomeSettings.nightDim) NightMode.DimBacklight()
+        ClockStyleContent(style, context, modifier)
+    }
+
+    /** The clock in [style] (the settings' own style, the night look, or a screenshot's preset). */
+    @Composable
+    fun ClockStyleContent(style: ClockStyle, context: HomePageContext, modifier: Modifier = Modifier) {
         val theme = style.theme
         val now = rememberMinuteClock()
         val is24h = DateFormat.is24HourFormat(LocalContext.current)
-        val artwork = rememberArtwork(context.nowPlaying)
-        val playing = nowPlayingVisible(context.nowPlaying)
+        // Fork: this device's Sendspin player or the Music page's selected room (clock/ClockNowPlaying.kt).
+        val music = rememberClockMusicShown(rememberClockMusic(style.nowPlayingFrom, context, follow = showsMusic(style)))
+        val playing = music.visible
 
         ClockThemed(theme) {
             BoxWithConstraints(modifier = modifier.fillMaxSize()) {
                 // Size the time from the space available, so it fills a small or a large screen.
                 val baseTimeSize = with(LocalDensity.current) { minOf(maxHeight * 0.36f, maxWidth * 0.2f).toSp() }
                 val usable = maxWidth - 48.dp // inside the page padding
-                ClockBackground(theme, if (playing) artwork else null, if (playing) context.nowPlaying.colors.backgroundDark else 0)
+                ClockBackground(theme, if (playing) music.music.artwork else null, if (playing) music.music.backgroundDark else 0)
 
-                val frame = ClockFrame(context, theme, baseTimeSize, now, is24h, artwork)
+                val frame = ClockFrame(context, theme, baseTimeSize, now, is24h, music)
                 val shown = style.elements.filter { it.visible }
                 // A now-playing bar runs along the bottom edge, outside the page's padding.
                 val bar = shown.firstOrNull { it.type == ElementType.NOW_PLAYING && it.style == Variants.NP_BAR }

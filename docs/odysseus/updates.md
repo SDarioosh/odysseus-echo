@@ -85,7 +85,7 @@ copy it to the server, run `scripts/echo_release.py` on the hub. Each release ne
 | `odysseus/update/AppRelease.kt` | contract C2's JSON, checks a release is usable |
 | `odysseus/update/UpdatePolicy.kt` | when to check, whether to download, resume point, APK checks, installer messages (tested) |
 | `odysseus/update/UpdateClient.kt` | `/app/latest` and the download: resume, size and sha256 (tested with a fake hub) |
-| `odysseus/update/LinkUpdateHttp.kt` | HTTP over `OdysseusLink.openGet` (base URL and voice token) |
+| `odysseus/update/LinkUpdateHttp.kt` | HTTP with the link's base URL and voice token: `/app/latest` through `OdysseusLink.sendToHub` (the one hub request, 64 K chars at most), the APK streamed over `OdysseusLink.openGet` |
 | `odysseus/update/UpdateManager.kt` | the schedule and state (Compose), started from `VACAApplication` |
 | `odysseus/update/UpdateInstaller.kt` | `PackageInstaller` session and `UpdateInstallReceiver` (manifest, not exported) |
 | `odysseus/update/UpdateSettings.kt`, `UpdateBanner.kt` | Menu → Odysseus → Updates; the clock banner |

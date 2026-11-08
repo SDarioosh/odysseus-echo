@@ -215,8 +215,8 @@ To-dos and action items can be marked done from it (below); everything else is r
   is blank.
 - **Failures**: the last result stays for up to 2 hours, with "Odysseus unreachable · Updated
   8:15" at the bottom (also while the device has no network); after that, or with nothing
-  fetched yet, the page says "Can't reach Odysseus" and why (a refused token says to link again;
-  a hub without the route says 404). A result from before midnight is dropped; midnight and
+  fetched yet, the page says "Can't reach Odysseus" and why ("Token refused (401)", "HTTP 503",
+  or the network error). A result from before midnight is dropped; midnight and
   "Today"/"Overdue" follow the hub's day (the offset of its `generated` time and its `date`), so
   a device left on another time zone still shows the current result. Logcat shows `Today: ...`
   lines.
@@ -244,10 +244,10 @@ confirmation: no spoken "yes" (contract C5 in
   place until its window ends).
 - **Already done** (`"already": true`): "Already done" for 5 s, no Undo.
 - **Failure**: the row comes back open, with a short reason in place of its due tag for 5 s
-  ("Can't reach Odysseus", "Not found in Odysseus", "Athena unavailable", "Token refused",
+  ("Can't reach Odysseus", "Not found in Odysseus" for any 404, "Athena unavailable", "Token refused",
   "Odysseus busy, try again" for a 503 `busy`, "Changed in Odysseus" for a 409 `changed`: the
-  line was edited or removed in Odysseus since Today was fetched, "Odysseus can't do this yet"
-  for a hub without the routes), and the Today data is refreshed. "Changed in Odysseus" is a
+  line was edited or removed in Odysseus since Today was fetched, "Odysseus error (n)" for
+  anything else), and the Today data is refreshed. "Changed in Odysseus" is a
   done's answer; "Too late to undo" is the undo's (both 409, told apart by `error`).
   Tap again to retry.
 - A row the hub sent without a `ref` or `id` has a dimmed ring and can't be tapped.
@@ -338,15 +338,15 @@ read `LocalHomeStripPosition` (the strip's position, null outside `HomeHost`) in
 | `odysseus/home/players/OtherPlayersRules.kt` | music on other speakers: parsing, which speaker, buttons → services. Plain Kotlin |
 | `odysseus/home/players/OtherPlayersClient.kt` | the Home Assistant calls for it (testable `HaHttp`) |
 | `odysseus/home/players/OtherPlayers.kt` | the process-wide state, polling, and where a button press goes |
-| `odysseus/home/today/TodayClient.kt` | contract C1: the call (testable `TodayHttp`) and lenient parsing |
+| `odysseus/home/today/TodayClient.kt` | contract C1: the call (through `HubHttp`, faked in tests) and lenient parsing |
 | `odysseus/home/today/TodayStore.kt` | what the page shows: not linked, loading, unreachable, ready/stale; the 2 h rule. Plain Kotlin |
 | `odysseus/home/today/TodayFormat.kt` | times in the device's zone, due tags, "and N more", what fits. Plain Kotlin |
-| `odysseus/home/today/TodayRepository.kt` | the process-wide state and refresh; `OdysseusLink.get` for the call |
+| `odysseus/home/today/TodayRepository.kt` | the process-wide state and refresh; `OdysseusLink` (the device's `HubHttp`) for the call |
 | `odysseus/home/today/TodayRefresh.kt` | the refresh timer, composed by `HomeHost` |
 | `odysseus/home/today/TodayPage.kt` | the page, with its Done rows |
 | `odysseus/home/today/TodayDone.kt` | the Done buttons: requests, the undo clock, refresh afterwards |
 | `odysseus/done/DoneApi.kt` | contract C5: paths, bodies, what an answer means. Plain Kotlin |
-| `odysseus/done/DoneClient.kt` | the Done/Undo requests (testable `DoneHttp`; `OdysseusLink.hubRequest`) |
+| `odysseus/done/DoneClient.kt` | the Done/Undo requests (through `HubHttp`, `OdysseusLink` on the device) |
 | `odysseus/done/DoneMarks.kt` | the optimistic Done state of the rows and the undo window. Plain Kotlin |
 | `odysseus/home/today/TodaySettingsSection.kt` | the "Today page" setting |
 | `odysseus/home/music/` | the Music page (files in [music.md](music.md#files)) |

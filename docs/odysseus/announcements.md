@@ -21,7 +21,7 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   ```
 
 - **Feed.** Every 30 s, and at once when the screen comes on (at most every 10 s, and not while
-  waiting after a refused token or on an older hub), it asks for announcements meant for it (all
+  waiting after a refused token), it asks for announcements meant for it (all
   devices, its area, or its id; the hub filters):
 
   ```
@@ -39,11 +39,11 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   - Skipped (but marked seen): expired ones (`expires_at` passed), and ones older than 2 h that
     have no `expires_at`, so an Echo that was off for a night doesn't show them all when it comes
     back. Both are judged on the hub's clock: each answer's `Date` header gives the difference
-    between the hub's clock and the device's (`HubClock`), which also places the first `since`
+    between the hub's clock and the device's (`Announcements.noteClock`), which also places the first `since`
     and the card's end. A device clock that is off doesn't drop or keep cards (without a `Date`
     header the device clock is used).
   - After a failed request it waits 30 s, 1, 2, 4, then 5 min. On a refused token (401/403) it
-    waits 15 min. An older Odysseus without the feed (404) is asked again hourly. A changed link
+    waits 15 min. Any other answer (a 404 too) is a failed request. A changed link
     in Menu → Odysseus (a new token too) starts again within a minute.
   - Not linked to Odysseus: nothing is sent at all. It only checks the settings again every minute.
 
@@ -104,9 +104,10 @@ phase. Check it on the device first (below), then decide.
 - `odysseus/announce/AnnouncementCard.kt`: the card.
 - `odysseus/announce/ReminderDone.kt`: the reminder card's Done button (its state per card).
 - `odysseus/done/`: contract C5, shared with the Today page: `DoneApi.kt` (paths, bodies, what an
-  answer means; pure, tested), `DoneClient.kt` (the requests through `OdysseusLink.hubRequest`).
-- `odysseus/OdysseusLink.kt`: `hubRequest`, a plain request with the voice token for features
-  in their own packages (`errorBody = true` also returns the start of an error answer).
+  answer means; pure, tested), `DoneClient.kt` (the requests through `HubHttp`).
+- `odysseus/HubHttp.kt`: `HubHttp`, the one way features ask the hub (`OdysseusLink` on the
+  device: the voice base URL and token; `HubCall.errorBody` also returns the start of an error
+  answer), `HubReply`, `HubJson` and `hubStatusText`.
 - Hooks:
   - `service/BackgroundTask.kt`: `Announcements.start`/`stop`, beside the other background
     services, so it runs whether or not the activity is in front.

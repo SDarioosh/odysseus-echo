@@ -53,7 +53,7 @@ When HA has the question (`AWAITING_RESPONSE`) and no answer has started 5 s lat
 
 Each voice turn notes when it reached each pipeline stage, in milliseconds after the wake word (`odysseus/TurnTimings.kt`): run started, listening, speech started and stopped, transcript, speech output asked for, audio starting, first audio, playback done, ended. When the turn has ended, the device posts them to Odysseus in the background (`POST <base>/satellite/timing`, JSON), with three flags: the thinking sound played, a wake word interrupted the turn (`barge_in`), "Check my voice" was on. Odysseus joins them to its own times for the same turn (getting ready, the model's first token, each tool call, first sentence sent), so every step of a turn can be measured: Home Assistant's speech to text and text to speech on the device's clock, Odysseus's steps on its own.
 
-Only numbers, the device id and these flags are sent: never the question, the answer or audio. Nothing is sent without the Odysseus link; an older Odysseus without the route (404) is skipped quietly.
+Only numbers, the device id and these flags are sent: never the question, the answer or audio. Nothing is sent without the Odysseus link; a failed post is only logged.
 
 Read them on the server: `python scripts/voice_timings.py` in the Odysseus checkout (hub docs: `docs/fork/voice-assistant.md#timings`).
 
@@ -81,12 +81,11 @@ Authorization: Bearer <voice token>        401/403 without a `voice` token
 
 GET <base>/turns/latest?since=<epoch ms>
 200 {"turn": {"id", "started_at", "ended_at", "question", "answer",
-              "links": [{"url", "label" | null}], "actions": [<as below>],
+              "links": [{"url", "label" | null}], "actions": [<action>, …],
               "awaiting_confirmation": "…?" | null, "device": {…} | null, "speaker": {…} | null,
               "session_id"}} | {"turn": null}
 
-GET <base>/actions?since=<epoch ms>&limit=<n>          (older hubs; used when /turns/latest is 404)
-200 {"actions": [
+<action>:
   {"id": "…", "at": "2026-11-03T19:52:10+00:00",
    "action": "created" | "completed",
    "kind": "todo" | "reminder" | "list_item" | "note" | "event" | "action_item",
@@ -94,11 +93,10 @@ GET <base>/actions?since=<epoch ms>&limit=<n>          (older hubs; used when /t
    "due": "2026-11-04T09:00:00-05:00" | "2026-11-07" | null, "all_day": false,
    "where": "To-dos" | "Shopping list" | "Calendar" | "Notes" | "Athena" | …,
    "source": "odysseus" | "athena", "turn_id": "…"}
-]}
 ```
 
 - **When:** when the answer starts playing and again when the turn ends, from 2 s before that turn's wake word. If there's no turn yet, it asks once more 1.5 s later.
-- **Older hub:** the first 404 from `/turns/latest` switches the device to `/actions` (no sources or confirmations) until the link is saved again.
+- **Errors:** any answer but a 200 (a 404 too) is a failure: logged, no card. The device and the hub are deployed together, so the feed is always there.
 - **Unknown fields:** the device ignores them.
 
 ## Setup on the device
@@ -112,7 +110,7 @@ Menu → Odysseus → **Set up with phone (QR code)** runs it again on an Echo t
 
 1. Open the menu: a two-finger swipe up from the bottom, then **Menu → Odysseus**.
 2. Enter the base URL and the voice token (Odysseus → Settings → Integrations → Voice assistant).
-3. Tap **Save and test**. It shows "Linked: Odysseus answered" (or, with an older Odysseus that has only the actions feed, "…actions only, no sources or voice check"), or the error ("token refused (403)", "Odysseus has no actions feed (404)", …).
+3. Tap **Save and test**. It shows "Linked: Odysseus answered", or the error ("Token refused (403)", "HTTP 404", …).
 
 The token is stored encrypted with an Android Keystore key, kept in the app's private storage, and never shown again. **Unlink** removes it.
 

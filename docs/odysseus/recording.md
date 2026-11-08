@@ -108,8 +108,9 @@ voice base URL (`https://<hub>/api/chat/voice/v1` → `https://<hub>`), with the
   that works, the older name is used until the app restarts. A chunk answered 404 on both is
   "relay missing" (table below). A 404 on both for `/sessions/<id>/end` (session not found)
   is that end's refusal, as before.
-- Redirects are not followed (`HubRelayTransport`): the token would go to wherever a redirect
-  points. A 3xx is a retry. At most 16 KB of an answer's body is read.
+- Redirects are not followed (`HubRelayTransport`, through `OdysseusLink.send`, the app's one
+  hub request): the token would go to wherever a redirect points. A 3xx is a retry. At most
+  16 K characters of an answer's body are read; the read timeout is 60 s.
 - Chunks of a session still recording are uploaded as they come. Sessions go oldest first,
   and chunks by sequence.
 
@@ -229,7 +230,7 @@ they work without Home Assistant.
   the 404 fallback, a missing relay, sessions left by a killed run, half-written files, the
   cap).
 - `HubRelayTransportTest`: a local HTTP server: a redirect isn't followed (the token doesn't
-  go to its target), a long body is cut at 16 KB.
+  go to its target), a long body is cut at 16 K characters, no server is no answer.
 - `RecordingTextTest`: the pill and status wording.
 - `RecordButtonGesturesTest`: the privacy button's press and hold from key down/up, repeats,
   stale timers, the mute-switch fallback and how a key covers it, and the Record/Mute rules.

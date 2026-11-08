@@ -106,10 +106,10 @@ scripts/odysseus/setup_device.sh "$APK" $S
 adb -s $S shell dpm set-active-admin $P/com.msp1974.vacompanion.VACADeviceAdminReceiver
 ```
 
-The script runs the privacy check and the install, then sets permissions and app ops (including
-`REQUEST_INSTALL_PACKAGES` for Odysseus updates), the Doze exemption, launcher = the app (this is how
-it starts at boot), screen always on, no lock screen or screensaver, and landscape locked. It also
-installs the privacy-button key layout with root; that layout loads at the next boot.
+The script runs the privacy check, the install and steps 7–9, 12–17 and 24 of
+[echo-show-5.md](echo-show-5.md#adb-commands-fresh-device) (what each does and how to undo it), plus
+`REQUEST_INSTALL_PACKAGES` for Odysseus updates and landscape locked. The privacy-button key layout
+loads at the next boot.
 
 Check:
 
@@ -138,7 +138,7 @@ adb -s $S shell 'uiautomator dump /sdcard/u.xml >/dev/null; cat /sdcard/u.xml; r
 
 ## 6. Tailscale (for use away from home)
 
-Install the official GitHub release. Fetch the latest version and its sha256 from the API, and
+Why, and the privacy notes: [tailscale.md](tailscale.md). Install the official GitHub release. Fetch the latest version and its sha256 from the API, and
 verify the download against it:
 
 ```sh
@@ -162,7 +162,7 @@ adb -s $S shell am force-stop org.lineageos.jelly        # close the login brows
 ```
 
 Tell the owner that the Tailscale Android app always uploads connection-metadata logs (no traffic)
-to `log.tailscale.com`. They can block that domain at the router.
+to `log.tailscale.com` ([tailscale.md](tailscale.md#privacy)).
 
 ## 7. Re-lock landscape (the login browser undoes it)
 
@@ -177,7 +177,7 @@ adb -s $S shell "dumpsys window | grep -m1 'mRotation='"     # mRotation=0
 
 ## 8. Smoke test (release build)
 
-Release builds are minified, and a missing JNI keep rule only crashes there. Watch for about 2 minutes:
+Release builds are minified, and a missing JNI keep rule only crashes there ([build.md](build.md#build)). Watch for about 2 minutes:
 
 ```sh
 p1=$(adb -s $S shell pidof $P); sleep 120; p2=$(adb -s $S shell pidof $P); echo "$p1 -> $p2"   # same pid
@@ -205,7 +205,7 @@ Then list what's left for the owner:
    setup server stops after 10 minutes. To show the QR again, restart the app
    (`adb shell am force-stop $P; adb shell am start -n $P/com.msp1974.vacompanion.MainActivity`).
    The phone must be on the same Wi-Fi or on Tailscale.
-2. **Music Assistant** (if this Echo plays music away from home): MA → Settings → Players →
-   Sendspin → Manual IP addresses → add the Echo's `100.x` address.
+2. **Music Assistant** (if this Echo plays music away from home): add the Echo's `100.x` address
+   to MA's Sendspin manual IP addresses ([tailscale.md](tailscale.md#music-assistant-sendspin-over-tailscale)).
 3. **Tailnet ACL** (if the tailnet restricts traffic): allow the HA host to reach the Echo on
    tcp:10800 (Wyoming), and MA to reach it on 8928 (Sendspin).

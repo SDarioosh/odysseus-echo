@@ -46,6 +46,9 @@ token or the sign-in is refused, 0 otherwise). An answer larger than the body ca
 | `KtorHaSocketTransport.kt` | the real socket: Ktor's WebSockets plugin on the OkHttp engine |
 | `HaClient.kt` | `HaClient : HaApi` (socket or REST), `HaClient.get(deviceManager)`, `DeviceHaAuth` |
 
+Outside `odysseus/ha/`: `odysseus/HaSetupClient.kt` and `home/weather/WeatherClient.kt` import
+`HaHttp` from here. No upstream file is changed. Tests: below.
+
 ## Rules
 
 - **Token and URL** come from the device's HA sign-in, as the weather does:

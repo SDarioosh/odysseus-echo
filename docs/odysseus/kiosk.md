@@ -53,7 +53,7 @@ When the dashboard fails to load, the app reloads it by itself:
   this adds the retries in between.
 - Logcat: `Kiosk: dashboard failed to load, reloading in N s`.
 
-## Code
+## Files
 
 All in `app/src/main/java/com/msp1974/vacompanion/odysseus/kiosk/`:
 

@@ -266,7 +266,7 @@ with text 1.3× (1.6× from 1500×900 dp).
 | File | What |
 |---|---|
 | `odysseus/music/` | the backend: `MusicBackend`, `HaMusicBackend`, `HaMusicJson`, `SelfPlayer`, `RoomChoice`, `MusicRepository`, `MusicSettings`, `PlayerState` |
-| `odysseus/player/` | the shared player pieces (`FullPlayer`, `Progress`, `VolumeBar`, `RoomChip`, …) |
+| `odysseus/player/` | the shared player pieces, also used by the clock: `PlayerViews.kt` (artwork, transport, title/artist, progress; row, pill, mini, line, bar and full players, `onControl(Control, value)`), `SendspinPlayerState.kt` (Sendspin ↔ `PlayerState`: `toPlayerState`, `commandFor`), `PlayerMetrics.kt`, `VolumeBar.kt`, `RoomChip.kt` |
 | `odysseus/home/music/MusicPage.kt` | the page: rail, tab content, message line, idle exemption, `LocalHomePageContext` |
 | `odysseus/home/music/MusicTabs.kt` | `MusicTab`, the registry `MusicTabs.all`, the selected tab |
 | `odysseus/home/music/NowPlayingTab.kt`, `RoomsTab.kt` | the two tabs; their pure rules in `NowPlayingRules.kt`, `RoomsRules.kt` |
@@ -283,6 +283,11 @@ with text 1.3× (1.6× from 1500×900 dp).
 | `odysseus/home/music/MusicSettingsSection.kt` | Menu → Odysseus → Music |
 | `odysseus/home/HomePage.kt`, `HomeNavigator.kt`, `HomeScreenController.kt`, `HomeHost.kt` | the page list, `idleExempt`, `MusicRefresh` |
 | `app/src/test/.../odysseus/home/music/Music{Tabs,Actions}Test.kt`, `home/HomeNavigatorTest.kt` | tests of the registry, error texts, clocks, art cache and the idle exemption; also `{Library,PlayMenu,MusicImages,MusicLayout}*Test.kt`, `music/HaMusicDetailTest.kt`, `clock/ClockNowPlayingTest.kt`, screenshots in `screenshots/` |
+| `odysseus/ha/` | the Home Assistant client the backend uses ([home-assistant-client.md](home-assistant-client.md)) |
+| `odysseus/managed/ManagedKeys.kt`, `ManagedBindings.kt` | `music.enabled`, `music.stay_while_playing` as hub-managed keys ([managed-settings.md](managed-settings.md)) |
+| `odysseus/home/clock/ClockStyle.kt` (`nowPlayingFrom`), `ClockElements.kt`, `ClockStyleSettingsSection.kt`, `odysseus/home/ClockPage.kt` | the clock's music source ([home-screen.md](home-screen.md)) |
+
+Tests by name: backend `SelfPlayerTest`, `HaMusicJsonTest`, `HaMusicBackendTest`, `HaMusicDetailTest`, `RoomChoiceTest`, `MusicRepositoryTest`; player `PlayerStateTest`, `SendspinPlayerStateTest`, `PlayerHelpersTest`; page `MusicTabsTest`, `MusicActionsTest`, `NowPlayingRulesTest`, `RoomsRulesTest`, `LibraryRulesTest`, `LibraryDetailKeyTest`, `PlayMenuTest`, `MusicImagesTest`, `MusicLayoutTest`, `MusicProbeScheduleTest`, `MusicPageLiveTest`, `HomeNavigatorTest`; clock `ClockNowPlayingTest`, `ClockStyleTest`; screenshots `PlayerShotsTest`, `LibraryShotsTest`, `SearchShotsTest`, `MusicPageShotsTest`, `MusicTabletShotsTest`, `ClockMusicShotsTest`.
 
 ## Adding a tab
 

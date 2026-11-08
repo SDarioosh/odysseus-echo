@@ -1,6 +1,14 @@
-# Turn card, voice check and thinking sound
+# Voice turns: indicator, turn card, voice check, thinking sound, barge-in
 
-The Echo Show shows what a voice turn did in Odysseus, tells Odysseus where each turn was asked and who asked it, and plays a soft tone when an answer takes a while. It follows the shared voice contract v1 (hub, Echo, Athena), §6 for the device.
+The Echo Show shows that it is listening and what a voice turn did in Odysseus, tells Odysseus where each turn was asked and who asked it, plays a soft tone when an answer takes a while, and lets a new "Hey Athena" interrupt a turn. It follows the shared voice contract v1 (hub, Echo, Athena), §6 for the device.
+
+## Listening indicator
+
+The app draws its own overlay on top of the dashboard, the clock or the blank screen. It needs no HA configuration.
+
+- A blue bar along the bottom pulses with "Listening…", and pulses faster once you start speaking.
+- It turns violet with "Thinking…" while HA and Odysseus work, then green with "Answering…".
+- The wake sound is VACA's own, set from HA ([echo-show-5.md](echo-show-5.md#wake-word-wake-sound-feedback)).
 
 ## The turn card
 
@@ -58,6 +66,15 @@ Only numbers, the device id, the context id and these flags are sent: never the 
 
 Read them on the server: `python scripts/voice_timings.py` in the Odysseus checkout (hub docs: `docs/fork/voice-assistant.md#timings`).
 
+## Barge-in
+
+Saying "Hey Athena" while the device is still thinking or answering stops that turn and starts listening again. Upstream only stops the turn, so the question said right after the wake word was lost.
+
+- **Odysseus ends the old turn.** The app calls `POST <base>/satellite/interrupt` (`device_id`, and the interrupted turn's `context_id` when known; `odysseus/BargeIn.kt`). Odysseus ends that turn at once with an empty answer, and HA ends its run within about a second. This also works after a long "Thinking…".
+- **The new turn waits for HA.** It starts only once HA has ended the interrupted run (`odysseus/HaRunGate.kt`). In the meantime the app keeps what you say, for up to 15 s. The interrupted answer is dropped and never played. Without the Odysseus link the app waits for HA to end the old run by itself, which happens only after the agent has answered.
+- **Why the wait:** HA's Wyoming satellite (`homeassistant/components/wyoming/assist_satellite.py`) clears its "run in progress" flag on any run's `RUN_END`. Starting the new run first left the satellite deaf until it reconnected. This is worth reporting to HA.
+- **Checked** in the hub's sandbox (a real Home Assistant and an emulator of this code): `docs/fork/sandbox.md#voice-barge-in` in `SDarioosh/odysseus-expanded`. History: [history.md](history.md).
+
 ## Settings (Menu → Odysseus)
 
 | Setting | Default | What it does |
@@ -73,6 +90,8 @@ Nothing is fetched or posted until the device is linked (base URL and token belo
 ## Why the device asks Odysseus itself
 
 Home Assistant gives the satellite only the spoken answer. Extended OpenAI Conversation keeps only the reply's text, so nothing structured ever reaches the device. The device therefore asks Odysseus what each turn did, using the same voice token Home Assistant uses. HA also tells the agent nothing about the satellite (which device, which room, whose voice), so the device posts that itself.
+
+Every request to Odysseus goes through `OdysseusLink.send` (Bearer voice token, redirects not followed, timeouts and body cap as parameters; only the streamed update APK uses `openGet`). Features ask through one seam, `HubHttp` (`odysseus/HubHttp.kt`: `OdysseusLink` on the device, fakes in tests), with one `HubJson` and one status text (`hubStatusText`). The device and the hub are deployed together, so there are no fallbacks for older hubs.
 
 ## The feeds (hub side)
 
@@ -121,21 +140,26 @@ The URL must be reachable from the device: Odysseus's LAN or Tailscale address, 
 
 ## Files
 
-- `odysseus/OdysseusLink.kt`: settings, the Keystore-encrypted token, and the hub client (`fetchLatestTurn`, `fetchActions`, `postSatelliteTurn`, `postTimings`, `interruptTurn`, `testLink`).
+- `odysseus/OdysseusLink.kt`: settings, the Keystore-encrypted token, and the hub client (`send`, `openGet`, `fetchLatestTurn`, `fetchActions`, `postSatelliteTurn`, `postTimings`, `interruptTurn`, `testLink`).
+- `odysseus/HubHttp.kt`: `HubHttp`, `HubReply`, `HubJson`, `hubStatusText`: the one way features ask the hub (also used by the Today page, Done, announcements, updates and the recorder relay).
 - `odysseus/VoiceTurnApi.kt`: the turn and satellite-post JSON, link filtering, the card's content, the multipart body (pure, unit-tested).
 - `odysseus/TurnCard.kt`: the card, the source overlay, and fetching after a turn (`VoiceTurns`).
 - `odysseus/OdysseusTurn.kt`: one per voice turn: the satellite post, the thinking sound and the timings. Later per-turn features plug in here.
 - `odysseus/TurnTimings.kt`: the turn's stage times and their JSON (unit-tested).
 - `odysseus/TurnAudioRecorder.kt`: the copy of the turn's streamed audio, and the WAV writer (unit-tested).
-- `odysseus/ThinkingChime.kt`: when the thinking sound plays (unit-tested).
+- `odysseus/ThinkingChime.kt`: when the thinking sound plays (unit-tested); `assets/odysseus/thinking.wav`.
+- `odysseus/ListeningIndicator.kt`: the listening indicator (also the "Microphone off" pill, [recording.md](recording.md#the-privacy-button)).
+- `odysseus/BargeIn.kt`: the interrupt call to Odysseus; `odysseus/HaRunGate.kt`: waiting for HA to end the interrupted run (`HaRunGateTest`).
+- `odysseus/OdysseusSatellite.kt`: the one fork object `Satellite` holds: `onWakeWord` (barge-in), `onServerPacket`, `awaitHaIdle`, `beginTurn`, `onStage`; reset on a new satellite and on every `clientId` change.
+- `odysseus/OdysseusOverlays.kt`: what `MainActivity` composes over the screen (the indicator, the card, …).
 - `odysseus/followup/`: listening for the "yes" without the wake word ([follow-up.md](follow-up.md)); `VoiceTurns.awaitingConfirmation()` in `TurnCard.kt`.
 - `odysseus/OdysseusSettingsLayout.kt`: Menu → Odysseus. `odysseus/EchoSetup.kt` and the files next to it: the phone setup ([setup.md](setup.md)).
-- Hooks: `MainActivity.kt` (the card overlay), `ui/layouts/SettingsLayout.kt` (the tile and screen), `satellite/Satellite.kt` (`startAudioPipeline`: `OdysseusTurn.begin` and `onStage`, next to the listening indicator, through `odysseus/OdysseusSatellite.kt` (`beginTurn`, `onStage`); `tee` on the pipeline's microphone flow). The card overlay is composed in `odysseus/OdysseusOverlays.kt`.
-- Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/` (`./gradlew :app:testDebugUnitTest`).
+- Hooks: `MainActivity.kt` (the overlays, through `OdysseusOverlays`), `ui/layouts/SettingsLayout.kt` (the tile and screen), `satellite/Satellite.kt`, one line each through `OdysseusSatellite`: `clientId` (resets the run gate), `processMessage` (`onServerPacket`), `handleWakeWordDetection` (`onWakeWord`), the gate wait (`awaitHaIdle`), `startAudioPipeline` (`beginTurn`, `onStage`; `tee` on the pipeline's microphone flow).
+- Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/` (`VoiceTurnApiTest`, `TurnTimingsTest`, `TurnAudioRecorderTest`, `ThinkingChimeTest`, `HaRunGateTest`, `OdysseusLinkHttpTest`, `OdysseusLinkFailureTextTest`; `./gradlew :app:testDebugUnitTest`).
 
 ## Testing without the hub feed
 
-`docs/odysseus/echo-show-5.md` ("Voice actions card test") uses a stand-in for the feed with fictional actions. The two-finger menu gesture was injected with root `sendevent`, because `adb shell input` has one finger only. The same stand-in can serve `/turns/latest` and `/satellite/turn` (fictional data only).
+The card was first tested against a stand-in for the feed with fictional actions ([history.md](history.md#0140odysseus6-voice-actions-card)). The same stand-in can serve `/turns/latest` and `/satellite/turn` (fictional data only).
 
 ## Still to check on the real device
 

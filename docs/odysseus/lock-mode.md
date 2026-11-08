@@ -73,7 +73,7 @@ The device's own time zone and clock (`persist.sys.timezone`). The state is work
 15 s and at once after any change, so a scheduled lock lands within 15 s of the time. Daylight
 saving changes keep the wall-clock times.
 
-## Code
+## Files
 
 - `odysseus/lock/LockMode.kt` publishes `locked`; the rules are in `LockRules.kt`, the settings in
   `LockSettings.kt`, the screen in `LockOverlay.kt` and `LockSettingsSection.kt`.

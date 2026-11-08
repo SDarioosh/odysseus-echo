@@ -59,6 +59,12 @@ The follow-up therefore covers what HA's mechanism misses: Odysseus waits for a 
 didn't set `continue_conversation` (the agent integration doesn't pass it, or the question doesn't end
 with "?").
 
+One more thing HA does with `continue_conversation`: it sends the next turn in that chat session
+**only** to that agent and skips local intents (`prepare_recognize_intent`, `_intent_agent_only` in
+`assist_pipeline/default_pipeline.py`). In a live test a follow-up Odysseus had asked for was
+interrupted, so a fresh "what time is it?" went to Odysseus instead of HA. So Odysseus should ask
+for a follow-up only when its answer really is a question.
+
 ## Settings
 
 Menu → Odysseus, under "Thinking sound". Stored on the device in their own SharedPreferences file

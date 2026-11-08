@@ -82,3 +82,11 @@ The helpers (`Shots.kt`):
 The content is drawn inside `AppTheme` on the theme's background, filling the window. Use only
 fictional data ("Harbour Lights" by "The Fictional Band"). Code that reads the clock should take
 a fixed one (as `FullPlayer(clock = { 0L })`), so images don't change from run to run.
+
+## Files
+
+- `app/src/test/java/com/msp1974/vacompanion/screenshots/`: `Shots.kt` (the helpers above), the
+  `*ShotsTest.kt` classes (`PlayerShotsTest`, `LibraryShotsTest`, `SearchShotsTest`,
+  `MusicPageShotsTest`, `MusicTabletShotsTest`, `ClockMusicShotsTest`) and their fixtures.
+- `app/build.gradle.kts`: the Roborazzi plugin, `isIncludeAndroidResources`, `robolectricSdk`, and
+  the test filter that runs these only with `-Pscreenshots`; versions in `gradle/libs.versions.toml`.

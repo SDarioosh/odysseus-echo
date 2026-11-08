@@ -99,3 +99,12 @@ Cost on a 1 GB device: about 40–60 MB RAM for the Tailscale service. Battery d
 - Since 0.14.0+odysseus.24 (encrypted Sendspin): once Music Assistant is **paired** with the device
   it is accepted from any address, LAN or Tailscale, without a trusted id. The trusted-id setting
   above stays for an unpaired server. See `sendspin/README.md` "Encryption and pairing".
+- Before that fix, and still working: trusted Music Assistant server ids
+  (`sendspin_trusted_server_ids`, on-device only) are accepted from any address. A paired server
+  is too (`sendspin/README.md`, "Encryption and pairing").
+- Album art comes over the Sendspin connection itself, since MA's `artwork_url` is a LAN address
+  (`sendspin/README.md`, "Album art pushed over the connection"). When the app stops, the player
+  says goodbye with `restart`, so MA re-dials a manually added address ("Goodbye reason").
+- Files: `sendspin/SendspinAllowedAddresses.kt` (which addresses pass), `sendspin/SendspinPlayer.kt`,
+  `settings/Settings.kt` (the settings); in the `:sendspin` module `src/main/cpp/sendspin_jni.cpp`
+  (the check on inbound sockets) and `NativeSendspin.kt`.

@@ -78,7 +78,7 @@ The steps are in [build.md](build.md#publishing-an-update): build a release APK,
 copy it to the server, run `scripts/echo_release.py` on the hub. Each release needs a higher
 `N` in `odysseusVersionName`, or the device sees nothing new.
 
-## Code
+## Files
 
 | File | What |
 |---|---|
@@ -90,7 +90,14 @@ copy it to the server, run `scripts/echo_release.py` on the hub. Each release ne
 | `odysseus/update/UpdateInstaller.kt` | `PackageInstaller` session and `UpdateInstallReceiver` (manifest, not exported) |
 | `odysseus/update/UpdateSettings.kt`, `UpdateBanner.kt` | Menu → Odysseus → Updates; the clock banner |
 
-Tests: `UpdatePolicyTest`, `UpdateClientTest` (`./gradlew :app:testDebugUnitTest`).
+| `odysseus/update/UpdateStore.kt` | what it remembers across restarts (SharedPreferences `odysseus_update`): last check, a failed download, a dismissed banner |
+
+Hooks: `VACAApplication.kt` (starts `UpdateManager`), `odysseus/home/ClockPage.kt` (the banner),
+`odysseus/OdysseusSettingsLayout.kt` (the screen), `AndroidManifest.xml` (the receiver),
+`utils/Updater.kt` (GitHub updates off); `scripts/odysseus/setup_device.sh` allows
+`REQUEST_INSTALL_PACKAGES`.
+
+Tests: `UpdatePolicyTest`, `UpdateClientTest`, `AppReleaseHubFixturesTest` (`./gradlew :app:testDebugUnitTest`).
 
 ## Not done
 

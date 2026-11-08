@@ -114,7 +114,8 @@ phase. Check it on the device first (below), then decide.
   - `MainActivity.kt`: the card composable, beside the turn card, and the
     `odysseusAnnouncement` event, which turns the screen on as the Sendspin pairing prompt does
     (both one-line hooks into `odysseus/OdysseusOverlays.kt`: `OdysseusOverlays`, `OdysseusUi.SCREEN_ON_EVENTS`).
-- Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/announce/`,
+- Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/announce/` (`AnnouncementApiTest`,
+  `AnnouncementFeedTest`, `AnnouncementRulesTest`, `AnnouncementApiHubFixturesTest`),
   `.../odysseus/done/DoneApiTest.kt`.
 
 ## Still to check on the real device

@@ -100,6 +100,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
                 thinking = it; OdysseusLink.thinkingSound = it
             }
             com.msp1974.vacompanion.odysseus.followup.FollowUpSettingsSection() // answer without the wake word (odysseus/followup/)
+            com.msp1974.vacompanion.odysseus.wakeword.WakeWordTrainingSection() // real "Hey Athena" clips for retraining (odysseus/wakeword/)
             OutlinedTextField(
                 value = deviceName,
                 onValueChange = { deviceName = it; OdysseusLink.deviceName = it },

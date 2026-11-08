@@ -210,7 +210,7 @@ abstract class SatelliteWakeWorkHandler(
                                         detectionCooldowns[it.detection.wakeWordId] = now
                                     } else {
                                         Timber.i("Wake word detected: ${it.detection.wakeWord} (mic level $levelText)")
-                                        wakeWordDetected(it.detection)
+                                        if (!com.msp1974.vacompanion.odysseus.wakeword.WakeClips.onWake(it.detection.score)) wakeWordDetected(it.detection) // Odysseus fork: no wake during a training take; notes the wake for missed-wake clips (odysseus/wakeword/WakeClips.kt)
                                         detectionCooldowns[it.detection.wakeWordId] = now
                                     }
                                 }

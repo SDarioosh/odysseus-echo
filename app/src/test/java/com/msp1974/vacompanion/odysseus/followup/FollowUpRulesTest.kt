@@ -89,7 +89,7 @@ class FollowUpRulesTest {
         assertEquals(15, FollowUpRules.clampSeconds(60))
         assertEquals(8_000L, FollowUpRules.listenLimitMs(FollowUpRules.DEFAULT_SECONDS))
         assertEquals(15_000L, FollowUpRules.listenLimitMs(99))
-        assertTrue(FollowUpRules.SECONDS_CHOICES.all { it in FollowUpRules.MIN_SECONDS..FollowUpRules.MAX_SECONDS })
+        assertTrue(FollowUpRules.SECONDS_CHOICES.all { it in FollowUpRules.SECONDS_RANGE })
         assertTrue(FollowUpRules.DEFAULT_SECONDS in FollowUpRules.SECONDS_CHOICES)
     }
 

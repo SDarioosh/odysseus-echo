@@ -38,6 +38,7 @@ section.
 | Voice-turn timeout setting `pipeline_timeout`, default 60 s, was a fixed 20 s (`satellite/SatelliteAudioPipeline.kt`, `settings/Settings.kt`) | agent turns with Athena tool calls on a local model take longer | — |
 | Own application id and version; `versionCode` derived from `versionName` (`app/build.gradle.kts`) | never collides with the official build; upstream's counter changed on every Gradle run | [build](docs/odysseus/build.md) |
 | Bundled "Hey Athena" microWakeWord model | the Odysseus wake word, trained locally | [wake-word](docs/odysseus/wake-word.md) |
+| Wake word training: guided "Hey Athena" takes and, optionally, missed wakes, sent to the hub for retraining | the model was trained on synthetic voices only and misses real ones | [wake-word-training](docs/odysseus/wake-word-training.md) |
 | Threshold rounds to the nearest value (`utils/Helpers.kt`) | upstream truncated: 9.2 became 0.91 (general fix, worth offering upstream) | [wake-word](docs/odysseus/wake-word.md#threshold) |
 | "Auto" orientation checks for a real accelerometer or gyroscope (`device/ScreenUtils.kt`; `setup_device.sh` locks landscape) | cronos declares an accelerometer it lacks, so the screen stuck in portrait (general fix, worth offering upstream) | — |
 | App microphone processing off by default | the Echo's front-end already cleans the audio; doing it twice distorts speech | [echo-show-5](docs/odysseus/echo-show-5.md#microphone-processing) |

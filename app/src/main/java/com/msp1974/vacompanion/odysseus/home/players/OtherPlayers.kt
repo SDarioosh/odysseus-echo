@@ -4,7 +4,8 @@ package com.msp1974.vacompanion.odysseus.home.players
 // Driver (composed in HomeHost) polls Home Assistant through HaClient (POST /api/template) every
 // POLL_MS while the Echo's screen is in use and the setting is on; the clock page and the
 // dashboard's now-playing card show [current] whenever OtherPlayersRules.showOther says so, and
-// their buttons go to Home Assistant through [command] (a media_player call). Any failure keeps the last reading for a short while, then hides it.
+// their buttons go to Home Assistant through [command] (a media_player call). Any failure keeps
+// the last reading for a short while, then hides it.
 
 import android.os.SystemClock
 import androidx.compose.runtime.Composable

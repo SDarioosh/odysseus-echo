@@ -177,7 +177,6 @@ abstract class WyomingTCPServer(private val context: Context, val deviceManager:
                                 Timber.d("Client disconnected: $clientId.  Total: ${clients.size}")
 
                                 if (clientId == satellite?.clientId) {
-                                    com.msp1974.vacompanion.odysseus.HaRunGate.reset() // Odysseus fork
                                     satellite?.clientId = ""
                                 }
 
@@ -362,7 +361,6 @@ abstract class WyomingTCPServer(private val context: Context, val deviceManager:
 
     private suspend fun startSatellite(clientId: String) {
         Timber.d("Processing run satellite")
-        com.msp1974.vacompanion.odysseus.HaRunGate.reset() // Odysseus fork: HA has no run for us after (re)connecting
 
         // A run-satellite always cancels any pending pause-satellite timeout, regardless of
         // what happens below - including the "already running, just take over" branch, which

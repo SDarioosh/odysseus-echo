@@ -1,5 +1,6 @@
 package com.msp1974.vacompanion.odysseus.announce
 
+import com.msp1974.vacompanion.odysseus.OdysseusLink
 import com.msp1974.vacompanion.odysseus.VoiceActivity.Phase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -94,7 +95,6 @@ class AnnouncementRulesTest {
         assertEquals(120_000L, AnnouncementPolling.nextDelay(AnnouncementPolling.Outcome.FAILED, 3))
         assertEquals(AnnouncementPolling.MAX_BACKOFF_MS, AnnouncementPolling.nextDelay(AnnouncementPolling.Outcome.FAILED, 50))
         assertEquals(AnnouncementPolling.UNAUTHORIZED_MS, AnnouncementPolling.nextDelay(AnnouncementPolling.Outcome.UNAUTHORIZED, 0))
-        assertEquals(AnnouncementPolling.NOT_SUPPORTED_MS, AnnouncementPolling.nextDelay(AnnouncementPolling.Outcome.NOT_SUPPORTED, 0))
         assertEquals(AnnouncementPolling.NOT_LINKED_MS, AnnouncementPolling.nextDelay(AnnouncementPolling.Outcome.NOT_LINKED, 0))
     }
 
@@ -128,9 +128,8 @@ class AnnouncementRulesTest {
         assertTrue(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.FAILED, 20_000))
         // The screen going on and off every few seconds doesn't poll every few seconds.
         assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.OK, 2_000))
-        // A refused token, an older hub, no link: their long waits hold.
+        // A refused token, no link: their long waits hold.
         assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.UNAUTHORIZED, 60_000))
-        assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.NOT_SUPPORTED, 60_000))
         assertFalse(AnnouncementPolling.wakeHonored(AnnouncementPolling.Outcome.NOT_LINKED, 60_000))
     }
 
@@ -138,10 +137,11 @@ class AnnouncementRulesTest {
     fun aDeviceClockTwoHoursAheadStillShowsTheCard() {
         val ahead = 2 * 3_600_000L
         val deviceNow = now + ahead + 5_000
-        val offset = HubClock.offset(hubDateMs = now + 5_000, deviceNowMs = deviceNow)
+        // The hub's clock minus the device's, as Announcements takes it from the Date header.
+        val offset = (now + 5_000) - deviceNow
         assertEquals(-ahead, offset)
         // The hub made it at `now` and it is worth showing for an hour, on the hub's clock.
-        val cards = AnnouncementCards().add(listOf(a("an_1", expiresAt = now + 3_600_000)), deviceNow, offset!!)
+        val cards = AnnouncementCards().add(listOf(a("an_1", expiresAt = now + 3_600_000)), deviceNow, offset)
         assertEquals(deviceNow + AnnouncementCards.SHOW_MS, cards.items.single().untilMs)
         assertEquals(1, cards.prune(deviceNow + 1_000).items.size)
         // Judged on the hub's clock, the feed keeps it too (the device's own clock would drop it).
@@ -153,18 +153,12 @@ class AnnouncementRulesTest {
     }
 
     @Test
-    fun noDateHeaderNoOffset() {
-        assertNull(HubClock.offset(null, now))
-        assertNull(HubClock.offset(0L, now))
-    }
-
-    @Test
     fun anUnreadableFeedIsLoggedWithoutItsText() {
         val body = """{"announcements": [{"id": "an_9", "at": "soon", "text": "Fictional secret: the spare key is under the mat"}]}"""
         val e = runCatching { AnnouncementApi.parseFeed(body) }.exceptionOrNull()!!
-        val logged = AnnouncementPolling.describeError(e)
+        val logged = OdysseusLink.failureText(e)
         assertFalse(logged, logged.contains("spare key"))
         assertTrue(logged.startsWith("unreadable answer"))
-        assertEquals("timeout", AnnouncementPolling.describeError(java.net.SocketTimeoutException("timeout")))
+        assertEquals("timeout", OdysseusLink.failureText(java.net.SocketTimeoutException("timeout")))
     }
 }

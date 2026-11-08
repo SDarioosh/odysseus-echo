@@ -102,10 +102,8 @@ class DoneApiTest {
     @Test
     fun errorAnswers() {
         assertEquals(DoneOutcome.Kind.NOT_FOUND, kind(404, """{"error": "not found"}"""))
-        // A 404 without the hub's error is an older hub without the route.
-        assertEquals(DoneOutcome.Kind.NOT_SUPPORTED, kind(404, ""))
-        assertEquals(DoneOutcome.Kind.NOT_SUPPORTED, kind(404, "<html>Not Found</html>"))
-        assertEquals(DoneOutcome.Kind.NOT_SUPPORTED, kind(405))
+        assertEquals(DoneOutcome.Kind.NOT_FOUND, kind(404, ""))
+        assertEquals(DoneOutcome.Kind.OTHER, kind(405))
         assertEquals(DoneOutcome.Kind.BAD_REQUEST, kind(400, """{"error": "bad ref"}"""))
         assertEquals(DoneOutcome.Kind.REFUSED, kind(401))
         assertEquals(DoneOutcome.Kind.REFUSED, kind(403))
@@ -159,7 +157,7 @@ class DoneApiTest {
     fun clientNeverSendsAReminderUndo() = runBlocking {
         val hub = FakeHub { OdysseusLink.HubReply(200, "{}") }
         val r = DoneClient(hub).undo(DoneTarget.Reminder("todo:41"), "dev-1")
-        assertTrue(r is DoneOutcome.Failed && r.kind == DoneOutcome.Kind.NOT_SUPPORTED)
+        assertTrue(r is DoneOutcome.Failed && r.kind == DoneOutcome.Kind.OTHER)
         assertTrue(hub.sent.isEmpty())
     }
 

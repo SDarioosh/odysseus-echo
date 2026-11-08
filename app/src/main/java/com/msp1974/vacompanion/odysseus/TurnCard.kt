@@ -5,7 +5,7 @@ package com.msp1974.vacompanion.odysseus
 //   - up to three of its sources as chips; a tap opens the page in an overlay with a close button,
 //   - while Odysseus waits for a spoken "yes", the question it asked.
 // It asks the hub for the turn (GET /turns/latest, OdysseusLink.fetchLatestTurn) when the answer
-// starts and again when the turn ends; an older hub without that feed (404) gets GET /actions.
+// starts and again when the turn ends.
 // The card shows for SHOW_MS (AWAITING_SHOW_MS while a confirmation waits), until tapped, or until
 // the next wake word. Nothing is fetched when the device isn't linked to Odysseus.
 
@@ -98,9 +98,6 @@ object VoiceTurns {
     /** The turn (its turnStartedAt) the card in [shown] was fetched for; 0 = none yet. */
     @Volatile private var shownFor = 0L
 
-    /** False once the hub answered 404 for /turns/latest; then /actions is used. Reset on relink. */
-    @Volatile private var turnFeed = true
-
     /** A wake word: a new turn, so the previous card and page go. */
     fun onTurnStarted() {
         turnStartedAt = System.currentTimeMillis()
@@ -119,8 +116,11 @@ object VoiceTurns {
 
     fun closeLink() { _openLink.value = null }
 
-    /** The link settings changed: try the turn feed again. */
-    fun resetFeed() { turnFeed = true }
+    /**
+     * Does nothing: there is no older feed to fall back from any more. Kept only because the link
+     * settings (OdysseusSettingsLayout) still call it; remove with that call.
+     */
+    fun resetFeed() = Unit
 
     /** Asks Odysseus what the current turn did and shows it. */
     suspend fun refresh() {
@@ -171,25 +171,13 @@ object VoiceTurns {
         data object Stop : Fetched
     }
 
-    private suspend fun fetch(from: Long): Fetched {
-        if (turnFeed) {
-            when (val r = OdysseusLink.fetchLatestTurn(from)) {
-                is OdysseusLink.TurnResult.Ok -> {
-                    val turn = r.turn ?: return Fetched.NoTurn
-                    if (!VoiceTurnApi.isFromDevice(turn, deviceId)) return Fetched.NoTurn
-                    return Fetched.Card(VoiceTurnApi.cardState(turn))
-                }
-                is OdysseusLink.TurnResult.Failed -> { Timber.w("Odysseus turn: ${r.message}"); return Fetched.Stop }
-                OdysseusLink.TurnResult.NotSupported -> {
-                    Timber.i("Odysseus has no turn feed (404); using the actions feed")
-                    turnFeed = false
-                }
-            }
+    private suspend fun fetch(from: Long): Fetched = when (val r = OdysseusLink.fetchLatestTurn(from)) {
+        is OdysseusLink.TurnResult.Ok -> {
+            val turn = r.turn
+            if (turn == null || !VoiceTurnApi.isFromDevice(turn, deviceId)) Fetched.NoTurn
+            else Fetched.Card(VoiceTurnApi.cardState(turn))
         }
-        return when (val r = OdysseusLink.fetchActions(from)) {
-            is OdysseusLink.Result.Ok -> VoiceTurnApi.cardState(r.actions)?.let { Fetched.Card(it) } ?: Fetched.NoTurn
-            is OdysseusLink.Result.Failed -> { Timber.w("Odysseus actions: ${r.message}"); Fetched.Stop }
-        }
+        is OdysseusLink.TurnResult.Failed -> { Timber.w("Odysseus turn: ${r.message}"); Fetched.Stop }
     }
 }
 

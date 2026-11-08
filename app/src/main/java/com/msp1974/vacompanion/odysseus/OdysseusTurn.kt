@@ -80,11 +80,7 @@ class OdysseusTurn private constructor(
         if (current === this) current = null
         val body = timings.toJson(config.uuid)
         scope.launch {
-            when (val r = OdysseusLink.postTimings(body)) {
-                is OdysseusLink.TimingResult.Ok -> Timber.d("Odysseus turn timings sent: ${timings.marks()}")
-                OdysseusLink.TimingResult.NotSupported -> Timber.d("Odysseus turn timings: this Odysseus doesn't keep them")
-                is OdysseusLink.TimingResult.Failed -> Timber.w("Odysseus turn timings: ${r.message}")
-            }
+            if (OdysseusLink.postTimings(body)) Timber.d("Odysseus turn timings sent: ${timings.marks()}")
         }
     }
 

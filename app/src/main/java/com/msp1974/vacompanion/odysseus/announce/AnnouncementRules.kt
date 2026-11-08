@@ -20,7 +20,7 @@ data class AnnouncementCards(val items: List<AnnouncementCardItem> = emptyList()
 
     /**
      * New announcements arrived: each stays SHOW_MS from now, or until it expires if sooner.
-     * [clockOffsetMs] is the hub's clock minus the device's (HubClock): `expires_at` is the hub's.
+     * [clockOffsetMs] is the hub's clock minus the device's (Announcements.noteClock): `expires_at` is the hub's.
      */
     fun add(new: List<Announcement>, nowMs: Long, clockOffsetMs: Long = 0L): AnnouncementCards {
         val known = items.map { it.announcement.id }.toSet()
@@ -55,17 +55,6 @@ data class AnnouncementCards(val items: List<AnnouncementCardItem> = emptyList()
 }
 
 /**
- * The hub's clock as seen from the device. The feed's times (`at`, `expires_at`) are the hub's;
- * comparing them with a device clock that is off by an hour drops every announcement (or, the
- * other way, `since` is ahead of the hub and nothing new ever comes). Each answer's Date header
- * gives the offset.
- */
-object HubClock {
-    /** The hub's clock minus the device's, from an answer's Date header; null without one. */
-    fun offset(hubDateMs: Long?, deviceNowMs: Long): Long? = hubDateMs?.takeIf { it > 0 }?.let { it - deviceNowMs }
-}
-
-/**
  * Keeps the card out of a voice turn's way. A turn is "active" from its wake word (or follow-up)
  * until the voice indicator is idle again, and while the turn card or its page is up. An
  * announcement Home Assistant speaks also passes "listening" and "answering", but no wake word
@@ -86,15 +75,13 @@ object AnnouncementPolling {
     const val MAX_BACKOFF_MS = 5 * 60_000L
     /** Token refused: try again now and then; a relink also starts at once (link change). */
     const val UNAUTHORIZED_MS = 15 * 60_000L
-    /** An older hub without the feed. */
-    const val NOT_SUPPORTED_MS = 60 * 60_000L
     /** Not linked to Odysseus: no requests; only look at the settings again. */
     const val NOT_LINKED_MS = 60_000L
     const val HELLO_EVERY_MS = 60 * 60_000L
     /** "Poll now" (the screen came on) at most this often. */
     const val MIN_WAKE_GAP_MS = 10_000L
 
-    enum class Outcome { OK, FAILED, UNAUTHORIZED, NOT_SUPPORTED, NOT_LINKED }
+    enum class Outcome { OK, FAILED, UNAUTHORIZED, NOT_LINKED }
 
     /** [failures]: failed requests in a row, counting this one. */
     fun nextDelay(outcome: Outcome, failures: Int): Long = when (outcome) {
@@ -104,7 +91,6 @@ object AnnouncementPolling {
             minOf(POLL_MS shl n, MAX_BACKOFF_MS)
         }
         Outcome.UNAUTHORIZED -> UNAUTHORIZED_MS
-        Outcome.NOT_SUPPORTED -> NOT_SUPPORTED_MS
         Outcome.NOT_LINKED -> NOT_LINKED_MS
     }
 
@@ -116,18 +102,12 @@ object AnnouncementPolling {
 
     /**
      * Whether "poll now" (the screen came on) cuts the wait short after [outcome], [sinceRequestMs]
-     * after the last request. Not after a refused token, an older hub or while not linked (their
-     * long waits would be lost to every screen-on), and not more often than MIN_WAKE_GAP_MS (a
+     * after the last request. Not after a refused token or while not linked (their long waits
+     * would be lost to every screen-on), and not more often than MIN_WAKE_GAP_MS (a
      * motion sensor can turn the screen on and off every few seconds).
      */
     fun wakeHonored(outcome: Outcome, sinceRequestMs: Long): Boolean =
         (outcome == Outcome.OK || outcome == Outcome.FAILED) && sinceRequestMs >= MIN_WAKE_GAP_MS
-
-    /**
-     * A failed poll for the log. A feed that can't be read says only so: the JSON parser's message
-     * quotes the answer, which holds the announcements' text (the owner's words, never logged).
-     */
-    fun describeError(e: Throwable): String = com.msp1974.vacompanion.odysseus.OdysseusLink.failureText(e)
 
     /** A hello is due at start, hourly, and whenever what it says (or the hub) changed. */
     fun helloDue(lastHelloMs: Long?, lastSent: String?, nowSaying: String, nowMs: Long): Boolean =

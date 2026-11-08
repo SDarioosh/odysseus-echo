@@ -2,8 +2,8 @@ package com.msp1974.vacompanion.odysseus.done
 
 // Odysseus fork: sends the Done and Undo requests of contract C5 (DoneApi.kt). HTTP goes through
 // DoneHttp so the client is unit-tested with a fake (DoneClientTest); on the device it is
-// OdysseusLink.hubRequest, asked for error bodies so a 404 "not found" is told from a missing
-// route. Never throws (but passes cancellation on).
+// OdysseusLink.hubRequest, asked for error bodies so the kinds of 409 and 503 are told apart.
+// Never throws (but passes cancellation on).
 
 import com.msp1974.vacompanion.odysseus.OdysseusLink
 import kotlin.coroutines.cancellation.CancellationException
@@ -27,7 +27,7 @@ class DoneClient(private val http: DoneHttp = LinkDoneHttp) {
 
     suspend fun undo(target: DoneTarget, deviceId: String): DoneOutcome {
         val path = DoneApi.undoPath(target)
-            ?: return DoneOutcome.Failed(DoneOutcome.Kind.NOT_SUPPORTED, "Can't be undone")
+            ?: return DoneOutcome.Failed(DoneOutcome.Kind.OTHER, "Can't be undone")
         return send(path, DoneApi.body(target, deviceId))
     }
 

@@ -79,7 +79,7 @@ data class DoneMarks(val marks: Map<DoneTarget, DoneMark> = emptyMap()) {
             is DoneOutcome.Ok -> copy(marks = marks - target)
             is DoneOutcome.Failed -> {
                 val final = outcome.kind == DoneOutcome.Kind.TOO_LATE || outcome.kind == DoneOutcome.Kind.NOT_FOUND ||
-                    outcome.kind == DoneOutcome.Kind.NOT_SUPPORTED || outcome.kind == DoneOutcome.Kind.CHANGED
+                    outcome.kind == DoneOutcome.Kind.CHANGED
                 put(
                     m.copy(
                         phase = DoneMark.Phase.DONE,

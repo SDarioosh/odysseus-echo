@@ -13,7 +13,7 @@ package com.msp1974.vacompanion.odysseus.done
 //   404 {"error": "not found"}, 400 malformed, 503 {"error": "athena unavailable"} or {"error": "busy"}.
 //   409 {"error": "changed"} on a done: the row's line was changed or removed in Odysseus since
 //   Today was fetched (the hub finds a moved line by the "title" the row showed); 409 on an undo:
-//   {"error": "too late to undo"}.
+//   {"error": "too late to undo"}. The app and the hub are deployed together: every route is there.
 //
 // Pure: paths, bodies and what an answer means, unit-tested (DoneApiTest). The requests go
 // through DoneHttp (DoneClient.kt), OdysseusLink.hubRequest on the device.
@@ -54,7 +54,7 @@ sealed interface DoneOutcome {
 
     data class Failed(val kind: Kind, val reason: String) : DoneOutcome
 
-    enum class Kind { NOT_FOUND, TOO_LATE, CHANGED, ATHENA_UNAVAILABLE, BUSY, REFUSED, NOT_SUPPORTED, BAD_REQUEST, UNREACHABLE, OTHER }
+    enum class Kind { NOT_FOUND, TOO_LATE, CHANGED, ATHENA_UNAVAILABLE, BUSY, REFUSED, BAD_REQUEST, UNREACHABLE, OTHER }
 }
 
 object DoneApi {
@@ -85,7 +85,7 @@ object DoneApi {
     /**
      * The JSON body of a done or undo request: `ref` or `id`, and the device id. [title], the row's
      * text as shown, goes with a done of a line by index ([sendsTitle]), so a hub whose line moved
-     * since ticks the right one (or answers 409 "changed"); an older hub ignores it.
+     * since ticks the right one (or answers 409 "changed").
      */
     fun body(target: DoneTarget, deviceId: String, title: String? = null): String = buildJsonObject {
         when (target) {
@@ -106,8 +106,7 @@ object DoneApi {
 
     /**
      * What the hub's answer means. [body] is the answer's body, also for errors (the start of it):
-     * a 404 with `{"error": "not found"}` is an unknown item, a 404 without it a hub that doesn't
-     * have the route yet. The reasons are short: they replace a row's due tag.
+     * 409 and 503 are told apart by their `error`. The reasons are short: they replace a row's due tag.
      */
     fun classify(code: Int, body: String): DoneOutcome = when (code) {
         in 200..299 -> {
@@ -124,12 +123,7 @@ object DoneApi {
         }
         400 -> DoneOutcome.Failed(DoneOutcome.Kind.BAD_REQUEST, "Odysseus refused it (400)")
         401, 403 -> DoneOutcome.Failed(DoneOutcome.Kind.REFUSED, "Token refused ($code)")
-        404 -> if (error(body) == "not found") {
-            DoneOutcome.Failed(DoneOutcome.Kind.NOT_FOUND, "Not found in Odysseus")
-        } else {
-            DoneOutcome.Failed(DoneOutcome.Kind.NOT_SUPPORTED, "Odysseus can't do this yet")
-        }
-        405 -> DoneOutcome.Failed(DoneOutcome.Kind.NOT_SUPPORTED, "Odysseus can't do this yet")
+        404 -> DoneOutcome.Failed(DoneOutcome.Kind.NOT_FOUND, "Not found in Odysseus")
         // "changed": the line was edited or removed in Odysseus; any other 409 is the undo's.
         409 -> if (error(body) == "changed") {
             DoneOutcome.Failed(DoneOutcome.Kind.CHANGED, "Changed in Odysseus")

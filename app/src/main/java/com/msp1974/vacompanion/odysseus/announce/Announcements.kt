@@ -56,13 +56,18 @@ object Announcements : EventListener {
     private var lastHelloMs: Long? = null
     private var lastHelloSaid: String? = null
 
-    /** The hub's clock minus the device's (HubClock), from the last answer; 0 until one came. */
+    /**
+     * The hub's clock minus the device's, from the last answer's Date header; 0 until one came.
+     * The feed's times (`at`, `expires_at`) are the hub's: compared with a device clock that is off
+     * by an hour, every announcement would be dropped (or, the other way, `since` would be ahead
+     * of the hub and nothing new would ever come).
+     */
     @Volatile private var clockOffsetMs = 0L
 
     private fun hubNow() = System.currentTimeMillis() + clockOffsetMs
 
     private fun noteClock(reply: OdysseusLink.HubReply) {
-        HubClock.offset(reply.dateMs, System.currentTimeMillis())?.let { clockOffsetMs = it }
+        reply.dateMs?.takeIf { it > 0 }?.let { clockOffsetMs = it - System.currentTimeMillis() }
     }
 
     @Synchronized
@@ -117,7 +122,8 @@ object Announcements : EventListener {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Timber.w("Announcements: ${AnnouncementPolling.describeError(e)}")
+                // Not the parser's message: it quotes the feed, the owner's words (failureText).
+                Timber.w("Announcements: ${OdysseusLink.failureText(e)}")
                 AnnouncementPolling.Outcome.FAILED
             }
             failures = if (outcome == AnnouncementPolling.Outcome.FAILED) failures + 1 else 0
@@ -170,7 +176,6 @@ object Announcements : EventListener {
                 AnnouncementPolling.Outcome.OK
             }
             401, 403 -> AnnouncementPolling.Outcome.UNAUTHORIZED
-            404, 405 -> AnnouncementPolling.Outcome.NOT_SUPPORTED
             else -> {
                 Timber.w("Announcements: feed answered HTTP ${reply.code}")
                 AnnouncementPolling.Outcome.FAILED
@@ -189,7 +194,6 @@ object Announcements : EventListener {
                 else Timber.i("Announcements: hello sent (${form.deviceName}, area '${form.area}', ${form.appVersionCode})")
             }
             401, 403 -> return AnnouncementPolling.Outcome.UNAUTHORIZED
-            404, 405 -> Timber.i("Announcements: this Odysseus has no hello route (${reply.code})")
             else -> {
                 // Try again on the next poll; the feed may still answer.
                 Timber.w("Announcements: hello answered HTTP ${reply.code}")

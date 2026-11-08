@@ -85,7 +85,7 @@ data class SatelliteTurnForm(
 
 /** What the turn card shows for one turn. */
 data class TurnCardState(
-    /** The hub's turn id ("actions:<id>" when the card came from the older /actions feed). */
+    /** The hub's turn id. */
     val turnId: String,
     val actions: List<VoiceAction> = emptyList(),
     val links: List<TurnLink> = emptyList(),
@@ -148,10 +148,6 @@ object VoiceTurnApi {
             answer = turn.answer?.trim()?.takeIf { it.isNotEmpty() && links.isNotEmpty() },
         )
     }
-
-    /** The card from the older /actions feed (no links, no confirmation). */
-    fun cardState(actions: List<VoiceAction>): TurnCardState? =
-        if (actions.isEmpty()) null else TurnCardState(turnId = "actions:" + actions.first().id, actions = actions)
 
     /** Action rows that fit the Echo Show 5's 480 px height next to the other parts of the card. */
     fun actionRows(state: TurnCardState, maxRows: Int = 4): Int {

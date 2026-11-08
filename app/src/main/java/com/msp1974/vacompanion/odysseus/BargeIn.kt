@@ -12,7 +12,7 @@ package com.msp1974.vacompanion.odysseus
 // Called on every wake word that starts a new turn, not only while the device shows a turn:
 // after 15 s of "Thinking…" Satellite.isResponding() reports the turn as stuck, but HA still has
 // the run. Nothing is sent when HA has no run, and only once per interrupted run.
-// Without an Odysseus link (or with an older Odysseus) the gate waits as before.
+// Without an Odysseus link the gate waits as before.
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +34,6 @@ object BargeIn {
         scope.launch {
             when (val r = OdysseusLink.interruptTurn(deviceId)) {
                 is OdysseusLink.InterruptResult.Ok -> Timber.i("Barge-in: Odysseus ended ${r.cut} turn(s), marked ${r.marked}")
-                OdysseusLink.InterruptResult.NotSupported -> Timber.i("Barge-in: this Odysseus can't end a turn early; waiting for its answer")
                 is OdysseusLink.InterruptResult.Failed -> Timber.w("Barge-in: asking Odysseus to end the turn failed: ${r.message}")
             }
         }

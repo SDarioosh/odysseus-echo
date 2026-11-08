@@ -38,7 +38,7 @@ interface UpdateHttp {
 
 sealed interface CheckResult {
     data class Found(val release: AppRelease) : CheckResult
-    /** The hub has no release uploaded (404), or an older hub without the route. */
+    /** The hub has no release uploaded (404). */
     data object NoRelease : CheckResult
     data class Failed(val message: String) : CheckResult
 }

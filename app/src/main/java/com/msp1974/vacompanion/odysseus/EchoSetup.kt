@@ -428,7 +428,6 @@ object EchoSetup {
         if (!claimed) return redirect(out, "/setup/${s.code}")
         OdysseusLink.baseUrl = baseUrl
         OdysseusLink.setToken(token)
-        VoiceTurns.resetFeed()
         val (ok, msg) = runBlocking { OdysseusLink.testLink() }
         val step = if (ok) Step("Link to Odysseus", StepStatus.OK, "Odysseus answered")
         else Step("Link to Odysseus", StepStatus.WARN, msg)

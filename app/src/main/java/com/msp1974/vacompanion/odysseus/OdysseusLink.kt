@@ -4,9 +4,8 @@ package com.msp1974.vacompanion.odysseus
 // completed. Home Assistant passes only the spoken answer to the satellite (Extended OpenAI
 // Conversation drops everything else), so the device asks Odysseus directly:
 //
-//   GET <base>/actions?since=<epoch ms>&limit=<n>      Authorization: Bearer <voice token>
-//   <base> is the same OpenAI base URL Home Assistant uses: https://<odysseus>/api/chat/voice/v1
-//   -> {"actions": [VoiceAction, ...]}   newest first; see VoiceAction for the fields.
+//   <base> is the same OpenAI base URL Home Assistant uses: https://<odysseus>/api/chat/voice/v1,
+//   every request with Authorization: Bearer <voice token>.
 //   GET <base>/turns/latest?since=<epoch ms>           -> {"turn": VoiceTurn | null}  (VoiceTurnApi.kt)
 //   POST <base>/satellite/turn (multipart)             -> device, area, wake word and the spoken command
 //   POST <base>/satellite/interrupt (form: device_id)  -> a barge-in: end this device's turn now (BargeIn.kt)
@@ -29,7 +28,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.net.HttpURLConnection
 import java.net.URL
@@ -39,6 +37,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+/** One thing a voice turn created or completed (VoiceTurn.actions). */
 @Serializable
 data class VoiceAction(
     val id: String = "",
@@ -59,9 +58,6 @@ data class VoiceAction(
     val source: String = "odysseus",
 )
 
-@Serializable
-private data class VoiceActionsResponse(val actions: List<VoiceAction> = emptyList())
-
 object OdysseusLink {
     private const val PREFS = "odysseus_link"
     private const val KEY_URL = "base_url"
@@ -72,7 +68,6 @@ object OdysseusLink {
     private const val KEY_DEVICE_NAME = "device_name"
     private const val KEYSTORE_ALIAS = "odysseus_link_token"
 
-    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     @Volatile private var appContext: Context? = null
 
     fun init(context: Context) {
@@ -175,16 +170,9 @@ object OdysseusLink {
         else -> e.message ?: e.javaClass.simpleName
     }
 
-    sealed interface Result {
-        data class Ok(val actions: List<VoiceAction>) : Result
-        data class Failed(val message: String) : Result
-    }
-
     sealed interface TurnResult {
         /** The newest finished turn since the time asked, or null when there is none yet. */
         data class Ok(val turn: VoiceTurn?) : TurnResult
-        /** The hub has no turn feed (404): an older Odysseus; use fetchActions instead. */
-        data object NotSupported : TurnResult
         data class Failed(val message: String) : TurnResult
     }
 
@@ -198,7 +186,6 @@ object OdysseusLink {
 
     private fun describe(code: Int, what: String) = when (code) {
         401, 403 -> "token refused ($code)"
-        404 -> "Odysseus has no $what (404)"
         else -> "HTTP $code"
     }
 
@@ -287,25 +274,12 @@ object OdysseusLink {
         }
     }
 
-    suspend fun fetchActions(sinceEpochMs: Long, limit: Int = 8): Result = withContext(Dispatchers.IO) {
-        try {
-            val r = request("/actions?since=$sinceEpochMs&limit=$limit")
-            if (r.code != 200) return@withContext Result.Failed(describe(r.code, "actions feed"))
-            Result.Ok(json.decodeFromString<VoiceActionsResponse>(r.body).actions)
-        } catch (e: Exception) {
-            Result.Failed(failureText(e))
-        }
-    }
-
     /** GET /turns/latest: the newest finished voice turn that started at or after [sinceEpochMs]. */
     suspend fun fetchLatestTurn(sinceEpochMs: Long): TurnResult = withContext(Dispatchers.IO) {
         try {
             val r = request("/turns/latest?since=$sinceEpochMs")
-            when (r.code) {
-                200 -> TurnResult.Ok(VoiceTurnApi.parseLatestTurn(r.body))
-                404 -> TurnResult.NotSupported
-                else -> TurnResult.Failed(describe(r.code, "turn feed"))
-            }
+            if (r.code != 200) return@withContext TurnResult.Failed(describe(r.code, "turn feed"))
+            TurnResult.Ok(VoiceTurnApi.parseLatestTurn(r.body))
         } catch (e: Exception) {
             TurnResult.Failed(failureText(e))
         }
@@ -331,8 +305,6 @@ object OdysseusLink {
     sealed class InterruptResult {
         /** The hub cut [cut] running turns short and marked [marked] it hadn't been asked yet. */
         data class Ok(val cut: Int, val marked: Int) : InterruptResult()
-        /** An older Odysseus without the route: the barge-in waits for the old answer as before. */
-        object NotSupported : InterruptResult()
         data class Failed(val message: String) : InterruptResult()
     }
 
@@ -344,35 +316,26 @@ object OdysseusLink {
         try {
             val body = "device_id=" + java.net.URLEncoder.encode(deviceId, "UTF-8")
             val r = request("/satellite/interrupt", "application/x-www-form-urlencoded", body.toByteArray(), readTimeoutMs = 4000)
-            when (r.code) {
-                200 -> VoiceTurnApi.parseInterruptResponse(r.body)
-                404, 405 -> InterruptResult.NotSupported
-                else -> InterruptResult.Failed(describe(r.code, "interrupt route"))
-            }
+            if (r.code != 200) return@withContext InterruptResult.Failed(describe(r.code, "interrupt route"))
+            VoiceTurnApi.parseInterruptResponse(r.body)
         } catch (e: Exception) {
             InterruptResult.Failed(failureText(e))
         }
     }
 
-    sealed class TimingResult {
-        object Ok : TimingResult()
-        /** An older Odysseus without the route. */
-        object NotSupported : TimingResult()
-        data class Failed(val message: String) : TimingResult()
-    }
-
-    /** POST /satellite/timing: when each stage of a finished turn happened ([TurnTimings.toJson]). */
-    suspend fun postTimings(json: String): TimingResult = withContext(Dispatchers.IO) {
-        try {
+    /**
+     * POST /satellite/timing: when each stage of a finished turn happened ([TurnTimings.toJson]).
+     * True when the hub took them; a failure is logged here.
+     */
+    suspend fun postTimings(json: String): Boolean = withContext(Dispatchers.IO) {
+        val failure = try {
             val r = request("/satellite/timing", "application/json", json.toByteArray(), readTimeoutMs = 4000)
-            when (r.code) {
-                in 200..299 -> TimingResult.Ok
-                404, 405 -> TimingResult.NotSupported
-                else -> TimingResult.Failed(describe(r.code, "timing route"))
-            }
+            if (r.code in 200..299) null else describe(r.code, "timing route")
         } catch (e: Exception) {
-            TimingResult.Failed(failureText(e))
+            failureText(e)
         }
+        failure?.let { Timber.w("Odysseus turn timings: $it") }
+        failure == null
     }
 
     /**
@@ -393,18 +356,12 @@ object OdysseusLink {
     ): HubReply =
         withContext(Dispatchers.IO) { request(path, contentType, body, readTimeoutMs, errorBody).let { HubReply(it.code, it.body, it.dateMs) } }
 
-    /** Tests the saved link: (ok, message to show). An older hub without the turn feed is tested with /actions. */
-    suspend fun testLink(): Pair<Boolean, String> {
-        val dayAgo = System.currentTimeMillis() - 86_400_000L
-        return when (val t = fetchLatestTurn(dayAgo)) {
+    /** Tests the saved link with the turn feed: (ok, message to show). */
+    suspend fun testLink(): Pair<Boolean, String> =
+        when (val t = fetchLatestTurn(System.currentTimeMillis() - 86_400_000L)) {
             is TurnResult.Ok -> true to "Linked: Odysseus answered"
             is TurnResult.Failed -> false to "Saved, but the test failed: ${t.message}"
-            TurnResult.NotSupported -> when (val r = fetchActions(dayAgo, 1)) {
-                is Result.Ok -> true to "Linked: Odysseus answered (an older Odysseus: actions only, no sources or voice check)"
-                is Result.Failed -> false to "Saved, but the test failed: ${r.message}"
-            }
         }
-    }
 }
 
 /**

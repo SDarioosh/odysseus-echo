@@ -86,8 +86,7 @@ class VoiceTurnApiTest {
     @Test
     fun aTurnThatDidNothingHasNoCard() {
         assertNull(VoiceTurnApi.cardState(VoiceTurn(id = "t3", answer = "It's 5 PM.", awaitingConfirmation = " ")))
-        assertNull(VoiceTurnApi.cardState(emptyList()))
-        assertNotNull(VoiceTurnApi.cardState(listOf(VoiceAction(id = "a", title = "Milk"))))
+        assertNotNull(VoiceTurnApi.cardState(VoiceTurn(id = "t4", actions = listOf(VoiceAction(id = "a", title = "Milk")))))
     }
 
     @Test

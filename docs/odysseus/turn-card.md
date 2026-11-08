@@ -39,7 +39,7 @@ POST <base>/satellite/turn   multipart/form-data, Authorization: Bearer <voice t
 - **Audio:** exactly the frames the pipeline streamed to HA for this turn: the audio kept since the wake word, then live audio until HA's VAD stopped listening. The first 15 s are kept. It's held in memory for that turn only, never written to storage or logged.
 - **Hub side:** Odysseus forwards it to Athena's speaker check and never stores it. Athena compares it with the enrolled voices, so personal answers can be kept to the owner's voice (`FORK_VOICE_PRIVATE` on the hub).
 - **Off:** with "Check my voice" off, the post carries no audio; the hub still learns the device and area.
-- **The context id:** the answer's `context_id` names this turn at the hub. The device keeps it for the turn (`OdysseusTurn.contextId`) and sends it with the turn's later requests, so the hub joins them exactly instead of by time: the turn card's feed (`context_id=`), the timings and a barge-in's interrupt. Until the hub has answered, or when the post failed, the turn has no id and those requests go without one, matched by time or device as before.
+- **The context id:** the answer's `context_id` names this turn at the hub. The device keeps it for the turn (`OdysseusTurn.contextId`) and sends it with the turn's later requests, so the hub joins them exactly instead of by time: the turn card's feed (`context_id=` beside `since=`; a turn is taken as ours when it carries our id, else only when it names this device), the timings and a barge-in's interrupt. Until the hub has answered, or when the post failed, the turn has no id and those requests go without one, matched by time or device as before.
 - **Logs:** the device logs the context id, the audio size and the speaker's `verified`/`is_owner`, never the audio.
 
 ## Thinking sound
@@ -80,7 +80,7 @@ Home Assistant gives the satellite only the spoken answer. Extended OpenAI Conve
 <base> = the OpenAI base URL Home Assistant uses: https://<odysseus>/api/chat/voice/v1
 Authorization: Bearer <voice token>        401/403 without a `voice` token
 
-GET <base>/turns/latest?context_id=<id>      the turn of that context: null until it's finished (or the id is unknown)
+GET <base>/turns/latest?since=<ms>&context_id=<id>   the turn of that context (null until it's finished); the hub answers by the id, an older one by time
 GET <base>/turns/latest?since=<epoch ms>     a turn without a context id: the newest finished one since then
 200 {"turn": {"id", "context_id", "started_at", "ended_at", "question", "answer",
               "links": [{"url", "label" | null}], "actions": [<action>, …],

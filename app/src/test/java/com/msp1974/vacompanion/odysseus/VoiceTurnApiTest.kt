@@ -138,8 +138,8 @@ class VoiceTurnApiTest {
 
     @Test
     fun theTurnIsAskedForByItsContextIdWhenKnownElseByTime() {
-        assertEquals("/turns/latest?context_id=ctx-1", VoiceTurnApi.latestTurnPath("ctx-1", 5000))
-        assertEquals("/turns/latest?context_id=a%26b+c", VoiceTurnApi.latestTurnPath("a&b c", 5000))
+        assertEquals("/turns/latest?since=5000&context_id=ctx-1", VoiceTurnApi.latestTurnPath("ctx-1", 5000))
+        assertEquals("/turns/latest?since=5000&context_id=a%26b+c", VoiceTurnApi.latestTurnPath("a&b c", 5000))
         assertEquals("/turns/latest?since=5000", VoiceTurnApi.latestTurnPath(null, 5000))
         assertEquals("/turns/latest?since=5000", VoiceTurnApi.latestTurnPath("", 5000))
     }
@@ -153,10 +153,17 @@ class VoiceTurnApiTest {
     @Test
     fun theCardAsksByContextIdAndTakesThatTurnAsOurs() = runBlocking {
         VoiceTurns.deviceId = "me" // the fixture's turn names device "dev": by time it wouldn't be ours
-        val hub = FakeHub(latest)
+        val hub = FakeHub(latest.replace("\"id\": \"t1\",", "\"id\": \"t1\", \"context_id\": \"ctx-1\","))
         val card = VoiceTurns.findCard(since = 1_000_000L, contextId = "ctx-1", http = hub)
-        assertEquals(listOf("/turns/latest?context_id=ctx-1"), hub.calls.map { it.path })
+        assertEquals(listOf("/turns/latest?since=998000&context_id=ctx-1"), hub.calls.map { it.path })
         assertEquals("t1", card?.state?.turnId)
+    }
+
+    @Test
+    fun aHubThatIgnoresTheContextIdStillGetsTheDeviceCheck() = runBlocking {
+        VoiceTurns.deviceId = "me" // the answer has no context_id (an older hub) and names device "dev"
+        val card = VoiceTurns.findCard(since = 1_000_000L, contextId = "ctx-1", http = FakeHub(latest))
+        assertEquals(null, card)
     }
 
     @Test

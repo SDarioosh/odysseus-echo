@@ -179,8 +179,8 @@ object VoiceTurns {
         when (val r = OdysseusLink.fetchLatestTurn(contextId, since - CLOCK_SLACK_MS, http)) {
             is OdysseusLink.TurnResult.Ok -> {
                 val turn = r.turn
-                // By context id the turn is ours; by time it may be another satellite's.
-                if (turn == null || (contextId == null && !VoiceTurnApi.isFromDevice(turn, deviceId))) Fetched.NoTurn
+                // A turn carrying our context id is ours; by time it may be another satellite's.
+                if (turn == null || !VoiceTurnApi.isOurTurn(turn, contextId, deviceId)) Fetched.NoTurn
                 else Fetched.Card(VoiceTurnApi.cardState(turn))
             }
             is OdysseusLink.TurnResult.Failed -> { Timber.w("Odysseus turn: ${r.message}"); Fetched.Stop }

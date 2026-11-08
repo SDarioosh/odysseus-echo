@@ -112,7 +112,8 @@ phase. Check it on the device first (below), then decide.
   - `service/BackgroundTask.kt`: `Announcements.start`/`stop`, beside the other background
     services, so it runs whether or not the activity is in front.
   - `MainActivity.kt`: the card composable, beside the turn card, and the
-    `odysseusAnnouncement` event, which turns the screen on as the Sendspin pairing prompt does.
+    `odysseusAnnouncement` event, which turns the screen on as the Sendspin pairing prompt does
+    (both one-line hooks into `odysseus/OdysseusOverlays.kt`: `OdysseusOverlays`, `OdysseusUi.SCREEN_ON_EVENTS`).
 - Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/announce/`,
   `.../odysseus/done/DoneApiTest.kt`.
 

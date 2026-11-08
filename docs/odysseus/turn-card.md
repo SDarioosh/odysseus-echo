@@ -127,7 +127,7 @@ The URL must be reachable from the device: Odysseus's LAN or Tailscale address, 
 - `odysseus/ThinkingChime.kt`: when the thinking sound plays (unit-tested).
 - `odysseus/followup/`: listening for the "yes" without the wake word ([follow-up.md](follow-up.md)); `VoiceTurns.awaitingConfirmation()` in `TurnCard.kt`.
 - `odysseus/OdysseusSettingsLayout.kt`: Menu → Odysseus. `odysseus/EchoSetup.kt` and the files next to it: the phone setup ([setup.md](setup.md)).
-- Hooks: `MainActivity.kt` (the card overlay), `ui/layouts/SettingsLayout.kt` (the tile and screen), `satellite/Satellite.kt` (`startAudioPipeline`: `OdysseusTurn.begin`, `tee` on the pipeline's microphone flow, `onStage` next to the listening indicator).
+- Hooks: `MainActivity.kt` (the card overlay), `ui/layouts/SettingsLayout.kt` (the tile and screen), `satellite/Satellite.kt` (`startAudioPipeline`: `OdysseusTurn.begin` and `onStage`, next to the listening indicator, through `odysseus/OdysseusSatellite.kt` (`beginTurn`, `onStage`); `tee` on the pipeline's microphone flow). The card overlay is composed in `odysseus/OdysseusOverlays.kt`.
 - Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/` (`./gradlew :app:testDebugUnitTest`).
 
 ## Testing without the hub feed

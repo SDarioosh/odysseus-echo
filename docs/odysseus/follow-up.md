@@ -93,8 +93,11 @@ setters (Compose state, persisted; seconds are clamped to 3–15), `FollowUpSett
 - `odysseus/TurnCard.kt`: `VoiceTurns.awaitingConfirmation()`.
 - `assets/odysseus/listening.wav`, made by `scripts/odysseus/make_listening_sound.py` (sine waves,
   reproducible, nothing downloaded).
-- Hooks: `satellite/Satellite.kt` (`startAudioPipeline`: `FollowUp.afterTurn` in `onFinish`, the
-  `followUpListenMs` parameter; new `startFollowUpListening`), `satellite/SatelliteAudioPipeline.kt`
+- `FollowUp.startListening`: the follow-up's pipeline, started the manual-wake way, through
+  `FollowUp.Host` (what it needs of the satellite; `odysseus/OdysseusSatellite.kt` implements it over
+  `Satellite`'s private state; `FollowUpStartTest` with a fake host).
+- Hooks: `satellite/Satellite.kt` (`startAudioPipeline`: `odysseus.afterTurn` in `onFinish`, the
+  `followUpListenMs` parameter), `satellite/SatelliteAudioPipeline.kt`
   (`followUpListenMs`: the listening limit in `hasExceededTimeInStage`, "nothing heard" in
   `handlePipelineError`), `odysseus/OdysseusSettingsLayout.kt` (one line).
 

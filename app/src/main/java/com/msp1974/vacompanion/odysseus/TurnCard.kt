@@ -126,18 +126,7 @@ object VoiceTurns {
     suspend fun refresh() {
         val since = turnStartedAt
         if (since == 0L || !OdysseusLink.showActions || !OdysseusLink.isConfigured) return
-        val from = since - CLOCK_SLACK_MS
-        repeat(2) { attempt ->
-            when (val found = fetch(from)) {
-                Fetched.Stop -> return
-                Fetched.NoTurn -> Unit
-                is Fetched.Card -> {
-                    if (turnStartedAt == since) { _shown.value = found.state; shownFor = since }
-                    return
-                }
-            }
-            if (attempt == 0) delay(RETRY_MS)
-        }
+        findCard(since)?.let { show(it, since) }
     }
 
     /**
@@ -149,19 +138,27 @@ object VoiceTurns {
         val since = turnStartedAt
         if (since == 0L || !OdysseusLink.isConfigured) return false
         if (shownFor == since) return _shown.value?.awaitingConfirmation != null
+        val found = findCard(since) ?: return false
+        if (OdysseusLink.showActions) show(found, since)
+        return found.state?.awaitingConfirmation != null
+    }
+
+    /** The turn that started at [since], asked twice ([RETRY_MS] apart) while the hub has none yet; null if none or failed. */
+    private suspend fun findCard(since: Long): Fetched.Card? {
         val from = since - CLOCK_SLACK_MS
         repeat(2) { attempt ->
             when (val found = fetch(from)) {
-                Fetched.Stop -> return false
-                Fetched.NoTurn -> Unit
-                is Fetched.Card -> {
-                    if (OdysseusLink.showActions && turnStartedAt == since) { _shown.value = found.state; shownFor = since }
-                    return found.state?.awaitingConfirmation != null
-                }
+                Fetched.Stop -> return null
+                Fetched.NoTurn -> if (attempt == 0) delay(RETRY_MS)
+                is Fetched.Card -> return found
             }
-            if (attempt == 0) delay(RETRY_MS)
         }
-        return false
+        return null
+    }
+
+    /** Shows [found] unless a newer turn has started since [since]. */
+    private fun show(found: Fetched.Card, since: Long) {
+        if (turnStartedAt == since) { _shown.value = found.state; shownFor = since }
     }
 
     private sealed interface Fetched {

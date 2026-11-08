@@ -17,7 +17,7 @@ Trained locally with [microWakeWord](https://github.com/kahrendt/microWakeWord).
 - **Final streaming test:** at a cutoff of 0.92, it misses 6.5 % and false-wakes 0.19 times per hour. The full table is under [Threshold](#threshold).
 
 **Retraining:** the scripts are in the owner's scratch folder (`gen_samples.sh`, `make_features.py`, `make_config.py`, `train.sh`, `train_gpu.py`). They're not in the repo because they depend on about 40 GB of local data.
-The biggest improvement would come from adding real recordings of the household saying "hey athena". Keep those private, and never commit them.
+The biggest improvement comes from adding real recordings of the household saying "hey athena": the Echo collects them (Menu → Odysseus → Wake word training) and the hub keeps them for download. How to use them: [wake-word-training.md](wake-word-training.md). Keep them private, and never commit them.
 
 ## Threshold
 

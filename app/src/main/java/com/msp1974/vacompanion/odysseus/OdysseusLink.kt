@@ -15,6 +15,7 @@ package com.msp1974.vacompanion.odysseus
 //   GET <base>/app/latest, GET <base>/app/apk          -> updates from the hub (odysseus/update/; the APK by openGet)
 //   POST <base>/todos/done, /reminders/done, /action-items/done, /todos/undo, /action-items/undo
 //                                                      -> Done buttons (odysseus/done/, through HubHttp)
+//   POST <base>/satellite/wakeword/clip (multipart)    -> a wake word training clip (odysseus/wakeword/, through HubHttp)
 //
 
 // The token is the same `voice`-scope token Home Assistant uses (read-only plus voice actions).

@@ -128,6 +128,7 @@ What the fork changes and why: [ODYSSEUS.md](ODYSSEUS.md). Each feature's doc in
 | Sendspin pairing, Tailscale | `sendspin/SendspinSecurity`, `SendspinAllowedAddresses` | [sendspin/README.md](sendspin/README.md), [tailscale](docs/odysseus/tailscale.md) |
 | Look (theme, icons) | `odysseus/OdysseusTheme` | [look](docs/odysseus/look.md) |
 | "Hey Athena" wake word | `assets/microwakeword/wakeWords/hey_athena.*` | [wake-word](docs/odysseus/wake-word.md) |
+| Wake word training clips (guided takes, missed wakes) for retraining | `odysseus/wakeword/WakeClips`, `WakeClipCatcher`, `WakeClipQueue` | [wake-word-training](docs/odysseus/wake-word-training.md) |
 
 ## Conventions to follow
 

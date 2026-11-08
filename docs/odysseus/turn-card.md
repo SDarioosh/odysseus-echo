@@ -75,6 +75,10 @@ Saying "Hey Athena" while the device is still thinking or answering stops that t
 - **Why the wait:** HA's Wyoming satellite (`homeassistant/components/wyoming/assist_satellite.py`) clears its "run in progress" flag on any run's `RUN_END`. Starting the new run first left the satellite deaf until it reconnected. This is worth reporting to HA.
 - **Checked** in the hub's sandbox (a real Home Assistant and an emulator of this code): `docs/fork/sandbox.md#voice-barge-in` in `SDarioosh/odysseus-expanded`. History: [history.md](history.md).
 
+### "Hey Athena, never mind"
+
+When a wake word turn's transcript is only a cancel phrase ("never mind", "nevermind", "forget it", "cancel", "stop talking", "be quiet", "shut up", "nothing", "that's all", "no thanks"; "Athena", "oh", "please" and punctuation around it are ignored), the device ends the turn there and drops its answer the same way as a barge-in, so it stays quiet (`odysseus/Nevermind.kt`, one hook in `satellite/SatelliteAudioPipeline.kt`). Upstream checked for "never mind" only in a continued conversation, so after a barge-in Odysseus answered it out loud. In a continued conversation (a follow-up) only "never mind" ends it: "cancel" and "no" there answer Odysseus's question.
+
 ## Settings (Menu → Odysseus)
 
 | Setting | Default | What it does |
@@ -140,10 +144,11 @@ The URL must be reachable from the device: Odysseus's LAN or Tailscale address, 
 
 ## Files
 
-- `odysseus/OdysseusLink.kt`: settings, the Keystore-encrypted token, and the hub client (`send`, `openGet`, `fetchLatestTurn`, `fetchActions`, `postSatelliteTurn`, `postTimings`, `interruptTurn`, `testLink`).
+- `odysseus/OdysseusLink.kt`: settings, the Keystore-encrypted token, and the hub client (`send`, `openGet`, `fetchLatestTurn`, `postSatelliteTurn`, `postTimings`, `interruptTurn`, `testLink`).
 - `odysseus/HubHttp.kt`: `HubHttp`, `HubReply`, `HubJson`, `hubStatusText`: the one way features ask the hub (also used by the Today page, Done, announcements, updates and the recorder relay).
 - `odysseus/VoiceTurnApi.kt`: the turn and satellite-post JSON, link filtering, the card's content, the multipart body (pure, unit-tested).
 - `odysseus/TurnCard.kt`: the card, the source overlay, and fetching after a turn (`VoiceTurns`).
+- `odysseus/Nevermind.kt`: the cancel phrases that end a turn unanswered (pure, `NevermindTest`); hook in `satellite/SatelliteAudioPipeline.kt` (`handleTranscript`).
 - `odysseus/OdysseusTurn.kt`: one per voice turn: the satellite post, the thinking sound and the timings. Later per-turn features plug in here.
 - `odysseus/TurnTimings.kt`: the turn's stage times and their JSON (unit-tested).
 - `odysseus/TurnAudioRecorder.kt`: the copy of the turn's streamed audio, and the WAV writer (unit-tested).

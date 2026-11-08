@@ -8,6 +8,7 @@ package com.msp1974.vacompanion.odysseus.lock
 //    Assistant's wake / media / alarm / toast actions, drops announcements (answering "played") and
 //    refuses conversations Home Assistant starts;
 //  - SendspinManager stops the Sendspin player, RecorderController stops and refuses recording.
+//  - WakeClips stops wake word training and forgets held audio; no clip is caught, kept or sent.
 // Home Assistant locks and unlocks it with vaca.send_event, event navigate, url odysseus://lock or
 // odysseus://unlock (handled in Satellite.handleAction). See docs/odysseus/lock-mode.md.
 

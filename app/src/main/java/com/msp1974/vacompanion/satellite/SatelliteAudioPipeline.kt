@@ -304,7 +304,7 @@ abstract class SatelliteAudioPipeline(
         lastRequestTranscript = text
         onRequestTranscript(pipelineId, text)
         // Handle pipeline cancel words
-        if (isContinuation && text.lowercase().replace(".", "") in CONTINUATION_STOP_WORDS) {
+        if (com.msp1974.vacompanion.odysseus.Nevermind.endsTurn(text, isContinuation, config.uuid)) { // Odysseus fork: also ends a wake word turn, answer dropped (odysseus/Nevermind.kt)
             stop()
             return
         }

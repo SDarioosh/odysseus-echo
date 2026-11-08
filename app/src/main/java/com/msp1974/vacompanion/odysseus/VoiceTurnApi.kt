@@ -176,8 +176,14 @@ object VoiceTurnApi {
         return rows.coerceAtLeast(1)
     }
 
-    /** A multipart/form-data body with text [fields] and, when given, one WAV file field "audio". */
-    fun multipartBody(boundary: String, fields: List<Pair<String, String>>, audioWav: ByteArray?): ByteArray {
+    /**
+     * A multipart/form-data body with text [fields] and, when given, one WAV file field "audio"
+     * named [audioFileName] (also the wake word clips' upload, odysseus/wakeword/WakeClipQueue.kt).
+     */
+    fun multipartBody(
+        boundary: String, fields: List<Pair<String, String>>, audioWav: ByteArray?,
+        audioFileName: String = "command.wav",
+    ): ByteArray {
         val out = ByteArrayOutputStream()
         fun line(s: String = "") { out.write(s.toByteArray(Charsets.UTF_8)); out.write(CRLF) }
         for ((name, value) in fields) {
@@ -188,7 +194,7 @@ object VoiceTurnApi {
         }
         if (audioWav != null) {
             line("--$boundary")
-            line("Content-Disposition: form-data; name=\"audio\"; filename=\"command.wav\"")
+            line("Content-Disposition: form-data; name=\"audio\"; filename=\"$audioFileName\"")
             line("Content-Type: audio/wav")
             line()
             out.write(audioWav)

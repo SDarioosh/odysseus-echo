@@ -92,6 +92,7 @@ open class MicroWakeWordEngine (
 
                     // Always run audio through the models to keep their internal state up to date
                     val detections = detector!!.detect(toByteBuffer(frame))
+                    com.msp1974.vacompanion.odysseus.wakeword.WakeClips.onFrame(context, deviceManager, frame, detections, wakeWords) // Odysseus fork: wake word training clips (odysseus/wakeword/WakeClips.kt)
                     for (detection in detections) {
                         if (detection.score > 0.1f) {
                             if (detection.wakeWordId in wakeWords) {

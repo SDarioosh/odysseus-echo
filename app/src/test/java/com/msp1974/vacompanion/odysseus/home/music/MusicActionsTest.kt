@@ -6,7 +6,6 @@ import com.msp1974.vacompanion.odysseus.music.MusicLocked
 import com.msp1974.vacompanion.odysseus.music.Room
 import com.msp1974.vacompanion.odysseus.music.SelfMatch
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,13 +42,6 @@ class MusicActionsTest {
         assertTrue(long.length <= "Play: ".length + 60)
         assertEquals("Play: IllegalStateException", musicActionMessage("Play", IllegalStateException()))
         assertEquals("boom", musicActionMessage("", RuntimeException("boom")))
-    }
-
-    @Test
-    fun wallClockIsToldFromElapsedRealtime() {
-        assertTrue(isWallClock(1_793_000_000_000L)) // 2026
-        assertFalse(isWallClock(86_400_000L * 400)) // 400 days of uptime
-        assertFalse(isWallClock(0))
     }
 
     @Test

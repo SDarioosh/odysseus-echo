@@ -30,6 +30,7 @@ import com.msp1974.vacompanion.odysseus.music.MusicRepository
 import com.msp1974.vacompanion.odysseus.music.MusicSettings
 import com.msp1974.vacompanion.odysseus.music.PlayerState
 import com.msp1974.vacompanion.odysseus.player.OnControl
+import com.msp1974.vacompanion.odysseus.player.PlayerClock
 import com.msp1974.vacompanion.odysseus.player.commandFor
 import com.msp1974.vacompanion.odysseus.player.toPlayerState
 import kotlinx.coroutines.delay
@@ -47,8 +48,8 @@ data class ClockMusic(
     val artwork: Bitmap?,
     /** Sendspin's dark artwork colour behind the blurred art; 0 for none. */
     val backgroundDark: Int = 0,
-    /** The clock [state]'s positionAtMs is on (MusicActions.clockFor). */
-    val clock: () -> Long = MusicActions.clockFor(state),
+    /** The clock [state]'s positionAtMs is on (PlayerClock; screenshots pass a fixed one). */
+    val clock: () -> Long = PlayerClock.now,
     val onControl: OnControl = { _, _ -> },
     /** A tap on the element: opens the Music page; null while the page isn't offered. */
     val onOpen: (() -> Unit)? = null,

@@ -10,11 +10,12 @@ import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
 
 /**
  * This Sendspin state as a [PlayerState]. `playing` is "active and playing" (a stopped stream
- * shows the play button, as the clock always did); `positionAtMs` stays on Sendspin's clock
- * ([android.os.SystemClock.elapsedRealtime]); pushed artwork goes to `artwork`; Sendspin's playback `speed` becomes `rate`. Volume and mute
+ * shows the play button, as the clock always did); `positionAtMs` moves from Sendspin's clock
+ * ([android.os.SystemClock.elapsedRealtime]) to the wall clock every PlayerState is on
+ * ([PlayerClock], [wallMinusElapsedMs]); pushed artwork goes to `artwork`; Sendspin's playback `speed` becomes `rate`. Volume and mute
  * aren't sent over this path, so they're never in `can`.
  */
-fun SendspinNowPlaying.toPlayerState(): PlayerState = PlayerState(
+fun SendspinNowPlaying.toPlayerState(wallMinusElapsedMs: Long = PlayerClock.wallMinusElapsed()): PlayerState = PlayerState(
     title = title.takeIf { it.isNotBlank() },
     artist = artist.takeIf { it.isNotBlank() },
     album = album.takeIf { it.isNotBlank() },
@@ -23,7 +24,7 @@ fun SendspinNowPlaying.toPlayerState(): PlayerState = PlayerState(
     playing = active && playing,
     durationS = if (durationMs > 0) durationMs / 1000.0 else null,
     positionS = positionMs.coerceAtLeast(0) / 1000.0,
-    positionAtMs = positionAtMs,
+    positionAtMs = PlayerClock.elapsedToWall(positionAtMs, wallMinusElapsedMs),
     shuffle = shuffle,
     repeat = when (repeat) { "one" -> Repeat.ONE; "all" -> Repeat.ALL; else -> Repeat.OFF },
     volume = null,

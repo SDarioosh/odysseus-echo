@@ -83,8 +83,8 @@ class WeatherClient(private val ha: HaApi) {
     }
 
     /**
-     * The forecast list, or null when the entity doesn't support [type] (REST answers 400, the
-     * websocket an error with code 0) or the answer has none. Other errors (a refused sign-in,
+     * The forecast list, or null when the entity doesn't support [type] (Home Assistant refuses the
+     * call: HaException code 400 on REST and the websocket) or the answer has none. Other errors (a refused sign-in,
      * HTTP 5xx) are thrown.
      */
     private suspend fun forecast(entityId: String, type: String): List<JsonObject>? {
@@ -92,7 +92,7 @@ class WeatherClient(private val ha: HaApi) {
         val response = try {
             ha.call("weather", "get_forecasts", data, returnResponse = true) as? JsonObject
         } catch (e: HaException) {
-            if (e.code != 400 && e.code != 0) throw e
+            if (e.code != 400) throw e
             null
         } ?: return null
         val forEntity = response[entityId] as? JsonObject ?: return null

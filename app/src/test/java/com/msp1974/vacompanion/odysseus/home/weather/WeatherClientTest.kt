@@ -96,16 +96,25 @@ class WeatherClientTest {
             {"datetime":"2026-11-05T06:00:00+00:00","is_daytime":true,"temperature":13.0},
             {"datetime":"2026-11-05T18:00:00+00:00","is_daytime":false,"temperature":6.0},
             {"datetime":"2026-11-06T06:00:00+00:00","is_daytime":true,"temperature":20.0}]}}""")
-        // REST answers 400, the websocket an error with code 0: both mean "not supported".
-        for (code in listOf(400, 0)) {
-            val fake = ha()
-            fake.answers["weather.get_forecasts"] = {
-                if (fake.calls.last().data["type"] == JsonPrimitive("daily")) throw HaException("not supported", code)
-                twice
-            }
-            assertEquals(13.0 to 6.0, WeatherClient(fake).todayHighLow("weather.home", TODAY, ZONE))
-            assertEquals(2, fake.calls.size)
+        // Home Assistant refusing the call is code 400 on both transports.
+        val fake = ha()
+        fake.answers["weather.get_forecasts"] = {
+            if (fake.calls.last().data["type"] == JsonPrimitive("daily")) throw HaException("not supported", 400)
+            twice
         }
+        assertEquals(13.0 to 6.0, WeatherClient(fake).todayHighLow("weather.home", TODAY, ZONE))
+        assertEquals(2, fake.calls.size)
+    }
+
+    @Test
+    fun aLostConnectionIsThrownNotTakenAsNoDailyForecast() = runBlocking {
+        val fake = ha().apply { answers["weather.get_forecasts"] = { throw HaException("websocket closed") } }
+        try {
+            WeatherClient(fake).todayHighLow("weather.home", TODAY, ZONE); fail()
+        } catch (e: HaException) {
+            assertEquals(0, e.code)
+        }
+        assertEquals(1, fake.calls.size)
     }
 
     @Test

@@ -91,7 +91,7 @@ setters (Compose state, persisted; seconds are clamped to 3–15), `FollowUpSett
   checks the guards, starts the follow-up; the listening sound.
 - `odysseus/followup/FollowUpSettings.kt`, `FollowUpSettingsSection.kt`: the settings and their screen.
 - `odysseus/TurnCard.kt`: `VoiceTurns.awaitingConfirmation()`.
-- `assets/odysseus/listening.wav`, made by `scripts/odysseus/make_listening_sound.py` (sine waves,
+- `assets/odysseus/listening.wav`, made by `scripts/odysseus/make_sounds.py` (sine waves,
   reproducible, nothing downloaded).
 - `FollowUp.startListening`: the follow-up's pipeline, started the manual-wake way, through
   `FollowUp.Host` (what it needs of the satellite; `odysseus/OdysseusSatellite.kt` implements it over

@@ -4,7 +4,7 @@ package com.msp1974.vacompanion.odysseus
 // but no answer has started after DELAY_MS, play one short soft tone, so a long Odysseus turn
 // (tool calls on a local model) doesn't sound like the device stopped listening. At most once per
 // turn, through the satellite's sound-effect player. The sound is bundled
-// (assets/odysseus/thinking.wav, made by scripts/odysseus/make_thinking_sound.py).
+// (assets/odysseus/thinking.wav, made by scripts/odysseus/make_sounds.py).
 
 import com.msp1974.vacompanion.satellite.PipelineStage
 

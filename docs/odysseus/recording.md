@@ -205,10 +205,10 @@ RecorderController.state     // StateFlow<RecorderUiState>: recorder (Idle / Rec
 ## Sounds
 
 `assets/odysseus/record_start.wav` and `record_stop.wav` are made from sine waves by
-`scripts/odysseus/make_record_sounds.py`:
+`scripts/odysseus/make_sounds.py`:
 
 ```bash
-python3 scripts/odysseus/make_record_sounds.py app/src/main/assets/odysseus
+python3 scripts/odysseus/make_sounds.py app/src/main/assets/odysseus
 ```
 
 They play through the app's sound-effect player (notification usage), not the satellite's, so

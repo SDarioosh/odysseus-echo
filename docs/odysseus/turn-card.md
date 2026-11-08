@@ -48,7 +48,7 @@ When HA has the question (`AWAITING_RESPONSE`) and no answer has started 5 s lat
 
 - **At most once per turn.** None once the answer's TTS is on its way.
 - **Never during a barge-in** (a wake word ends the old turn and its timer), **muted** (HA's mute switch or the privacy button), or **do-not-disturb**.
-- **The sound:** generated locally from sine waves by `scripts/odysseus/make_thinking_sound.py` into `app/src/main/assets/odysseus/thinking.wav`. The script is reproducible (same bytes every run); nothing is downloaded.
+- **The sound:** generated locally from sine waves by `scripts/odysseus/make_sounds.py` into `app/src/main/assets/odysseus/thinking.wav`. The script is reproducible (same bytes every run); nothing is downloaded.
 
 ## Timings
 

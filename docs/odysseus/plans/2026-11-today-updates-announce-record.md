@@ -429,7 +429,7 @@ Paste the output into a new issue on odysseus-echo. Then:
 > - a red "REC 12:34" or "NOTE 0:42" pill over every screen, and the screen kept on while
 >   recording;
 > - a short start sound and a two-tone stop sound (generate them like
->   `scripts/odysseus/make_thinking_sound.py`), not played while DND is on.
+>   `scripts/odysseus/make_sounds.py`), not played while DND is on.
 >
 > The `device` field is `echo-<config.uuid>`.
 >

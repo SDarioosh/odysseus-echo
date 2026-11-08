@@ -147,10 +147,11 @@ under it.
   neither, only the temperature shows.
 - **Refresh**: when the clock comes up, every 15 minutes while the home screen is on, when Home
   Assistant reconnects and when the setting changes.
-- **Read-only**, with the access token the Echo already holds for the dashboard:
-  `POST /api/template` (the entity list; condition, temperature, unit and `sun.sun`) and
-  `POST /api/services/weather/get_forecasts?return_response` (the forecast). Nothing is changed in
-  Home Assistant.
+- **Read-only**, through the app's Home Assistant client ([home-assistant-client.md](home-assistant-client.md),
+  with the access token the Echo already holds for the dashboard): templates (the entity list;
+  condition, temperature, unit and `sun.sun`) and `weather.get_forecasts` with its response (the
+  forecast; "not supported" is HTTP 400 over REST, an error over the websocket). Nothing is
+  changed in Home Assistant.
 - **Failures** hide nothing else: a failed refresh keeps the last reading for up to an hour, then
   the badge disappears. Logcat shows `Weather: ...` lines.
 
@@ -176,18 +177,27 @@ other speakers reach the clock through `clockNowPlaying` / `onClockCommand`.
   paused, another speaker that is playing takes over the line and the card.
 - **Buttons**: play, pause, next, previous, shuffle and repeat, as far as the entity supports them
   (`supported_features`), sent as `media_player.media_play`, `media_pause`, `media_next_track`,
-  `media_previous_track`, `shuffle_set`, `repeat_set`. The state is read again right after.
+  `media_previous_track`, `shuffle_set`, `repeat_set` (the Music page's mapping,
+  `HaMusicJson.controlCall`). The state is read again right after.
 - **Refresh**: every 4 seconds while the app is in front and the screen is on, and the clock or the
   dashboard's now-playing card is turned on; not while locked, not with the setting off. Whatever
   stops it forgets the speaker, so an old song doesn't flash up when the screen comes back, and a
-  read still under way when it stops is thrown away. One `POST /api/template` per read (a few hundred bytes per playing
-  speaker).
+  read still under way when it stops is thrown away. The polling is one coroutine on the main
+  thread, owned by `OtherPlayers.Driver`'s effect; a new run first waits for the one before it to
+  end, and a button press only asks the run to read again. One `POST /api/template` per read (a
+  few hundred bytes per playing speaker).
+- **Other Echos**: another Echo's Sendspin player is a speaker like any other (often in this
+  room), so it can show here and its buttons control it. The Music page's rule that its room guess
+  never claims another Echo's player (`isOtherVacaPlayer`) is about which player is *this*
+  device, which this feature never decides; this Echo's own music always wins (above).
 - **Artwork**: the entity's `entity_picture`, through Home Assistant's own media proxy (it carries
   its own access token). A picture URL on another host (Music Assistant's LAN address) may not load
   over Tailscale; the music-note placeholder shows then.
-- **Home Assistant**: no change and no re-pairing. It uses the access token the Echo already
-  holds for the dashboard, like the weather. `/api/template` needs that user to be an
-  administrator (the weather needs the same).
+- **Home Assistant**: no change and no re-pairing. It goes through the app's Home Assistant
+  client (`HaClient`, [home-assistant-client.md](home-assistant-client.md)) with the access token
+  the Echo already holds for the dashboard, like the weather: one token refresh on a 401, none
+  for a non-admin user's 401. `/api/template` needs that user to be an administrator (the weather
+  needs the same).
 - **Failures**: a failed read keeps the last speaker for 30 seconds, then hides it. Logcat shows
   `Other players: ...` lines.
 
@@ -330,13 +340,12 @@ read `LocalHomeStripPosition` (the strip's position, null outside `HomeHost`) in
 | `odysseus/home/clock/NightRules.kt`, `NightMode.kt` | the night look: when (plain Kotlin), light sensor, backlight |
 | `odysseus/home/clock/ClockStyleSettingsSection.kt` | Menu → Odysseus → Home screen → Clock style |
 | `res/font/clock_*.ttf` | the clock fonts (SIL OFL, `assets/licenses/*-OFL.txt`) |
-| `odysseus/home/weather/WeatherClient.kt` | the Home Assistant calls for the weather (testable `HaHttp`) |
+| `odysseus/home/weather/WeatherClient.kt` | the Home Assistant calls for the weather (over `HaApi`) |
 | `odysseus/home/weather/WeatherForecasts.kt` | today's high/low and condition → icon, plain Kotlin |
 | `odysseus/home/weather/WeatherRepository.kt` | the process-wide weather state and refresh |
 | `odysseus/home/weather/WeatherBadge.kt` | the badge in the clock's top left |
 | `res/drawable/odysseus_mdi_*.xml` | weather icons from @mdi/js 7.4.47 (`assets/licenses/MDI-LICENSE.txt`) |
-| `odysseus/home/players/OtherPlayersRules.kt` | music on other speakers: parsing, which speaker, buttons → services. Plain Kotlin |
-| `odysseus/home/players/OtherPlayersClient.kt` | the Home Assistant calls for it (testable `HaHttp`) |
+| `odysseus/home/players/OtherPlayersRules.kt` | music on other speakers: the template and its parsing, which speaker, buttons → services. Plain Kotlin apart from `snapshot(HaApi)` |
 | `odysseus/home/players/OtherPlayers.kt` | the process-wide state, polling, and where a button press goes |
 | `odysseus/home/today/TodayClient.kt` | contract C1: the call (through `HubHttp`, faked in tests) and lenient parsing |
 | `odysseus/home/today/TodayStore.kt` | what the page shows: not linked, loading, unreachable, ready/stale; the 2 h rule. Plain Kotlin |
@@ -355,6 +364,7 @@ read `LocalHomeStripPosition` (the strip's position, null outside `HomeHost`) in
 | `MainActivity.kt`, `ui/layouts/WebViewLayout.kt` | hooks (marked `Odysseus fork`) |
 | `app/src/test/.../odysseus/home/HomeNavigatorTest.kt` | tests of the rules |
 | `app/src/test/.../odysseus/home/clock/{ClockStyle,ClockToday,NightRules}Test.kt` | tests of the style model, presets, JSON and the clock's Today labels |
-| `app/src/test/.../odysseus/home/weather/WeatherClientTest.kt` | tests of the weather calls and rules |
+| `app/src/test/.../odysseus/home/weather/WeatherClientTest.kt` | tests of the weather calls (a fake `HaApi`) and rules |
+| `app/src/test/.../odysseus/home/players/OtherPlayersRulesTest.kt` | tests of the other-speaker reads (a fake `HaApi`), picks and buttons |
 | `app/src/test/.../odysseus/home/today/Today{Client,Store,Format}Test.kt` | tests of the Today parsing, staleness and layout rules |
 | `app/src/test/.../odysseus/done/Done{Api,Marks}Test.kt` | tests of the Done requests, answers and row states |

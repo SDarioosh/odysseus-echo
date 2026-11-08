@@ -2,10 +2,18 @@
 
 The app's one way for new features to reach Home Assistant (HA): REST for single requests, and
 a websocket for live states and actions while something watches them. Built for the Music page
-(plan `docs/odysseus/plans/2026-11-music.md`, contract I1); **nothing uses it yet**, so nothing
-opens the websocket in the app today. Upstream's HA code (the Wyoming satellite, the dashboard
-login, `AuthenticationManager`) is unchanged; the phone setup (`HaSetupClient`) and the weather
-(`WeatherClient`) keep their own REST calls over the same `HaHttp`.
+(plan `docs/odysseus/plans/2026-11-music.md`, contract I1). Its users:
+
+- the **Music page** (`music/MusicRepository` over `HaMusicBackend`): templates, service calls,
+  and the only `watch()`, so the websocket is open only while the Music page watches;
+- **music on other speakers** (`home/players/OtherPlayers`): a template every 4 s, and
+  `media_player.*` calls for the buttons ([home-screen.md](home-screen.md#music-on-other-speakers));
+- the **clock's weather** (`home/weather/WeatherClient`): templates and `weather.get_forecasts`
+  with its response.
+
+Upstream's HA code (the Wyoming satellite, the dashboard login, `AuthenticationManager`) is
+unchanged; only the phone setup (`HaSetupClient`, with the owner's token from the phone, not the
+Echo's) keeps its own REST calls over the same `HaHttp`.
 
 ## Using it
 

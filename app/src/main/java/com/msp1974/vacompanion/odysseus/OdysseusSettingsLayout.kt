@@ -46,6 +46,7 @@ import com.msp1974.vacompanion.odysseus.home.players.OtherPlayers
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherRepository
 import com.msp1974.vacompanion.odysseus.managed.ManagedNote
 import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
+import com.msp1974.vacompanion.odysseus.managed.secondsLabel
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.ui.components.MenuLayout
 import kotlinx.coroutines.launch
@@ -174,12 +175,12 @@ private fun HomeScreenSettings() {
             FilterChip(
                 selected = idle == seconds,
                 onClick = { HomeSettings.idleSeconds = seconds },
-                label = { Text(HomeSettings.idleLabel(seconds)) },
+                label = { Text(secondsLabel(seconds)) },
                 enabled = enabled && !ManagedSettings.isManaged("home.idle_seconds"),
             )
         }
     }
-    ManagedNote("home.idle_seconds", HomeSettings.idleLabel(idle))
+    ManagedNote("home.idle_seconds", secondsLabel(idle))
 
     // Weather in the clock's top left (odysseus/home/weather/).
     val weatherOn = HomeSettings.weatherEnabled
@@ -282,12 +283,12 @@ private fun KioskSettingsSection() {
             FilterChip(
                 selected = returnSeconds == seconds,
                 onClick = { KioskSettings.returnSeconds = seconds },
-                label = { Text(KioskSettings.returnLabel(seconds)) },
+                label = { Text(secondsLabel(seconds)) },
                 enabled = !ManagedSettings.isManaged("kiosk.return_seconds"),
             )
         }
     }
-    ManagedNote("kiosk.return_seconds", KioskSettings.returnLabel(returnSeconds))
+    ManagedNote("kiosk.return_seconds", secondsLabel(returnSeconds))
     Text(
         "When another app has been in front this long, this app comes back. Not while the screen is off.",
         fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,

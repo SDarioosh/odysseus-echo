@@ -3,17 +3,18 @@ package com.msp1974.vacompanion.odysseus.lock
 // Odysseus fork: Lock mode settings (Menu → Odysseus → Lock outside work hours). Stored on the
 // device in their own SharedPreferences file, not sent to Home Assistant. Off by default; it can
 // only be turned on once a PIN is set. The PIN is kept as a salted SHA-256 hash, never as typed.
-// The PIN and lock overrides survive a restart. See docs/odysseus/lock-mode.md.
+// The PIN and lock overrides survive a restart. Bespoke fields over a PrefStore (the times are
+// checked as a pair, `enabled` needs a PIN). See docs/odysseus/lock-mode.md.
 
 import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.msp1974.vacompanion.odysseus.settings.PrefStore
 import java.security.SecureRandom
 
 object LockSettings {
-    private const val PREFS = "odysseus_lock"
     private const val KEY_ENABLED = "lock_enabled"
     private const val KEY_OPEN = "lock_open_minute"
     private const val KEY_CLOSE = "lock_close_minute"
@@ -24,7 +25,7 @@ object LockSettings {
     private const val KEY_FAILURES = "lock_pin_failures"
     private const val KEY_LAST_FAILURE = "lock_pin_last_failure"
 
-    private var appContext: Context? = null
+    private val store = PrefStore("odysseus_lock")
 
     private var enabledState by mutableStateOf(false)
     private var openState by mutableIntStateOf(LockRules.DEFAULT_OPEN_MINUTE)
@@ -32,10 +33,7 @@ object LockSettings {
     private var hasPinState by mutableStateOf(false)
 
     /** Loads the stored values. Safe to call more than once. */
-    fun init(context: Context) {
-        if (appContext != null) return
-        appContext = context.applicationContext
-        val p = prefs() ?: return
+    fun init(context: Context) = store.init(context) { p ->
         val open = p.getInt(KEY_OPEN, LockRules.DEFAULT_OPEN_MINUTE)
         val close = p.getInt(KEY_CLOSE, LockRules.DEFAULT_CLOSE_MINUTE)
         if (LockRules.validTimes(open, close)) { openState = open; closeState = close }
@@ -44,7 +42,7 @@ object LockSettings {
         enabledState = p.getBoolean(KEY_ENABLED, false) && hasPinState
     }
 
-    private fun prefs() = appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs() = store.prefs
 
     /** Lock outside the work hours (default off). Can't be turned on without a PIN. */
     var enabled: Boolean

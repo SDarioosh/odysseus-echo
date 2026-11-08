@@ -38,11 +38,7 @@ fun RecordingSettingsSection() {
         "Record conversations (tap the record button) and voice notes (hold it 1 s) for Athena. " +
             "The audio goes only to your Odysseus hub. A red pill shows while anything records.",
         managedKey = "record.enabled",
-    ) {
-        RecorderSettings.enabled = it
-        if (!it) RecorderController.onRecordingDisabled()
-        RecordButton.refreshMute()
-    }
+    ) { RecorderSettings.enabled = it }
     Toggle(
         RecorderSettings.clockButton, "Record button on the clock",
         "A small record button in the clock page's bottom right. Also in the quick actions sheet.",
@@ -94,10 +90,7 @@ private fun PrivacyButtonChoice(recordingEnabled: Boolean) {
             for (m in PrivacyButtonMode.entries) {
                 RadioButton(
                     selected = mode == m,
-                    onClick = {
-                        RecorderSettings.privacyButton = m
-                        RecordButton.refreshMute()
-                    },
+                    onClick = { RecorderSettings.privacyButton = m },
                     enabled = hasButton && !ManagedSettings.isManaged("record.privacy_button"),
                 )
                 Text(

@@ -2,8 +2,8 @@ package com.msp1974.vacompanion.odysseus.managed
 
 // Odysseus fork: settings Odysseus manages for this device (plan contract C6,
 // docs/odysseus/managed-settings.md). The process-wide face of ManagedEngine:
-//   - register(): a setting's store says how to read and write it (ManagedBindings.kt has the
-//     built-in ones; a later setting adds its own, see the doc);
+//   - register(): how to read and write a setting's store (ManagedBindings.kt registers every
+//     field a store declares with `managed = …`, settings/PrefStore.kt);
 //   - isManaged(): Compose state for the settings screen ("Set by Odysseus", control disabled);
 //   - start()/fetchNow(): the hub is asked at start, after each hello and on a "settings" item of
 //     the announcements feed (odysseus/announce/Announcements.kt).
@@ -56,13 +56,6 @@ object ManagedSettings {
         val e = engine
         if (e == null) pending[key] = binding else { e.register(binding); publish(e) }
     }
-
-    /** Typed helpers for [register]. */
-    fun registerBool(key: String, get: () -> Boolean, set: (Boolean) -> Unit) =
-        register(key, get) { set(it as Boolean) }
-
-    fun registerInt(key: String, get: () -> Int, set: (Int) -> Unit) =
-        register(key, get) { set(it as Int) }
 
     /** True while Odysseus sets [key]: the settings screen shows it and disables the control. Compose state. */
     fun isManaged(key: String): Boolean = key in managedKeysState
@@ -137,7 +130,7 @@ object ManagedSettings {
         }
     }
 
-    /** True when there is nothing to retry (applied, not linked, refused or not supported). */
+    /** True when there is nothing to retry (applied, not linked or refused). */
     private suspend fun fetch(why: String): Boolean {
         val id = deviceId()
         if (!OdysseusLink.isConfigured || id.isBlank()) return true
@@ -159,7 +152,6 @@ object ManagedSettings {
                 return true
             }
             401, 403 -> Timber.w("Managed settings: token refused (${reply.code}); keeping the last settings")
-            404, 405 -> Timber.i("Managed settings: this Odysseus has no device settings (${reply.code}); keeping the last settings")
             else -> {
                 Timber.w("Managed settings: answered HTTP ${reply.code}")
                 return false

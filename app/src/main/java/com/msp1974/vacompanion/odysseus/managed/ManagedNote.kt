@@ -23,3 +23,10 @@ fun ManagedNote(key: String, value: String? = null) {
         )
     }
 }
+
+/** A number of seconds as the settings menu shows it: "Never" (0), "10 min", "8 s". */
+fun secondsLabel(seconds: Int): String = when {
+    seconds <= 0 -> "Never"
+    seconds % 60 == 0 -> "${seconds / 60} min"
+    else -> "$seconds s"
+}

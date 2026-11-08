@@ -113,7 +113,7 @@ What the fork changes and why: [ODYSSEUS.md](ODYSSEUS.md). Each feature's doc in
 |---|---|---|
 | Home screen over the live dashboard: clock, weather, other speakers | `odysseus/home/HomeHost`, `HomeNavigator`, `HomeScreenController` | [home-screen](docs/odysseus/home-screen.md) |
 | Today page and Done buttons | `home/today/TodayRepository`, `done/DoneClient` | [home-screen](docs/odysseus/home-screen.md#today-page) |
-| Music page (Music Assistant through HA) | `home/music/MusicPage`, `music/MusicRepository` | [music](docs/odysseus/music.md) |
+| Music page: every HA media player; library, search and queue for Music Assistant ones | `home/music/MusicPage`, `music/MusicRepository` | [music](docs/odysseus/music.md) |
 | Home Assistant client | `odysseus/ha/HaClient` | [home-assistant-client](docs/odysseus/home-assistant-client.md) |
 | Voice turns: indicator, turn card, satellite post, timings, thinking sound, barge-in | `odysseus/OdysseusTurn`, `TurnCard`, `BargeIn`, `HaRunGate` | [turn-card](docs/odysseus/turn-card.md) |
 | Answer "yes" without the wake word | `odysseus/followup/FollowUp` | [follow-up](docs/odysseus/follow-up.md) |

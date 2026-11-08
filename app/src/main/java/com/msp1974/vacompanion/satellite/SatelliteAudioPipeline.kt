@@ -3,6 +3,8 @@ package com.msp1974.vacompanion.satellite
 import android.content.Context
 import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.satellite.Satellite.Companion.isoNow
+import com.msp1974.vacompanion.odysseus.BargeIn // Odysseus fork
+import com.msp1974.vacompanion.odysseus.Nevermind // Odysseus fork
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.wyoming.WyomingEvent
@@ -304,7 +306,10 @@ abstract class SatelliteAudioPipeline(
         lastRequestTranscript = text
         onRequestTranscript(pipelineId, text)
         // Handle pipeline cancel words
-        if (isContinuation && text.lowercase().replace(".", "") in CONTINUATION_STOP_WORDS) {
+        // Odysseus fork: "never mind" also ends a wake word turn, and its answer is dropped (odysseus/Nevermind.kt).
+        if (Nevermind.cancels(text, isContinuation)) {
+            Timber.i("Pipeline [$pipelineId] cancelled by \"$text\"")
+            BargeIn.interruptHaRun(config.uuid)
             stop()
             return
         }

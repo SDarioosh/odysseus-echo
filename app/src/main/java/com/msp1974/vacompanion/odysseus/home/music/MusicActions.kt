@@ -14,7 +14,6 @@ import com.msp1974.vacompanion.odysseus.music.Control
 import com.msp1974.vacompanion.odysseus.music.MusicBackend
 import com.msp1974.vacompanion.odysseus.music.MusicLocked
 import com.msp1974.vacompanion.odysseus.music.MusicRepository
-import com.msp1974.vacompanion.odysseus.music.PlayerState
 import com.msp1974.vacompanion.odysseus.music.QueueSummary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -49,13 +48,6 @@ fun musicActionMessage(label: String, e: Throwable): String {
     val short = if (reason.length > MAX_REASON) reason.take(MAX_REASON - 1).trimEnd() + "…" else reason
     return if (label.isBlank()) short else "$label: $short"
 }
-
-/**
- * True when [positionAtMs] is on the wall clock (System.currentTimeMillis: Home Assistant's
- * media_position_updated_at), false when it is on SystemClock.elapsedRealtime (Sendspin). Any time
- * after 2001 on the wall clock is larger than any uptime a device reaches. Pure.
- */
-fun isWallClock(positionAtMs: Long): Boolean = positionAtMs >= 1_000_000_000_000L
 
 object MusicActions {
     /** How long a message stays. */
@@ -131,17 +123,6 @@ object MusicActions {
             null
         }
     }
-
-    /**
-     * The clock [state]'s positionAtMs is on, for FullPlayer / Progress(clock = …): the wall
-     * clock for Home Assistant's states (every state from MusicBackend.player and
-     * rememberPlayerState), elapsedRealtime for Sendspin's own (toPlayerState()).
-     */
-    fun clockFor(state: PlayerState?): () -> Long =
-        if (state == null || isWallClock(state.positionAtMs)) WALL_CLOCK else ELAPSED_CLOCK
-
-    private val WALL_CLOCK: () -> Long = { System.currentTimeMillis() }
-    private val ELAPSED_CLOCK: () -> Long = { android.os.SystemClock.elapsedRealtime() }
 
     private fun controlLabel(control: Control): String = when (control) {
         Control.PLAY -> "Play"

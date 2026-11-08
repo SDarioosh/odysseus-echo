@@ -78,19 +78,26 @@ The steps are in [build.md](build.md#publishing-an-update): build a release APK,
 copy it to the server, run `scripts/echo_release.py` on the hub. Each release needs a higher
 `N` in `odysseusVersionName`, or the device sees nothing new.
 
-## Code
+## Files
 
 | File | What |
 |---|---|
 | `odysseus/update/AppRelease.kt` | contract C2's JSON, checks a release is usable |
 | `odysseus/update/UpdatePolicy.kt` | when to check, whether to download, resume point, APK checks, installer messages (tested) |
 | `odysseus/update/UpdateClient.kt` | `/app/latest` and the download: resume, size and sha256 (tested with a fake hub) |
-| `odysseus/update/LinkUpdateHttp.kt` | HTTP over `OdysseusLink.openGet` (base URL and voice token) |
+| `odysseus/update/LinkUpdateHttp.kt` | HTTP with the link's base URL and voice token: `/app/latest` through `OdysseusLink.sendToHub` (the one hub request, 64 K chars at most), the APK streamed over `OdysseusLink.openGet` |
 | `odysseus/update/UpdateManager.kt` | the schedule and state (Compose), started from `VACAApplication` |
 | `odysseus/update/UpdateInstaller.kt` | `PackageInstaller` session and `UpdateInstallReceiver` (manifest, not exported) |
 | `odysseus/update/UpdateSettings.kt`, `UpdateBanner.kt` | Menu → Odysseus → Updates; the clock banner |
 
-Tests: `UpdatePolicyTest`, `UpdateClientTest` (`./gradlew :app:testDebugUnitTest`).
+| `odysseus/update/UpdateStore.kt` | what it remembers across restarts (SharedPreferences `odysseus_update`): last check, a failed download, a dismissed banner |
+
+Hooks: `VACAApplication.kt` (starts `UpdateManager`), `odysseus/home/ClockPage.kt` (the banner),
+`odysseus/OdysseusSettingsLayout.kt` (the screen), `AndroidManifest.xml` (the receiver),
+`utils/Updater.kt` (GitHub updates off); `scripts/odysseus/setup_device.sh` allows
+`REQUEST_INSTALL_PACKAGES`.
+
+Tests: `UpdatePolicyTest`, `UpdateClientTest`, `AppReleaseHubFixturesTest` (`./gradlew :app:testDebugUnitTest`).
 
 ## Not done
 

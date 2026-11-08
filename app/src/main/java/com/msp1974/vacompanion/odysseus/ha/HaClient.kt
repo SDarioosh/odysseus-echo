@@ -3,9 +3,10 @@ package com.msp1974.vacompanion.odysseus.ha
 // Odysseus fork: the app's one Home Assistant client for new features (docs/odysseus/
 // home-assistant-client.md). Service calls go over the websocket while it is open (someone is
 // watching), else REST; watch() keeps the websocket open while collected and polls REST every
-// 5 s while the socket can't deliver (GET /api/states/<id> per watched id, not the whole list). Templates, state lists and bytes are always REST.
-// Get the process-wide instance with HaClient.get(deviceManager). Nothing opens the socket yet
-// except a watch() (the Music page, later).
+// 5 s while the socket can't deliver (GET /api/states/<id> per watched id, not the whole list).
+// Templates, state lists and bytes are always REST. Get the process-wide instance with
+// HaClient.get(deviceManager); its users are the Music page (MusicRepository, the only watch()),
+// music on other speakers (home/players/) and the clock's weather (home/weather/).
 
 import com.msp1974.vacompanion.device.DeviceManager
 import com.msp1974.vacompanion.device.authentication.AuthenticationException

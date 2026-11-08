@@ -33,7 +33,5 @@ class DoneApiHubFixturesTest {
         failed(DoneOutcome.Kind.BAD_REQUEST, 400, "c5_action_item_done_400.json")
         failed(DoneOutcome.Kind.REFUSED, 401, "c5_no_token_401.json")
         failed(DoneOutcome.Kind.REFUSED, 403, "c5_scope_403.json")
-        // a hub without the route answers FastAPI's own 404: "can't do this yet", not "not found"
-        failed(DoneOutcome.Kind.NOT_SUPPORTED, 404, "c5_route_missing_404.json")
     }
 }

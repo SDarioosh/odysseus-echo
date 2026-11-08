@@ -17,9 +17,10 @@ Assistant is signed in and Music Assistant has at least one player.
   previous / play-pause / next, shuffle, repeat and volume; what plays now and next and "N in the
   queue"; a room chip to switch rooms. This device's own room may use the artwork Music Assistant
   pushes over Sendspin.
-- **Rooms**: every Music Assistant room with what it plays and a volume control, this device
-  first, marked "This Echo". Tap a room to select it; "Move here" moves what plays in another room
-  to this one; "Group with…" joins rooms (only where the player can group).
+- **Rooms**: every Music Assistant room, and Home Assistant's other media players (Cast, Sonos, TVs…)
+  while they are on, with what it plays and a volume control, this device first, marked "This
+  Echo". Tap a room to select it; "Move here" moves what plays in another room to this one; "Group
+  with…" joins rooms (only where the player can group). Both are Music Assistant's only.
 - **Library**: playlists, albums, artists, radio, tracks, podcasts and audiobooks, sorted by
   recent, name or added, favourites only if you like; artists and albums open a detail list.
 - **Search**: type two letters or more; results by kind.
@@ -66,19 +67,34 @@ is reachable over Tailscale where MA's LAN address isn't. Code: `app/src/main/ja
 
 | Backend call | Home Assistant |
 |---|---|
-| `rooms` | the rooms template (`HaMusicJson.ROOMS_TEMPLATE`, fixed text, no user input) at once, every minute and when a player appears or goes away (at most every 10 s); between runs `HaApi.watch()` on the players for names, availability and group members |
+| `rooms` | the rooms template (`HaMusicJson.ROOMS_TEMPLATE`, fixed text, no user input: every `media_player`, with `ma` = in `integration_entities('music_assistant')` and not `device_class: tv`) at once, every minute and when a player appears or goes away (at most every 10 s); between runs `HaApi.watch()` on every media player the template returned (listed or not) for state, names, availability and group members. Which are listed: `RoomListing` (below) |
 | `player(id)` | `watch()` attributes: title, artist, album, duration, position (+ `media_position_updated_at`), shuffle, repeat, volume, mute, `entity_picture_local` ?: `entity_picture` (a HA path, loaded with `HaApi.bytes`), `supported_features` → `can` |
-| `queue(id)` | `music_assistant.get_queue` (return_response, keyed by entity id); "No active queue" → null |
+| `queue(id)` | `music_assistant.get_queue` (return_response, keyed by entity id); "No active queue" → null; a room that isn't MA's → null, nothing asked |
 | `library` | `music_assistant.get_library` `{config_entry_id, media_type, order_by, favorite, offset, limit}`; `favorite` is sent only when true (MA reads `false` as "not favourites"); `hasMore` while a full page came back |
 | `search` | `music_assistant.search` `{config_entry_id, name, media_type: [...], limit}`; blank text asks nothing |
 | `play` | `music_assistant.play_media` `{entity_id, media_id: uri, media_type, enqueue: play/next/add/replace, radio_mode}` |
 | `control` | `media_player.media_play` / `media_pause` / `media_next_track` / `media_previous_track` / `media_seek` / `shuffle_set` / `repeat_set` / `volume_set` / `volume_mute`; `GROUP` = `join` |
 | `transfer` | `music_assistant.transfer_queue` target = to, `source_player` = from, `auto_play: true` (same room: nothing) |
+| `live` (`HaMusicBackend` only) | the listed rooms' HA state text, `PlayerState` and last update, from the same watch: the clock's other speakers |
 | `group` / `ungroup` | `media_player.join` (`group_members`, the leader left out) / `media_player.unjoin` |
 
 - `config_entry_id` comes with the rooms template (run once first if needed).
+- **Which media players are rooms** (`RoomListing`, pure, `RoomListingTest`): every MA player, as
+  before, whatever its state; any other media player while it is on (not `off`, `standby`,
+  `unavailable` or `unknown`; its live state, else the template's). A non-MA player with the same
+  name (any case, whitespace collapsed) as an MA player, in the same area or with no area on either
+  side, is that speaker's native twin (a Sonos as `media_player.kitchen` and MA's
+  `media_player.kitchen_2`) and is left out. Every media player the template returned is watched,
+  so a speaker that is turned on is listed at its next state, without a template run; one added to
+  Home Assistant comes with the next run (≤ 1 min).
+- **Non-MA rooms** (`Room.musicAssistant` false): `player` and `control` as for any player (the
+  controls its `supported_features` allow: play/pause, next/previous, seek, volume, mute, shuffle,
+  repeat); `queue` null; `play`, `transfer`, `group` and `ungroup` throw `IllegalArgumentException`
+  ("<name> isn't a Music Assistant player") for a room known not to be MA's, before anything is
+  sent. Its own `group_members` aren't shown (grouping is MA's only). It is never this device's
+  player (`matchSelf` gets the MA rooms only).
 - **Not an admin token**: HA refuses the template (401/403); the rooms then come from
-  `GET /api/states` (players with `mass_player_type`), without areas, identifiers or the config
+  `GET /api/states` (every media player; MA's have `mass_player_type`), without areas, identifiers or the config
   entry (so no ID match and no library until the token is an admin's).
 - **Lock mode**: `play`, `control`, `transfer`, `group` and `ungroup` throw `MusicLocked` while
   `LockMode.isLocked`, before anything is sent. Reading (rooms, player, queue, library, search) works.
@@ -109,13 +125,14 @@ is reachable over Tailscale where MA's LAN address isn't. Code: `app/src/main/ja
 5. Otherwise none: no "Play here"; the room picker offers to set the override.
 
 The room the page starts on (`RoomChoice.defaultRoom`): this device's room, else the first room in
-`config.area`, else the room used last (`MusicSettings.lastRoom`), else the first room.
+`config.area` (an MA room before another media player), else the room used last (`MusicSettings.lastRoom`), else the first room.
 
 ### State and settings
 
 - `MusicRepository` (process-wide, Compose state): `install(context, backend, signedIn, area)` or
   `installHa(context, ha, config)`; `rooms`, `selfRoom`, `selectedRoomId` (`select()` persists it),
-  `available` (HA signed in and at least one room), `reachable`. `attach()` / `detach()` start and
+  `available` (HA signed in and at least one Music Assistant room: other media players alone don't
+  offer the page), `reachable`. `attach()` / `detach()` start and
   stop live rooms (the page calls them when it shows / hides); `probe()` checks, at most every
   10 min, whether there is anything to offer while the page isn't shown;
   `setSelfOverride()` changes the override and finds this device's player again.
@@ -158,9 +175,10 @@ Code: `app/src/main/java/com/msp1974/vacompanion/odysseus/home/music/`.
   `backend.player(roomId)` while composed (this device's room gets Sendspin's pushed artwork);
   `rememberRoomArt(state)` loads `artUrl` through `HaApi.bytes` (8 bitmaps cached), else the pushed
   artwork (never the previous track's art while a new one loads). The volume bar shows the last
-  volume it sent until the player reports it back (2 s at most), so quick taps add up. Home
-  Assistant's states put `positionAtMs` on the wall clock, Sendspin's on
-  `elapsedRealtime`: pass `MusicActions.clockFor(state)` to `FullPlayer` / `Progress`.
+  volume it sent until the player reports it back (2 s at most), so quick taps add up. Every
+  `PlayerState.positionAtMs` is on the wall clock (`player/PlayerClock`, the default clock of
+  `FullPlayer` / `Progress`): Home Assistant's are, and Sendspin's `elapsedRealtime` positions are
+  converted in `toPlayerState()` (and back, for the upstream card, in `OtherPlayersRules.toNowPlaying`).
 
 ### Now playing
 
@@ -172,27 +190,30 @@ Code: `app/src/main/java/com/msp1974/vacompanion/odysseus/home/music/`.
   use one column. Text is 1.3x from 900 dp wide.
 - **Controls**: only those the player's `can` has, sent through `MusicActions.control`. Repeat
   cycles off → all → one.
-- **Which state**: MA's player state while it has a track. For this device's room, Sendspin's own
+- **Which state**: the room's player state while it has a track (any media player). For this device's room, Sendspin's own
   state (`toPlayerState()`, commands through `onSendspinCommand`, pushed artwork only) while
   Sendspin is active. Otherwise "Nothing playing in <room>", with its volume and "Move here from
-  <room>" (`MusicActions.transfer`) when another available room plays (not a group containing
-  this one) and this room is available.
+  <room>" (`MusicActions.transfer`) when another available MA room plays (not a group containing
+  this one) and this room is an available MA room.
 - **Queue**: `MusicActions.queue` again when the room or the track changes: "Next: <title> —
-  <artist>", "N in the queue". Hidden when the room has no queue.
+  <artist>", "N in the queue". Hidden when the room has no queue (always for a non-MA room).
 - **Room chip**: "<room> · This Echo ▾" ("This Echo?" when guessed from the area). A tap opens a
   vertical list, this device first; a pick calls `MusicActions.select`.
 
 ### Rooms
 
-`RoomsTab.kt`; the rules are in `RoomsRules.kt` (pure, `RoomsRulesTest`). Every room, this device
-first with "This Echo" ("This Echo?" when guessed from the area): artwork, name, area when it
+`RoomsTab.kt`; the rules are in `RoomsRules.kt` (pure, `RoomsRulesTest`). Every room (Music
+Assistant's and the other media players that are on), this device first with "This Echo" ("This Echo?" when guessed from the area): artwork, name, area when it
 differs, and what plays ("Title — Artist", " · Paused"; else "Idle", "Off" or "Unavailable",
 greyed), play/pause and a compact volume bar. One column below 840 dp, 2 below 1200 dp, else 3;
 it scrolls vertically only. Tap a room to select it and open **Playing**. The ⋮ menu:
 **Move music here** (to an available room, from a room that plays and isn't in its group, nor a
 Music Assistant group player containing it; with several, pick one), **Group with…** (ticks for
 the other available rooms whose player can group; unticked members are taken out; not on a room
-that is a member of another room's group), **Leave group** / **Ungroup**. Group leaders show "+N rooms", Music
+that is a member of another room's group), **Leave group** / **Ungroup**. All four are Music
+Assistant's: a room that isn't MA's has no ⋮ menu (play/pause and volume only on its card; the
+Playing tab has the rest of its controls), and is never a source or target of a move nor offered
+for a group. Group leaders show "+N rooms", Music
 Assistant group players "Group of N". The tab collects each room's player state once.
 
 Known limits: `PlayerState` has no Home Assistant state text, so "Off" is inferred (no title, no
@@ -234,7 +255,8 @@ it. The last results stay while the page is away (`SearchState`).
 `PlayMenu.kt` (rules pure, `PlayMenuTest`): Play now (`play`), Play next (`next`), Add to queue
 (`add`), Replace queue (`replace`), Radio from this (`play` + `radio_mode`, tracks and artists
 only); a station only plays. "in <room>": the selected room, else this device's room ("(here)"),
-else the first available; Change lists the available rooms, this device first. Through
+else the first available; Change lists the available rooms, this device first. Only Music
+Assistant rooms are offered (`PlayMenu.rooms`). Through
 `MusicActions.run`, so Lock → "Locked". Play now, Replace and Radio select the room and open
 Playing; Next and Add say "Plays next in X" / "Added to the queue in X".
 
@@ -265,8 +287,8 @@ with text 1.3× (1.6× from 1500×900 dp).
 
 | File | What |
 |---|---|
-| `odysseus/music/` | the backend: `MusicBackend`, `HaMusicBackend`, `HaMusicJson`, `SelfPlayer`, `RoomChoice`, `MusicRepository`, `MusicSettings`, `PlayerState` |
-| `odysseus/player/` | the shared player pieces (`FullPlayer`, `Progress`, `VolumeBar`, `RoomChip`, …) |
+| `odysseus/music/` | the backend: `MusicBackend`, `HaMusicBackend`, `HaMusicJson`, `RoomListing` (which media players are rooms), `SelfPlayer`, `RoomChoice`, `MusicRepository`, `MusicSettings`, `PlayerState` |
+| `odysseus/player/` | the shared player pieces, also used by the clock: `PlayerViews.kt` (artwork, transport, title/artist, progress; row, pill, mini, line, bar and full players, `onControl(Control, value)`), `SendspinPlayerState.kt` (Sendspin ↔ `PlayerState`: `toPlayerState`, `commandFor`), `PlayerClock.kt` (the wall clock every `PlayerState` is on; elapsedRealtime ↔ wall), `PlayerMetrics.kt`, `VolumeBar.kt`, `RoomChip.kt` |
 | `odysseus/home/music/MusicPage.kt` | the page: rail, tab content, message line, idle exemption, `LocalHomePageContext` |
 | `odysseus/home/music/MusicTabs.kt` | `MusicTab`, the registry `MusicTabs.all`, the selected tab |
 | `odysseus/home/music/NowPlayingTab.kt`, `RoomsTab.kt` | the two tabs; their pure rules in `NowPlayingRules.kt`, `RoomsRules.kt` |
@@ -277,12 +299,19 @@ with text 1.3× (1.6× from 1500×900 dp).
 | `odysseus/home/music/MusicLayout.kt` | one or two panes by size, columns beside the pane |
 | `odysseus/music/HaMusicDetail.kt` | `MediaDetail`, artist/album detail over `search`/`get_library` |
 | `odysseus/home/clock/ClockNowPlaying.kt` | the clock's now playing from this device or the selected room |
-| `odysseus/home/music/MusicActions.kt` | actions, error messages, `clockFor` |
+| `odysseus/home/music/MusicActions.kt` | actions, error messages |
 | `odysseus/home/music/MusicLive.kt` | `rememberPlayerState`, `rememberRoomArt`, the art cache |
 | `odysseus/home/music/MusicRefresh.kt` | install, attach/detach, probe |
 | `odysseus/home/music/MusicSettingsSection.kt` | Menu → Odysseus → Music |
 | `odysseus/home/HomePage.kt`, `HomeNavigator.kt`, `HomeScreenController.kt`, `HomeHost.kt` | the page list, `idleExempt`, `MusicRefresh` |
 | `app/src/test/.../odysseus/home/music/Music{Tabs,Actions}Test.kt`, `home/HomeNavigatorTest.kt` | tests of the registry, error texts, clocks, art cache and the idle exemption; also `{Library,PlayMenu,MusicImages,MusicLayout}*Test.kt`, `music/HaMusicDetailTest.kt`, `clock/ClockNowPlayingTest.kt`, screenshots in `screenshots/` |
+| `odysseus/ha/` | the Home Assistant client the backend uses ([home-assistant-client.md](home-assistant-client.md)) |
+| `odysseus/managed/ManagedKeys.kt`, `ManagedBindings.kt` | `music.enabled`, `music.stay_while_playing` as hub-managed keys ([managed-settings.md](managed-settings.md)) |
+| `odysseus/home/clock/ClockStyle.kt` (`nowPlayingFrom`), `ClockElements.kt`, `ClockStyleSettingsSection.kt`, `odysseus/home/ClockPage.kt` | the clock's music source ([home-screen.md](home-screen.md)) |
+| `odysseus/home/players/` | music on other speakers, a view over this list (`HaMusicBackend.rooms` / `.live`) ([home-screen.md](home-screen.md#music-on-other-speakers)) |
+| `app/src/test/resources/odysseus/music/rooms_template_all.json` | a fictional rooms-template answer with MA and other media players |
+
+Tests by name: backend `SelfPlayerTest`, `RoomListingTest`, `HaMusicJsonTest`, `HaMusicBackendTest`, `HaMusicDetailTest`, `RoomChoiceTest`, `MusicRepositoryTest`; player `PlayerStateTest`, `SendspinPlayerStateTest`, `PlayerHelpersTest`; page `MusicTabsTest`, `MusicActionsTest`, `NowPlayingRulesTest`, `RoomsRulesTest`, `LibraryRulesTest`, `LibraryDetailKeyTest`, `PlayMenuTest`, `MusicImagesTest`, `MusicLayoutTest`, `MusicProbeScheduleTest`, `MusicPageLiveTest`, `HomeNavigatorTest`; clock `ClockNowPlayingTest`, `ClockStyleTest`; screenshots `PlayerShotsTest`, `LibraryShotsTest`, `SearchShotsTest`, `MusicPageShotsTest`, `MusicTabletShotsTest`, `ClockMusicShotsTest`.
 
 ## Adding a tab
 

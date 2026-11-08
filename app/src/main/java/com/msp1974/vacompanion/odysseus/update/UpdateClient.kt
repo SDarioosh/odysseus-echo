@@ -8,6 +8,7 @@ package com.msp1974.vacompanion.odysseus.update
 //   GET <voice base>/app/latest  -> 200 AppRelease | 404 {"error": "no release"}
 //   GET <voice base>/app/apk     -> the file; "Range: bytes=N-" may be answered 206 or 200
 
+import com.msp1974.vacompanion.odysseus.hubStatusText
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
@@ -38,7 +39,7 @@ interface UpdateHttp {
 
 sealed interface CheckResult {
     data class Found(val release: AppRelease) : CheckResult
-    /** The hub has no release uploaded (404), or an older hub without the route. */
+    /** The hub has no release uploaded (404). */
     data object NoRelease : CheckResult
     data class Failed(val message: String) : CheckResult
 }
@@ -59,8 +60,7 @@ class UpdateClient(private val http: UpdateHttp) {
                     if (problem != null) CheckResult.Failed(problem) else CheckResult.Found(release!!)
                 }
                 404 -> CheckResult.NoRelease
-                401, 403 -> CheckResult.Failed("token refused (${r.code})")
-                else -> CheckResult.Failed("HTTP ${r.code}")
+                else -> CheckResult.Failed(hubStatusText(r.code))
             }
         }
     } catch (e: Exception) {
@@ -100,9 +100,8 @@ class UpdateClient(private val http: UpdateHttp) {
                         }
                     }
                     200 -> if (from > 0) { from = 0; part.delete() } // the hub ignored the range
-                    401, 403 -> return DownloadResult.Failed("token refused (${r.code})")
                     404 -> return DownloadResult.Failed("the hub has no APK (404)")
-                    else -> return DownloadResult.Failed("HTTP ${r.code}")
+                    else -> return DownloadResult.Failed(hubStatusText(r.code))
                 }
                 val body = r.body ?: return DownloadResult.Failed("empty answer from the hub")
                 var have = from

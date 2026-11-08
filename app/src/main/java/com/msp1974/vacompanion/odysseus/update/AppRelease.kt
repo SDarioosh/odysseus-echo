@@ -10,7 +10,7 @@ package com.msp1974.vacompanion.odysseus.update
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import com.msp1974.vacompanion.odysseus.HubJson
 
 @Serializable
 data class AppRelease(
@@ -36,9 +36,8 @@ data class AppRelease(
     companion object {
         const val APP_NAME = "odysseus-echo"
         private val SHA256_RE = Regex("[0-9a-f]{64}")
-        private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
         /** Parses the body of a 200 from /app/latest; throws on malformed JSON. */
-        fun parse(body: String): AppRelease = json.decodeFromString(serializer(), body)
+        fun parse(body: String): AppRelease = HubJson.decodeFromString(serializer(), body)
     }
 }

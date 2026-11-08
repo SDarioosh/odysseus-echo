@@ -21,7 +21,11 @@ import kotlinx.serialization.json.putJsonArray
 import java.net.URLEncoder
 import java.time.OffsetDateTime
 
-/** One row of the rooms template: an MA media player as Home Assistant knows it. */
+/**
+ * One row of the rooms template: a media player as Home Assistant knows it. [musicAssistant]
+ * rows (Music Assistant's own players) carry [type], [members], [ids] and [entry]; the others
+ * (Cast, Sonos, TVs, …) only name, area and [state] (the state when the template ran).
+ */
 data class RoomRow(
     val entityId: String,
     val name: String,
@@ -30,25 +34,38 @@ data class RoomRow(
     val members: List<String>,
     val ids: List<List<String>>,
     val entry: String?,
+    val musicAssistant: Boolean = true,
+    val state: String? = null,
 )
+
+/**
+ * A listed room's live Home Assistant state: [status] is HA's state text ("playing", "paused",
+ * "idle", …), [updatedMs] its last_updated (wall clock), [player] the neutral state.
+ */
+data class LivePlayer(val status: String, val player: PlayerState, val updatedMs: Long)
 
 /** A service to call on Home Assistant: `domain.service` with [data]. */
 data class HaCall(val domain: String, val service: String, val data: JsonObject)
 
 object HaMusicJson {
     /**
-     * Every MA media player with its name, area, type, group members, device identifiers and MA
-     * config entry. Fixed text, never user input (needs an admin token: /api/template).
+     * Every media player (any integration) with its name, area, state and whether it is one of
+     * Music Assistant's ('ma'); MA players also with their type, group members, device
+     * identifiers and MA config entry. An MA entity with device_class tv counts as a plain player.
+     * Fixed text, never user input (needs an admin token: /api/template).
      */
     val ROOMS_TEMPLATE = """
+{% set ma = integration_entities('music_assistant') %}
 {% set ns = namespace(r=[]) %}
-{% for e in integration_entities('music_assistant') if e.startswith('media_player.')
-   and state_attr(e, 'device_class') != 'tv' %}
-{% set ns.r = ns.r + [{'entity_id': e, 'name': state_attr(e, 'friendly_name'),
-   'area': area_name(e) or '', 'type': state_attr(e, 'mass_player_type'),
-   'members': state_attr(e, 'group_members') or [],
-   'ids': (device_attr(device_id(e), 'identifiers') or []) | map('list') | list,
-   'entry': config_entry_id(e)}] %}
+{% for s in states.media_player %}
+{% set e = s.entity_id %}
+{% set m = e in ma and s.attributes.get('device_class') != 'tv' %}
+{% set ns.r = ns.r + [{'entity_id': e, 'name': s.attributes.get('friendly_name'),
+   'area': area_name(e) or '', 'state': s.state, 'ma': m,
+   'type': s.attributes.get('mass_player_type') if m else none,
+   'members': (s.attributes.get('group_members') or []) if m else [],
+   'ids': ((device_attr(device_id(e), 'identifiers') or []) | map('list') | list) if m else [],
+   'entry': config_entry_id(e) if m else none}] %}
 {% endfor %}{{ ns.r | to_json }}
 """.trim()
 
@@ -87,39 +104,51 @@ object HaMusicJson {
 
     // ---- rooms ----
 
-    /** The rooms template's output; rows without an entity id are dropped. Throws on text that isn't a JSON list. */
+    /**
+     * The rooms template's output; rows without an entity id are dropped. A row without 'ma' (the
+     * template before every media player was listed) is MA's when it has a player type. Throws on
+     * text that isn't a JSON list.
+     */
     fun parseRooms(text: String): List<RoomRow> {
         val list = json.parseToJsonElement(text.trim()).arr() ?: throw IllegalArgumentException("rooms: not a list")
         return list.mapNotNull { el ->
             val o = el.obj() ?: return@mapNotNull null
             val id = o["entity_id"].str()?.takeIf { it.startsWith("media_player.") } ?: return@mapNotNull null
+            val type = o["type"].str()
+            val ma = o["ma"].bool() ?: (type != null)
             RoomRow(
                 entityId = id,
                 name = o["name"].str()?.takeIf { it.isNotBlank() } ?: id.removePrefix("media_player."),
                 area = o["area"].str() ?: "",
-                type = o["type"].str(),
-                members = o["members"].strings(),
-                ids = o["ids"].arr()?.mapNotNull { pair -> pair.arr()?.mapNotNull { it.str() } } ?: emptyList(),
-                entry = o["entry"].str()?.takeIf { it.isNotBlank() },
+                type = type.takeIf { ma },
+                members = if (ma) o["members"].strings() else emptyList(),
+                ids = if (ma) o["ids"].arr()?.mapNotNull { pair -> pair.arr()?.mapNotNull { it.str() } } ?: emptyList() else emptyList(),
+                entry = o["entry"].str()?.takeIf { ma && it.isNotBlank() },
+                musicAssistant = ma,
+                state = o["state"].str(),
             )
         }
     }
 
     /**
-     * Rooms from `GET /api/states` when the template is refused (a token that isn't admin): MA
-     * players have `mass_player_type`. No area, identifiers or config entry are known then.
+     * Rooms from `GET /api/states` when the template is refused (a token that isn't admin): every
+     * media player; MA players have `mass_player_type`. No area, identifiers or config entry are
+     * known then.
      */
     fun roomRowsFromStates(states: List<HaState>): List<RoomRow> = states
-        .filter { isMaPlayerState(it) }
+        .filter { it.entityId.startsWith("media_player.") }
         .map {
+            val ma = isMaPlayerState(it)
             RoomRow(
                 entityId = it.entityId,
                 name = it.attributes["friendly_name"].str() ?: it.entityId.removePrefix("media_player."),
                 area = "",
-                type = it.attributes["mass_player_type"].str(),
-                members = it.attributes["group_members"].strings(),
+                type = if (ma) it.attributes["mass_player_type"].str() else null,
+                members = if (ma) it.attributes["group_members"].strings() else emptyList(),
                 ids = emptyList(),
                 entry = null,
+                musicAssistant = ma,
+                state = it.state,
             )
         }
 
@@ -139,10 +168,12 @@ object HaMusicJson {
     )
 
     /**
-     * The rooms the page lists: names and group members as live as [states] has them, this device
-     * ([self]) first, then by name.
+     * The rooms the page lists ([RoomListing]): every MA player, and the other media players that
+     * are on (not off, standby, unavailable or unknown) and aren't a twin of an MA player; names
+     * and group members as live as [states] has them, this device ([self]) first, then by name.
      */
     fun buildRooms(rows: List<RoomRow>, states: Map<String, HaState>, self: SelfMatch?): List<Room> = rows
+        .filter { RoomListing.listed(it, states[it.entityId]?.state) }
         .map { row ->
             val s = states[row.entityId]
             Room(
@@ -150,12 +181,21 @@ object HaMusicJson {
                 name = s?.attributes?.get("friendly_name").str() ?: row.name,
                 area = row.area.takeIf { it.isNotBlank() },
                 isThisDevice = self?.entityId == row.entityId,
-                isGroup = row.type == "group",
-                groupMembers = s?.attributes?.get("group_members")?.strings() ?: row.members,
+                isGroup = row.musicAssistant && row.type == "group",
+                // Grouping is Music Assistant's only: a plain player's own group isn't shown.
+                groupMembers = if (!row.musicAssistant) emptyList() else s?.attributes?.get("group_members")?.strings() ?: row.members,
                 available = isAvailable(s),
+                musicAssistant = row.musicAssistant,
             )
         }
+        .let(RoomListing::withoutTwins)
         .sortedWith(compareBy<Room>({ !it.isThisDevice }, { it.name.lowercase() }, { it.entityId }))
+
+    /** The listed rooms' live states (for the clock's other speakers). */
+    fun livePlayers(rooms: List<Room>, states: Map<String, HaState>, nowMs: Long): Map<String, LivePlayer> =
+        rooms.mapNotNull { r ->
+            states[r.entityId]?.let { r.entityId to LivePlayer(it.state, playerState(it, nowMs), it.lastUpdatedMs) }
+        }.toMap()
 
     // ---- players ----
 

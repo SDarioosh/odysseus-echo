@@ -32,4 +32,13 @@ class RoomChoiceTest {
         assertEquals("media_player.c", RoomChoice.keepOrDefault("media_player.c", rooms, SelfMatch("media_player.d", How.ID), null, null))
         assertEquals("media_player.d", RoomChoice.keepOrDefault("media_player.x", rooms, SelfMatch("media_player.d", How.ID), null, null))
     }
+
+    @Test
+    fun inTheAreaAMusicAssistantRoomComesBeforeAnotherPlayer() {
+        val tv = room("tv", "Kitchen").copy(musicAssistant = false)
+        val list = listOf(tv) + rooms
+        assertEquals("media_player.b", RoomChoice.defaultRoom(list, null, "Kitchen", null))
+        // Only a plain player there: it is the room.
+        assertEquals("media_player.tv", RoomChoice.defaultRoom(listOf(room("a", null), tv), null, "Kitchen", null))
+    }
 }

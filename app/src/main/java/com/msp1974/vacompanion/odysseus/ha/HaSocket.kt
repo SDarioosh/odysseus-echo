@@ -150,7 +150,8 @@ class HaSocket(
         val error = reply["error"] as? JsonObject
         val text = (error?.get("message") as? JsonPrimitive)?.content
             ?: (error?.get("code") as? JsonPrimitive)?.content ?: "failed"
-        throw HaException("Home Assistant: $domain.$service: $text")
+        // HA refused the call itself, as REST's HTTP 400: callers tell it from a lost connection (0).
+        throw HaException("Home Assistant: $domain.$service: $text", 400)
     }
 
     // --- The connection loop -------------------------------------------------------------

@@ -1,13 +1,5 @@
 package com.msp1974.vacompanion.satellite
 
-import com.msp1974.vacompanion.odysseus.HaRunGate // Odysseus fork
-import com.msp1974.vacompanion.odysseus.BargeIn // Odysseus fork
-import com.msp1974.vacompanion.odysseus.OdysseusTurn // Odysseus fork
-import com.msp1974.vacompanion.odysseus.VoiceActivity // Odysseus fork
-import com.msp1974.vacompanion.odysseus.followup.FollowUp // Odysseus fork
-import com.msp1974.vacompanion.odysseus.followup.FollowUpRules // Odysseus fork
-import com.msp1974.vacompanion.odysseus.lock.LockMode // Odysseus fork
-
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -101,6 +93,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
     val deviceInfo = deviceManager.deviceInfo
 
     var clientId = clientIdString
+        set(value) { field = value; odysseus.onClientId() } // Odysseus fork: resets the run gate (odysseus/OdysseusSatellite.kt)
     val mediaManager: SatelliteMediaManager = SatelliteMediaManager(context, config)
 
     var sensorJob: Job? = null
@@ -162,7 +155,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
         state = SatelliteState.STARTING
         config.eventBroadcaster.addListener(this)
-        watchLockMode() // Odysseus fork (odysseus/lock/LockMode.kt)
+        odysseus.onStart() // Odysseus fork: Lock mode (odysseus/lock/SatelliteLock.kt)
 
         val loadedSettings = waitForSettings()
         if (!loadedSettings) {
@@ -402,9 +395,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
     }
 
     suspend fun processMessage(packet: WyomingPacket) {
-        // Odysseus fork: drop what HA still sends for a run a wake word interrupted (odysseus/HaRunGate.kt).
-        if (packet.type != WyomingEvent.CUSTOM_EVENT && HaRunGate.onServerPacket(packet.type)) return
-        if (packet.type != WyomingEvent.CUSTOM_EVENT && lockedServerPacket(packet.type)) return // Odysseus fork (odysseus/lock/)
+        if (odysseus.onServerPacket(packet)) return // Odysseus fork: run gate, Lock mode (odysseus/OdysseusSatellite.kt)
         when (packet.type) {
             WyomingEvent.CUSTOM_EVENT -> customEventHandler(clientId, packet)
             else -> {
@@ -460,12 +451,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
                     Timber.d("Wake word detected: $detection")
                     if (isResponding()) {
                         interruptResponse(detection)
-                        // Odysseus fork: a wake word during a turn starts a fresh turn (barge-in).
-                        // Upstream only stops, which drops the question asked right after it. The
-                        // new run waits for HA to end the old one (odysseus/HaRunGate.kt), which
-                        // Odysseus is asked to end at once (odysseus/BargeIn.kt).
-                        BargeIn.interruptHaRun(config.uuid)
-                        handleWakeWordDetection(detection)
+                        handleWakeWordDetection(detection) // Odysseus fork: and starts a fresh turn (barge-in, odysseus/OdysseusSatellite.kt)
                     } else if (mediaManager.alarmPlayer.isSounding()) {
                         onStopWordDetected(detection)
                     } else {
@@ -561,17 +547,14 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
         cancelDetectionBuffer()
         audioPipeline?.stop()
         audioPipeline = null
-        VoiceActivity.onIdle() // Odysseus fork
+        odysseus.showIdle() // Odysseus fork
         if (mediaManager.alarmPlayer.isSounding()) {
             handleAlarmAction(false)
         }
     }
 
     suspend fun handleWakeWordDetection(detection: WakeWordEngineProvider.WakeWordDetection) {
-        if (LockMode.isLocked) { // Odysseus fork: no voice while locked (odysseus/lock/)
-            Timber.i("Lock mode: wake (${detection.wakeWordId}) ignored, locked")
-            return
-        }
+        if (odysseus.onWakeWord(detection)) return // Odysseus fork: Lock mode, barge-in (odysseus/OdysseusSatellite.kt)
         if (clientId.isEmpty()) {
             Timber.e("Unable to run audio pipeline. Satellite not connected to HA")
             val toastMessage = "No connection to Home Assistant.  Unable to respond to voice command."
@@ -598,7 +581,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             // heard, and the audio from now on is kept, so nothing said while the devices agree
             // who answers is lost. Only the winner uses the audio; the others drop it.
             buffer = DetectionBuffer(microphone.audio, scope).also { detectionBuffer = it }
-            VoiceActivity.onWakeWord() // Odysseus fork: show "Listening…" at once
+            odysseus.showListening() // Odysseus fork
             playWakeWordDetectionSound()
 
             val won = VacaUdpBroadcast.instance?.arbitrateWakeWord(
@@ -622,10 +605,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
                 config.screenSaver = false
             }
             audioLogManager.onWakeWordDetected(detection.timestamp, detection.wakeWord, detection.score)
-            // Odysseus fork: never start a run while HA's previous one is still going (odysseus/HaRunGate.kt).
-            // A run still going here is interrupted too, e.g. after > 15 s of "Thinking…" (odysseus/BargeIn.kt).
-            BargeIn.interruptHaRun(config.uuid)
-            if (!HaRunGate.awaitIdle()) { VoiceActivity.onIdle(); return }
+            if (!odysseus.awaitHaIdle()) return // Odysseus fork: HA's previous run must end first (odysseus/HaRunGate.kt)
             startAudioPipeline(PipelineStartMode.WAKE_WORD_DETECTED, detection.timestamp, buffer)
             buffer = null // the pipeline owns it now
         } finally {
@@ -698,8 +678,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
     fun muteMicrophone(muted: Boolean) {
         runCatching {
-            // Odysseus fork: Lock mode keeps the wake word engine (and so the microphone) off.
-            wakeWordHandler?.engine?.setMuted(muted || LockMode.isLocked)
+            wakeWordHandler?.engine?.setMuted(muted || odysseus.locked) // Odysseus fork: Lock mode
         }.onFailure { e ->
             Timber.e(e, "Error setting wake word engine muted=$muted")
         }
@@ -728,9 +707,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             audioPipeline?.stop()
             audioPipeline = null
         }
-        if (startStage != PipelineStartMode.START_STREAM_TTS) HaRunGate.runStarted() // Odysseus fork
-        // Odysseus fork: per-turn satellite post, voice check audio and thinking sound (odysseus/OdysseusTurn.kt).
-        val odysseusTurn = OdysseusTurn.begin(context, startStage, config)
+        val odysseusTurn = odysseus.beginTurn(startStage) // Odysseus fork: run gate, satellite post, thinking sound (odysseus/OdysseusTurn.kt)
         audioPipeline = object: SatelliteAudioPipeline(context, scope, config, eventId, mediaManager, odysseusTurn.tee(buffer?.frames ?: microphone.audio)) {
             override fun sendMessage(packet: WyomingPacket) {
                 sendSatelliteMessage(clientId, packet.type, packet.data, packet.payload)
@@ -738,8 +715,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
             override fun onStateChange(state: PipelineStage) {
                 Timber.d("Audio pipeline state: $state")
-                VoiceActivity.onPipelineStage(state) // Odysseus fork: on-screen listening indicator
-                odysseusTurn.onStage(state, mediaManager) // Odysseus fork (odysseus/OdysseusTurn.kt)
+                odysseus.onStage(odysseusTurn, state) // Odysseus fork: listening indicator, the turn
                 audioPipelineLastStateChange = System.currentTimeMillis()
                 // Past listening the kept audio is of no use any more.
                 if (state.ordinal > PipelineStage.VOICE_STARTED.ordinal) cancelDetectionBuffer()
@@ -773,9 +749,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             override fun onFinish(reason: PipelineEndReason, continueConversation: Boolean) {
                 Timber.i("Pipeline ended.  Restarting: $continueConversation")
                 cancelDetectionBuffer()
-                // Odysseus fork: listen for a "yes" without the wake word when Odysseus waits on one (odysseus/followup/FollowUp.kt).
-                FollowUp.afterTurn(context, config, mediaManager, startStage, reason, continueConversation,
-                    busy = { isResponding() || arbitratingWakeWord }) { startFollowUpListening(it) }
+                odysseus.afterTurn(startStage, reason, continueConversation) // Odysseus fork: follow-up (odysseus/followup/FollowUp.kt)
                 // A continuing conversation keeps other devices ducked until it really finishes.
                 // This device ducked the others when it won arbitration, so it always unducks them.
                 if (!(reason == PipelineEndReason.END_OF_PIPELINE && continueConversation)) {
@@ -805,25 +779,6 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
         }.also {
             it.followUpListenMs = followUpListenMs // Odysseus fork
             it.run(startStage)
-        }
-    }
-
-    // Odysseus fork: the follow-up's pipeline, started the manual-wake way: only this device, no
-    // arbitration report (it ducks the others as a manual wake does); the listening sound instead of
-    // the wake sound; audio kept from the end of that sound (odysseus/followup/FollowUp.kt).
-    private suspend fun startFollowUpListening(listenLimitMs: Long): Boolean {
-        if (!FollowUpRules.canStartListening(state == SatelliteState.RUNNING, clientId.isNotEmpty(), isResponding(), arbitratingWakeWord)) return false
-        arbitratingWakeWord = true
-        try {
-            FollowUp.playSound(mediaManager)
-            if (state != SatelliteState.RUNNING || isResponding()) return false
-            VacaUdpBroadcast.instance?.arbitrateWakeWord(1.0f, contest = false)
-            val buffer = DetectionBuffer(microphone.audio, scope).also { detectionBuffer = it }
-            if (!HaRunGate.awaitIdle()) { cancelDetectionBuffer(); return false }
-            startAudioPipeline(PipelineStartMode.CONTINUE_CONVERSATION, buffer = buffer, followUpListenMs = listenLimitMs)
-            return true
-        } finally {
-            arbitratingWakeWord = false
         }
     }
 
@@ -861,16 +816,6 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
         Timber.d("Action received: $action")
         runCatching {
             val payloadStr = packet.getProp("payload")
-            // Odysseus fork: Lock mode (odysseus/lock/). Home Assistant locks and unlocks through
-            // navigate odysseus://lock|unlock; while locked nothing it sends may wake, play or show.
-            if (action == "navigate" && payloadStr.isNotEmpty()) {
-                val url = Json.parseToJsonElement(payloadStr).jsonObject["url"]?.jsonPrimitive?.content ?: ""
-                if (LockMode.handleRemote(url)) return
-            }
-            if (LockMode.isLocked && action in LOCKED_IGNORED_ACTIONS) {
-                Timber.i("Lock mode: action $action ignored, locked")
-                return
-            }
             when (action) {
                 "play-media", "play", "pause", "stop", "set-volume" -> { handleMediaPlayerAction(action, payloadStr) }
                 "toast-message" -> if (payloadStr.isNotEmpty()) {
@@ -1213,72 +1158,13 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
         }
     }
 
-    // --- Odysseus fork: Lock mode (odysseus/lock/LockMode.kt, docs/odysseus/lock-mode.md) ---------
-
-    private var lockWatchJob: Job? = null
-
-    // Home Assistant's announcement audio being dropped because the device is locked.
-    @Volatile
-    private var droppingLockedAudio = false
-
-    /** Follows Lock mode for this session: mutes the wake word, stops a turn and all sound on lock. */
-    private fun watchLockMode() {
-        lockWatchJob?.cancel()
-        lockWatchJob = scope.launch {
-            LockMode.locked.collect { locked ->
-                muteMicrophone(config.isMuted)
-                if (!locked) return@collect
-                runCatching {
-                    audioPipeline?.stop()
-                    audioPipeline = null
-                    cancelDetectionBuffer()
-                    mediaManager.stopAll()
-                }.onFailure { Timber.e(it, "Lock mode: error stopping the satellite's audio") }
-            }
-        }
-    }
-
-    /**
-     * While locked, what Home Assistant starts on its own is refused without leaving it waiting:
-     * an announcement's audio is dropped and answered with `played` at its end, and a conversation
-     * it starts (`transcribe`) gets an `audio-stop` at once, so no microphone audio is sent.
-     * True if [type] was handled here.
-     */
-    private fun lockedServerPacket(type: String): Boolean {
-        if (!LockMode.isLocked && !droppingLockedAudio) return false
-        if (audioPipeline != null && audioPipeline?.pipelineStage != PipelineStage.ENDED) return false
-        return when (type) {
-            WyomingEvent.AUDIO_START -> {
-                if (!LockMode.isLocked) return false
-                Timber.i("Lock mode: announcement from Home Assistant dropped, locked")
-                droppingLockedAudio = true
-                true
-            }
-            WyomingEvent.AUDIO_CHUNK -> droppingLockedAudio
-            WyomingEvent.AUDIO_STOP -> {
-                if (!droppingLockedAudio) return false
-                droppingLockedAudio = false
-                sendSatelliteMessage(clientId, WyomingEvent.PLAYED, buildJsonObject {})
-                true
-            }
-            WyomingEvent.TRANSCRIBE -> {
-                if (!LockMode.isLocked) return false
-                Timber.i("Lock mode: conversation started by Home Assistant refused, locked")
-                sendSatelliteMessage(clientId, WyomingEvent.AUDIO_STOP, buildJsonObject { put("timestamp", isoNow()) })
-                true
-            }
-            else -> false
-        }
-    }
+    // Odysseus fork: the fork's hooks above call into this (odysseus/OdysseusSatellite.kt).
+    private val odysseus = com.msp1974.vacompanion.odysseus.OdysseusSatellite(this, this::arbitratingWakeWord,
+        pipelineActive = { audioPipeline.let { it != null && it.pipelineStage != PipelineStage.ENDED } },
+        keepAudio = { DetectionBuffer(microphone.audio, scope).also { detectionBuffer = it } }, dropAudio = ::cancelDetectionBuffer)
 
     companion object {
         fun isoNow(): String = DateTimeFormatter.ISO_INSTANT.format(Instant.now())
-
-        // Odysseus fork: Home Assistant actions that would wake, play or show something; ignored
-        // while Lock mode is locked. Logs, refresh and interrupt still work.
-        private val LOCKED_IGNORED_ACTIONS = setOf(
-            "play-media", "play", "set-volume", "toast-message", "wake", "alarm", "navigate",
-        )
 
         private const val AUDIO_DEVICE_DEBOUNCE_MS = 1000L
 

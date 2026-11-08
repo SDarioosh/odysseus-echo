@@ -1,5 +1,6 @@
 package com.msp1974.vacompanion.odysseus
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -86,8 +87,7 @@ class VoiceTurnApiTest {
     @Test
     fun aTurnThatDidNothingHasNoCard() {
         assertNull(VoiceTurnApi.cardState(VoiceTurn(id = "t3", answer = "It's 5 PM.", awaitingConfirmation = " ")))
-        assertNull(VoiceTurnApi.cardState(emptyList()))
-        assertNotNull(VoiceTurnApi.cardState(listOf(VoiceAction(id = "a", title = "Milk"))))
+        assertNotNull(VoiceTurnApi.cardState(VoiceTurn(id = "t4", actions = listOf(VoiceAction(id = "a", title = "Milk")))))
     }
 
     @Test
@@ -134,5 +134,54 @@ class VoiceTurnApiTest {
         assertTrue(VoiceTurnApi.isFromDevice(t, "other"))
         assertTrue(VoiceTurnApi.isFromDevice(VoiceTurn(id = "t"), "me"))
         assertTrue(VoiceTurnApi.isFromDevice(t, ""))
+    }
+
+    @Test
+    fun theTurnIsAskedForByItsContextIdWhenKnownElseByTime() {
+        assertEquals("/turns/latest?since=5000&context_id=ctx-1", VoiceTurnApi.latestTurnPath("ctx-1", 5000))
+        assertEquals("/turns/latest?since=5000&context_id=a%26b+c", VoiceTurnApi.latestTurnPath("a&b c", 5000))
+        assertEquals("/turns/latest?since=5000", VoiceTurnApi.latestTurnPath(null, 5000))
+        assertEquals("/turns/latest?since=5000", VoiceTurnApi.latestTurnPath("", 5000))
+    }
+
+    /** A hub that answers [body] to every call and keeps the calls. */
+    private class FakeHub(private val body: String) : HubHttp {
+        val calls = mutableListOf<HubCall>()
+        override suspend fun request(call: HubCall): HubReply { calls += call; return HubReply(200, body) }
+    }
+
+    @Test
+    fun theCardAsksByContextIdAndTakesThatTurnAsOurs() = runBlocking {
+        VoiceTurns.deviceId = "me" // the fixture's turn names device "dev": by time it wouldn't be ours
+        val hub = FakeHub(latest.replace("\"id\": \"t1\",", "\"id\": \"t1\", \"context_id\": \"ctx-1\","))
+        val card = VoiceTurns.findCard(since = 1_000_000L, contextId = "ctx-1", http = hub)
+        assertEquals(listOf("/turns/latest?since=998000&context_id=ctx-1"), hub.calls.map { it.path })
+        assertEquals("t1", card?.state?.turnId)
+    }
+
+    @Test
+    fun aHubThatIgnoresTheContextIdStillGetsTheDeviceCheck() = runBlocking {
+        VoiceTurns.deviceId = "me" // the answer has no context_id (an older hub) and names device "dev"
+        val card = VoiceTurns.findCard(since = 1_000_000L, contextId = "ctx-1", http = FakeHub(latest))
+        assertEquals(null, card)
+    }
+
+    @Test
+    fun withoutAContextIdTheCardAsksByTimeAndChecksTheDevice() = runBlocking {
+        VoiceTurns.deviceId = "dev"
+        val hub = FakeHub(latest)
+        val card = VoiceTurns.findCard(since = 1_000_000L, contextId = null, http = hub)
+        assertEquals(listOf("/turns/latest?since=998000"), hub.calls.map { it.path })
+        assertEquals("t1", card?.state?.turnId)
+    }
+
+    @Test
+    fun theInterruptNamesTheInterruptedTurnWhenItsContextIdIsKnown() = runBlocking {
+        val hub = FakeHub("""{"ok": true, "cut": 1, "marked": 0}""")
+        assertEquals(OdysseusLink.InterruptResult.Ok(1, 0), OdysseusLink.interruptTurn("echo 1", "ctx-1", hub))
+        assertEquals(OdysseusLink.InterruptResult.Ok(1, 0), OdysseusLink.interruptTurn("echo 1", null, hub))
+        assertEquals("/satellite/interrupt", hub.calls[0].path)
+        assertEquals("device_id=echo+1&context_id=ctx-1", String(hub.calls[0].body!!))
+        assertEquals("device_id=echo+1", String(hub.calls[1].body!!))
     }
 }

@@ -12,6 +12,9 @@ object FollowUpRules {
     const val MIN_SECONDS = 3
     const val MAX_SECONDS = 15
 
+    /** How long it may listen, also the range Odysseus may set (followup.seconds, FollowUpSettings). */
+    val SECONDS_RANGE = MIN_SECONDS..MAX_SECONDS
+
     /** Choices offered in the settings menu. */
     val SECONDS_CHOICES = listOf(3, 5, 8, 10, 15)
 
@@ -27,7 +30,7 @@ object FollowUpRules {
     /** HA's error when speech-to-text heard nothing: a follow-up then ends quietly. */
     const val NOTHING_HEARD_CODE = "stt-no-text-recognized"
 
-    fun clampSeconds(seconds: Int): Int = seconds.coerceIn(MIN_SECONDS, MAX_SECONDS)
+    fun clampSeconds(seconds: Int): Int = seconds.coerceIn(SECONDS_RANGE)
 
     /** How long the follow-up pipeline may sit in LISTENING without hearing speech. */
     fun listenLimitMs(seconds: Int): Long = clampSeconds(seconds) * 1000L

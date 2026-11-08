@@ -60,6 +60,15 @@ job.cancel()                                              // stop listening; the
   few seconds should cancel and collect again, but only once the wake word has also let go
   (for example on a satellite restart), so this is rare.
 
+## Files
+
+- `odysseus/audio/SharedMicrophone.kt`: the one `MicrophoneAudioStream` of the process.
+- `odysseus/audio/MicFrames.kt`: `MicFrame`, `MicFrameSharing` (who keeps the mic open),
+  `restartOnFailure`, `EmptyReads` (pure; `MicFramesTest`, `MicRestartTest`).
+- Hooks: `satellite/Satellite.kt` (takes the shared stream), `audio/MicrophoneInput.kt`
+  (`readShort`: the raw copy), `audio/MicrophoneAudioStream.kt` (sharing; failures counted in a
+  row, `restartOnFailure`, a dead AudioRecord detected by empty reads).
+
 ## Checking on a device
 
 - Wake word, barge-in and "Check my voice" still work.

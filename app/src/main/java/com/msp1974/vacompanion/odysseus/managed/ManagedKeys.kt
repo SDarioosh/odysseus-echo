@@ -10,7 +10,7 @@ package com.msp1974.vacompanion.odysseus.managed
 // out of range are ignored (and logged by the caller): the device keeps its own value for them.
 // Values are plain Kotlin: Boolean, Int or String.
 
-import kotlinx.serialization.json.Json
+import com.msp1974.vacompanion.odysseus.HubJson
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -56,27 +56,22 @@ data class ManagedSettingsReply(
     val ignored: List<String> = emptyList(),
 )
 
+/**
+ * A setting Odysseus may manage, as its store declares it (`managed = …` in settings/PrefStore.kt):
+ * C6's key and type ([spec]), and how to read and write the store's own value.
+ */
+class ManagedSetting(val spec: ManagedKey, val read: () -> Any, val write: (Any) -> Unit) {
+    val key: String get() = spec.key
+}
+
 object ManagedKeys {
-    /** "0 = never" values: up to a day. */
-    private const val MAX_SECONDS = 86_400
+    /** C6's keys, from the stores' declarations (ManagedBindings.all). */
+    val all: Map<String, ManagedKey> by lazy {
+        val specs = ManagedBindings.all.map { it.spec }
+        specs.associateBy { it.key }.also { check(it.size == specs.size) { "a managed key is declared twice" } }
+    }
 
-    val all: Map<String, ManagedKey> = listOf(
-        ManagedKey.Bool("home.enabled"),
-        ManagedKey.IntRange("home.idle_seconds", 0, MAX_SECONDS),
-        ManagedKey.Bool("home.weather_enabled"),
-        ManagedKey.Bool("today.enabled"),
-        ManagedKey.IntRange("kiosk.return_seconds", 0, MAX_SECONDS),
-        ManagedKey.Bool("kiosk.auto_reload"),
-        ManagedKey.Bool("record.enabled"),
-        ManagedKey.Bool("record.clock_button"),
-        ManagedKey.Choice("record.privacy_button", setOf("record", "mute")),
-        ManagedKey.Bool("followup.enabled"),
-        ManagedKey.IntRange("followup.seconds", 3, 15),
-        ManagedKey.Bool("music.enabled"),
-        ManagedKey.Bool("music.stay_while_playing"),
-    ).associateBy { it.key }
-
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    private val json = HubJson
 
     fun path(deviceId: String): String =
         "/devices/${java.net.URLEncoder.encode(deviceId, "UTF-8").replace("+", "%20")}/settings"

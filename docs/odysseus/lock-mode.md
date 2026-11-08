@@ -73,6 +73,25 @@ The device's own time zone and clock (`persist.sys.timezone`). The state is work
 15 s and at once after any change, so a scheduled lock lands within 15 s of the time. Daylight
 saving changes keep the wall-clock times.
 
+## Files
+
+- `odysseus/lock/LockMode.kt` publishes `locked`; the rules are in `LockRules.kt`, the settings in
+  `LockSettings.kt`, the screen in `LockOverlay.kt` and `LockSettingsSection.kt`.
+- `odysseus/lock/SatelliteLock.kt`: the satellite's side, one per `Satellite` (held by
+  `odysseus/OdysseusSatellite.kt`): `watch()` (started from `Satellite.start`) re-applies the wake
+  word mute and stops a turn and all sound on lock; `serverPacket()` refuses what Home Assistant
+  starts; `action()` handles `navigate odysseus://lock|unlock` and the ignored actions;
+  `refusesWake()` ignores a wake word. Which packets and actions are refused is the pure
+  `SatelliteLockRules.kt` (`IGNORED_ACTIONS`, `serverPacket`; `SatelliteLockRulesTest`).
+- The wake word check in `refusesWake()` looks redundant with the muted engine and the ignored
+  `wake` action, but isn't: the mute is applied by `watch()`'s collector after `LockMode` flips, so
+  a detection already on its way at the lock time would otherwise start a turn.
+- Hooks in `satellite/Satellite.kt` (one line each, through `OdysseusSatellite`): `start`,
+  `processMessage` (one check for the run gate and Lock mode, custom actions included),
+  `handleWakeWordDetection`, `muteMicrophone`; `wakeword/WakeWordEngine.kt` (a fresh engine starts
+  muted); `MainActivity.kt` (the overlay, and closing the menu on lock, both in
+  `odysseus/OdysseusOverlays.kt`).
+
 ## Logs
 
 `Lock mode: locked (tick), until Mon 08:00`, `Lock mode: unlocked (PIN), ...`, `Lock mode: wrong PIN (n in a row)`,

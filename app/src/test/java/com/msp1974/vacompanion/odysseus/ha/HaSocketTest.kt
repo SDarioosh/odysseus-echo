@@ -125,7 +125,7 @@ class HaSocketTest {
         assertTrue(m2["id"]!!.jsonPrimitive.int > id)
         c.toClient.send("""{"id":${m2["id"]},"type":"result","success":false,"error":{"code":"not_found","message":"Service not found."}}""")
         val e = failing.await().exceptionOrNull()
-        assertTrue(e is HaException && e.message!!.contains("Service not found"))
+        assertTrue(e is HaException && e.message!!.contains("Service not found") && e.code == 400)
         job.cancel()
     }
 

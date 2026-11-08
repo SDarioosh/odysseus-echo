@@ -258,6 +258,109 @@ class HaMusicBackendTest {
     }
 
     @Test
+    fun everyMediaPlayerIsWatchedAndOneTurnedOnIsListedAtOnce() = runBlocking {
+        ha.templateAnswer = { MusicFixtures.text("rooms_template_all.json") }
+        val b = backend()
+        val job = scope.launch { b.rooms.collect { } }
+        waitFor("rooms") { b.rooms.value.isNotEmpty() }
+        assertEquals(
+            listOf("media_player.kitchen_2", "media_player.living_room_tv", "media_player.study_speaker"),
+            b.rooms.value.map { it.entityId },
+        )
+        // Watched: also the hidden twin and the Cast that is off.
+        waitFor("watch") { ha.watched.isNotEmpty() }
+        assertEquals(
+            setOf("media_player.kitchen_2", "media_player.kitchen", "media_player.living_room_tv",
+                "media_player.bedroom_cast", "media_player.study_speaker"),
+            ha.watched.first(),
+        )
+        // The Cast is turned on: listed at the next state, without another template run.
+        ha.live.value = mapOf(
+            "media_player.kitchen_2" to MusicFixtures.state("media_player.kitchen_2", "playing",
+                kotlinx.serialization.json.JsonObject(MusicFixtures.json("player_state.json").jsonObject +
+                    ("friendly_name" to kotlinx.serialization.json.JsonPrimitive("Kitchen"))), 4_000L),
+            "media_player.kitchen" to MusicFixtures.named("media_player.kitchen", "Kitchen", "playing"),
+            "media_player.living_room_tv" to MusicFixtures.named("media_player.living_room_tv", "Living Room TV", "off"),
+            "media_player.bedroom_cast" to MusicFixtures.named("media_player.bedroom_cast", "Bedroom Cast", "idle"),
+            "media_player.study_speaker" to MusicFixtures.named("media_player.study_speaker", "Study Speaker", "unavailable"),
+        )
+        waitFor("cast") { b.rooms.value.any { it.entityId == "media_player.bedroom_cast" } }
+        assertEquals(
+            listOf("media_player.bedroom_cast", "media_player.kitchen_2", "media_player.study_speaker"),
+            b.rooms.value.map { it.entityId },
+        )
+        assertEquals(1, ha.templates.size)
+        // The live states of the listed rooms, for the clock.
+        val live = b.live.value
+        assertEquals(setOf("media_player.bedroom_cast", "media_player.kitchen_2", "media_player.study_speaker"), live.keys)
+        assertEquals("playing", live.getValue("media_player.kitchen_2").status)
+        assertEquals("Lantern Song", live.getValue("media_player.kitchen_2").player.title)
+        assertEquals(4_000L, live.getValue("media_player.kitchen_2").updatedMs)
+        job.cancel()
+    }
+
+    @Test
+    fun onlyMaPlayersCanBeThisDevice() = runBlocking {
+        // A plain player with MA's default name for this device, in this device's area: never claimed.
+        ha.templateAnswer = {
+            """[{"entity_id": "media_player.vaca_cast", "name": "VACA 0f1e2d3c-fict-ion0-al00-uuid00000001 Sendspin Player",
+                 "area": "Kitchen", "state": "idle", "ma": false, "type": "player", "members": [], "ids": [["music_assistant", "Zk3vQ-fictional-client-id"]], "entry": null}]"""
+        }
+        val b = backend()
+        val rooms = b.loadRooms()
+        assertEquals(listOf("media_player.vaca_cast"), rooms.map { it.entityId })
+        assertNull(b.self.value)
+        assertFalse(rooms.single().isThisDevice)
+    }
+
+    @Test
+    fun anUnauthorizedTemplateListsEveryMediaPlayerFromStates() = runBlocking {
+        ha.templateAnswer = { throw HaException("Unauthorized", 401) }
+        ha.allStates = listOf(
+            MusicFixtures.state("media_player.ma", "idle", obj("""{"friendly_name": "Den", "mass_player_type": "player"}""")),
+            MusicFixtures.state("media_player.cast", "playing", obj("""{"friendly_name": "Cast"}""")),
+            MusicFixtures.state("media_player.tv", "off", obj("""{"friendly_name": "TV"}""")),
+        )
+        val rooms = backend().loadRooms()
+        assertEquals(listOf("media_player.cast" to false, "media_player.ma" to true), rooms.map { it.entityId to it.musicAssistant })
+    }
+
+    @Test
+    fun aPlainPlayerHasNoQueueAndRefusesMusicAssistantsActions() = runBlocking {
+        ha.templateAnswer = { MusicFixtures.text("rooms_template_all.json") }
+        val b = backend()
+        b.loadRooms()
+        assertNull(b.queue("media_player.living_room_tv"))
+        assertTrue(ha.calls.isEmpty())
+        val item = MediaItem("library://track/301", MediaKind.TRACK, "Lantern Song", "", null)
+        val refused: List<suspend () -> Unit> = listOf(
+            { b.play(item, "media_player.living_room_tv", Enqueue.PLAY) },
+            { b.transfer("media_player.kitchen_2", "media_player.living_room_tv") },
+            { b.transfer("media_player.living_room_tv", "media_player.kitchen_2") },
+            { b.group("media_player.kitchen_2", listOf("media_player.living_room_tv")) },
+            { b.group("media_player.living_room_tv", listOf("media_player.kitchen_2")) },
+            { b.ungroup("media_player.living_room_tv") },
+        )
+        for (a in refused) {
+            try {
+                a(); fail("expected a refusal")
+            } catch (e: IllegalArgumentException) {
+                assertTrue(e.message!!.contains("isn't a Music Assistant player"))
+            }
+        }
+        assertTrue(ha.calls.isEmpty())
+        // Its own controls go to Home Assistant as for any player.
+        b.control("media_player.living_room_tv", Control.PAUSE)
+        b.control("media_player.living_room_tv", Control.VOLUME, 0.5)
+        assertEquals(listOf("media_pause", "volume_set"), ha.calls.map { it.service })
+        // An MA room still queues and plays.
+        ha.answers["music_assistant.get_queue"] = { MusicFixtures.json("queue.json") }
+        b.queue("media_player.kitchen_2")
+        b.play(item, "media_player.kitchen_2", Enqueue.PLAY)
+        assertEquals(listOf("get_queue", "play_media"), ha.calls.drop(2).map { it.service })
+    }
+
+    @Test
     fun actionsSendTheirRequests() = runBlocking {
         val b = backend()
         val item = MediaItem("library://album/21", MediaKind.ALBUM, "Harbour Lights", "", null)

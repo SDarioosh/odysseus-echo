@@ -59,6 +59,12 @@ The follow-up therefore covers what HA's mechanism misses: Odysseus waits for a 
 didn't set `continue_conversation` (the agent integration doesn't pass it, or the question doesn't end
 with "?").
 
+One more thing HA does with `continue_conversation`: it sends the next turn in that chat session
+**only** to that agent and skips local intents (`prepare_recognize_intent`, `_intent_agent_only` in
+`assist_pipeline/default_pipeline.py`). In a live test a follow-up Odysseus had asked for was
+interrupted, so a fresh "what time is it?" went to Odysseus instead of HA. So Odysseus should ask
+for a follow-up only when its answer really is a question.
+
 ## Settings
 
 Menu → Odysseus, under "Thinking sound". Stored on the device in their own SharedPreferences file
@@ -91,10 +97,13 @@ setters (Compose state, persisted; seconds are clamped to 3–15), `FollowUpSett
   checks the guards, starts the follow-up; the listening sound.
 - `odysseus/followup/FollowUpSettings.kt`, `FollowUpSettingsSection.kt`: the settings and their screen.
 - `odysseus/TurnCard.kt`: `VoiceTurns.awaitingConfirmation()`.
-- `assets/odysseus/listening.wav`, made by `scripts/odysseus/make_listening_sound.py` (sine waves,
+- `assets/odysseus/listening.wav`, made by `scripts/odysseus/make_sounds.py` (sine waves,
   reproducible, nothing downloaded).
-- Hooks: `satellite/Satellite.kt` (`startAudioPipeline`: `FollowUp.afterTurn` in `onFinish`, the
-  `followUpListenMs` parameter; new `startFollowUpListening`), `satellite/SatelliteAudioPipeline.kt`
+- `FollowUp.startListening`: the follow-up's pipeline, started the manual-wake way, through
+  `FollowUp.Host` (what it needs of the satellite; `odysseus/OdysseusSatellite.kt` implements it over
+  `Satellite`'s private state; `FollowUpStartTest` with a fake host).
+- Hooks: `satellite/Satellite.kt` (`startAudioPipeline`: `odysseus.afterTurn` in `onFinish`, the
+  `followUpListenMs` parameter), `satellite/SatelliteAudioPipeline.kt`
   (`followUpListenMs`: the listening limit in `hasExceededTimeInStage`, "nothing heard" in
   `handlePipelineError`), `odysseus/OdysseusSettingsLayout.kt` (one line).
 

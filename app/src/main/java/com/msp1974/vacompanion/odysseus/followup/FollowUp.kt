@@ -10,11 +10,12 @@ package com.msp1974.vacompanion.odysseus.followup
 // conversation itself (it already listens again), and never while muted, in do-not-disturb,
 // recording or with the screen blanked by the owner. The rules are in FollowUpRules (unit-tested).
 //
-// Satellite.startAudioPipeline's onFinish calls afterTurn(); Satellite.startFollowUpListening is
-// the [start] it is given.
+// Satellite.startAudioPipeline's onFinish calls afterTurn() through OdysseusSatellite, whose [start]
+// is startListening() with the satellite as its [Host].
 
 import android.content.Context
 import android.net.Uri
+import com.msp1974.vacompanion.odysseus.HaRunGate
 import com.msp1974.vacompanion.odysseus.VoiceActivity
 import com.msp1974.vacompanion.odysseus.VoiceTurns
 import com.msp1974.vacompanion.odysseus.record.RecorderController
@@ -98,5 +99,44 @@ object FollowUp {
         runCatching { mediaManager.soundPlayer.play(Uri.parse(SOUND_URI)) }
             .onFailure { Timber.w("Follow-up: listening sound failed: ${it.message}") }
         delay(FollowUpRules.CHIME_MS)
+    }
+
+    /** What startListening needs of the satellite; [B] is the audio kept from the end of the sound. */
+    interface Host<B> {
+        /** The satellite still runs (HA may have reconnected and replaced it while the answer played). */
+        val running: Boolean
+        val connected: Boolean
+        fun responding(): Boolean
+        /** The satellite is handling a wake word; set while the follow-up starts, so none interferes. */
+        var arbitrating: Boolean
+        /** The listening sound ([playSound]). */
+        suspend fun playSound()
+        /** Ducks the other devices as a manual wake does: no arbitration report. */
+        suspend fun duckOthers()
+        /** Starts keeping the microphone's audio from now (the satellite's detection buffer). */
+        fun keepAudio(): B
+        fun dropAudio()
+        fun startPipeline(buffer: B, listenLimitMs: Long)
+    }
+
+    /**
+     * The follow-up's pipeline, started the manual-wake way: only this device, no arbitration
+     * report (it ducks the others as a manual wake does); the listening sound instead of the wake
+     * sound; audio kept from the end of that sound. False if the satellite was busy.
+     */
+    suspend fun <B> startListening(host: Host<B>, listenLimitMs: Long): Boolean {
+        if (!FollowUpRules.canStartListening(host.running, host.connected, host.responding(), host.arbitrating)) return false
+        host.arbitrating = true
+        try {
+            host.playSound()
+            if (!host.running || host.responding()) return false
+            host.duckOthers()
+            val buffer = host.keepAudio()
+            if (!HaRunGate.awaitIdle()) { host.dropAudio(); return false }
+            host.startPipeline(buffer, listenLimitMs)
+            return true
+        } finally {
+            host.arbitrating = false
+        }
     }
 }

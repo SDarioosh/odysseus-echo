@@ -70,7 +70,7 @@ internal object ShotMusic {
         position: Double = 83.0, duration: Double = 214.0, volume: Float = 0.6f, repeat: Repeat = Repeat.OFF,
     ) = PlayerState(
         title = title, artist = artist, album = album, artUrl = null, artwork = art, playing = playing,
-        // On the wall clock, as Home Assistant's states are (MusicActions.clockFor).
+        // On the wall clock, as every PlayerState is (PlayerClock).
         durationS = duration, positionS = position, positionAtMs = System.currentTimeMillis(), shuffle = false,
         repeat = repeat, volume = volume, muted = false, can = all,
     )

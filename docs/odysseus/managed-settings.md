@@ -23,13 +23,13 @@ When it asks:
 
 - at start (the background task starts the announcements, which start this),
 - after each hello (`POST /satellite/hello`: at start, hourly, and when the name, area or link
-  changes; an older hub without the hello route counts too),
+  changes),
 - when the announcements feed has a new item with `"kind": "settings"` (the hub sends one when the
   device's settings change, so a change arrives within 30 s). That item never shows a card.
 
-A failed request (network, HTTP 5xx) is tried again after 1, 5 and 15 min, then at the next hello.
-A refused token (401/403) or an older hub without the route (404/405) keeps the last settings as
-they are. Nothing is asked while the device isn't linked.
+A failed request (network, any HTTP error but 401/403) is tried again after 1, 5 and 15 min, then
+at the next hello. A refused token (401/403) keeps the last settings as they are. Nothing is asked
+while the device isn't linked.
 
 ## Keys
 
@@ -46,8 +46,8 @@ Only these; any other key is ignored and logged.
 | `record.enabled` | bool | Recording | `RecorderSettings.enabled` |
 | `record.clock_button` | bool | Record button on the clock | `RecorderSettings.clockButton` |
 | `record.privacy_button` | `"record"` / `"mute"` | Privacy button | `RecorderSettings.privacyButton` |
-| `followup.enabled` | bool | Answer without the wake word | registered by that setting (below) |
-| `followup.seconds` | int 3..15 | How long it listens | registered by that setting (below) |
+| `followup.enabled` | bool | Answer without the wake word | `FollowUpSettings.enabled` |
+| `followup.seconds` | int 3..15 | How long it listens | `FollowUpSettings.seconds` |
 | `music.enabled` | bool | Music page (C7, `docs/odysseus/music.md`) | `MusicSettings.enabled` |
 | `music.stay_while_playing` | bool | Music page stays while this room plays (C7) | `MusicSettings.stayWhilePlaying` |
 
@@ -56,7 +56,7 @@ Only these; any other key is ignored and logged.
   and logged (`Managed settings: ignored <key>: bad value`); the device keeps its own value for it.
 - An answer without a numeric `version` or with `settings` not an object is ignored as a whole.
 - An int that isn't one of the menu's choices (e.g. 900 s) is used as it is; the menu then shows
-  "Set by Odysseus: 15 min" with no chip selected.
+  it as one more chip, selected, and "Set by Odysseus: 15 min" (`SecondsChips`).
 
 ## What the device does with them
 
@@ -79,38 +79,54 @@ Only these; any other key is ignored and logged.
 - `version` is the hub's; the device keeps the last one it applied (logged) but always follows the
   latest answer.
 
-## Adding a managed setting (follow-up listening and later ones)
+## Adding a managed setting
 
-A key's store registers itself; a key the hub sets before its store registers is kept and applied
-the moment it does (and an own value the hub released meanwhile is given back then).
+Each setting is declared once, in its store (`odysseus/settings/PrefStore.kt`): `managed = "<key>"`
+makes it one Odysseus may set. The declaration gives `ManagedKeys.all` the key, its type and its
+range, and `ManagedBindings` how to read and write the store's own value (the same setter the
+settings screen uses, so `onSet` hooks such as recording's run for the hub too).
 
 ```kotlin
-import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
+object FollowUpSettings {
+    internal val store = PrefStore("odysseus_followup")      // declared before the fields
+    fun init(context: Context) = store.init(context)
 
-ManagedSettings.registerBool("followup.enabled", { FollowupSettings.enabled }) { FollowupSettings.enabled = it }
-ManagedSettings.registerInt("followup.seconds", { FollowupSettings.seconds }) { FollowupSettings.seconds = it }
-// or, for any type: ManagedSettings.register(key, get = { … }) { value: Any -> … }
+    var enabled by store.bool("followup.enabled", true, managed = "followup.enabled")
+    var seconds by store.int("followup.seconds", 8, FollowUpRules.SECONDS_RANGE, managed = "followup.seconds")
+}
 ```
 
-- Put the lines in `ManagedBindings.registerBuiltIns` (one place for all keys), or call them from
-  the store's `init`. Either is safe at any time and from any thread; the work runs on the main
-  thread. The getter must return the same type as C6's table (Boolean, Int or String).
-- A new key also needs a line in `ManagedKeys.all` (its type and range) and in the table above,
-  and the hub's H6 table must offer it.
-- In the settings screen, disable the control while `ManagedSettings.isManaged(key)` and add
-  `ManagedNote(key)` under it ("Set by Odysseus"). `isManaged` is Compose state.
+- `bool`, `int` (kept within its range, which is also the range the hub may set) and `codec`
+  (a value stored as a string, managed as one of `choices`: the privacy button's `"record"` /
+  `"mute"`) can be managed; `float` and `string` are on-device only. The first argument is the
+  SharedPreferences key: never change one of an existing setting, or installed devices lose it.
+- A store with its first managed field goes into `ManagedBindings.stores`.
+- A new key also needs a line in the table above and in `ManagedBindingsTest`, and the hub's H6
+  table must offer it.
+- In the settings screen use `ManagedSwitchRow(checked, title, detail, managedKey = key)` or
+  `SecondsChips(choices, value, key)` (`ManagedControls.kt`): they disable the control while
+  `ManagedSettings.isManaged(key)` (Compose state) and show "Set by Odysseus" beneath it. Any other
+  control does the same by hand with `ManagedNote(key)`.
+- A key the hub sets before its store registers is kept and applied the moment it does (and an
+  own value the hub released meanwhile is given back then); `ManagedSettings.register(key, get, set)`
+  binds a setting that isn't a PrefStore field.
 
 ## Files
 
-- `ManagedKeys.kt`: C6's keys, value checks and the answer's parsing (pure, `ManagedKeysTest`).
+- `ManagedKeys.kt`: C6's keys (from the declarations), value checks and the answer's parsing (pure,
+  `ManagedKeysTest`; the key set is pinned in `ManagedBindingsTest`).
 - `ManagedEngine.kt`: applying, keeping and giving back own values (pure, `ManagedEngineTest`).
 - `ManagedSettings.kt`: the process-wide registry, Compose state, persistence and the fetch loop.
-- `ManagedBindings.kt`: the built-in keys bound to `HomeSettings`, `KioskSettings`, `RecorderSettings`.
-- `ManagedNote.kt`: "Set by Odysseus".
+- `ManagedBindings.kt`: the stores with managed fields (`HomeSettings`, `KioskSettings`,
+  `RecorderSettings`, `FollowUpSettings`, `MusicSettings`), registered at start.
+- `ManagedControls.kt`: "Set by Odysseus" (`ManagedNote`), `ManagedSwitchRow`, `SecondsChips`.
+- `odysseus/settings/PrefStore.kt`: the stores' fields and their `managed` declarations
+  (`PrefStoreTest`, `StoreKeysTest`).
 - Hooks: `odysseus/announce/Announcements.kt` (start/stop, fetch after hello, "settings" items),
   `AnnouncementFeed.kt` / `AnnouncementApi.kt` / `AnnouncementRules.kt` (a "settings" item is no
   card); settings screen: `odysseus/OdysseusSettingsLayout.kt`, `record/RecordingSettingsSection.kt`,
-  `home/today/TodaySettingsSection.kt`. No upstream file is changed.
+  `home/today/TodaySettingsSection.kt`, `followup/FollowUpSettingsSection.kt`,
+  `home/music/MusicSettingsSection.kt`. No upstream file is changed.
 
 ## Checking on a device
 

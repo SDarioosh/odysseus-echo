@@ -2,10 +2,20 @@
 
 The app's one way for new features to reach Home Assistant (HA): REST for single requests, and
 a websocket for live states and actions while something watches them. Built for the Music page
-(plan `docs/odysseus/plans/2026-11-music.md`, contract I1); **nothing uses it yet**, so nothing
-opens the websocket in the app today. Upstream's HA code (the Wyoming satellite, the dashboard
-login, `AuthenticationManager`) is unchanged; the phone setup (`HaSetupClient`) and the weather
-(`WeatherClient`) keep their own REST calls over the same `HaHttp`.
+(plan `docs/odysseus/plans/2026-11-music.md`, contract I1). Its users:
+
+- the **Music page** (`music/MusicRepository` over `HaMusicBackend`): templates, service calls,
+  and the only `watch()` (every media player), so the websocket is open only while the Music page,
+  the clock's selected room or the other speakers watch;
+- **music on other speakers** (`home/players/OtherPlayers`): no calls of its own, it reads the
+  Music backend's list and live states and controls through it
+  ([home-screen.md](home-screen.md#music-on-other-speakers));
+- the **clock's weather** (`home/weather/WeatherClient`): templates and `weather.get_forecasts`
+  with its response.
+
+Upstream's HA code (the Wyoming satellite, the dashboard login, `AuthenticationManager`) is
+unchanged; only the phone setup (`HaSetupClient`, with the owner's token from the phone, not the
+Echo's) keeps its own REST calls over the same `HaHttp`.
 
 ## Using it
 
@@ -37,6 +47,9 @@ token or the sign-in is refused, 0 otherwise). An answer larger than the body ca
 | `HaBackoff.kt` | reconnect waits (pure) |
 | `KtorHaSocketTransport.kt` | the real socket: Ktor's WebSockets plugin on the OkHttp engine |
 | `HaClient.kt` | `HaClient : HaApi` (socket or REST), `HaClient.get(deviceManager)`, `DeviceHaAuth` |
+
+Outside `odysseus/ha/`: `odysseus/HaSetupClient.kt` and `home/weather/WeatherClient.kt` import
+`HaHttp` from here. No upstream file is changed. Tests: below.
 
 ## Rules
 

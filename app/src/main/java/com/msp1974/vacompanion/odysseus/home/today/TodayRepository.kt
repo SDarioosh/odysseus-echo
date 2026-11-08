@@ -8,11 +8,10 @@ package com.msp1974.vacompanion.odysseus.home.today
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.msp1974.vacompanion.odysseus.HubHttp
 import com.msp1974.vacompanion.odysseus.OdysseusLink
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.time.ZoneId
 
@@ -68,7 +67,7 @@ object TodayRepository {
     }
 
     /** Fetches /today unless the last successful fetch is younger than [minAgeMs]. Never throws. */
-    suspend fun refresh(minAgeMs: Long = 0L, http: TodayHttp = TodayHttp { OdysseusLink.get(it) }) = lock.withLock {
+    suspend fun refresh(minAgeMs: Long = 0L, http: HubHttp = OdysseusLink) = lock.withLock {
         checkLink()
         if (!linked) return@withLock
         val now = System.currentTimeMillis()
@@ -77,7 +76,7 @@ object TodayRepository {
             return@withLock
         }
         try {
-            val data = withContext(Dispatchers.IO) { TodayClient(http).fetch() }
+            val data = TodayClient(http).fetch()
             store.onSuccess(data, now)
             Timber.i(
                 "Today: %s, %d events, %d to-dos, %d action items%s",

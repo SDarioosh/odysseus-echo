@@ -4,16 +4,17 @@ package com.msp1974.vacompanion.odysseus
 // Pure data and functions only (no Android), so they are unit-tested on the JVM; the HTTP calls
 // are in OdysseusLink.
 //
-//   GET  <base>/turns/latest?since=<epoch ms>  -> {"turn": VoiceTurn | null}
+//   GET  <base>/turns/latest?context_id=<id>   -> {"turn": VoiceTurn | null}  (null until it's finished)
+//   GET  <base>/turns/latest?since=<epoch ms>  -> the same, for a turn without a context id
 //   POST <base>/satellite/turn  (multipart)    -> {"ok": true, "context_id": "…", "speaker": … | null}
 //
 // Unknown fields are ignored, missing ones get defaults, so additive hub changes stay compatible.
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
 import java.net.URI
+import java.net.URLEncoder
 
 @Serializable
 data class TurnLink(
@@ -50,6 +51,8 @@ data class VoiceTurn(
     val device: TurnDevice? = null,
     val speaker: TurnSpeaker? = null,
     @SerialName("session_id") val sessionId: String? = null,
+    /** The hub's context id for the turn (POST /satellite/turn's answer), when it came from a satellite. */
+    @SerialName("context_id") val contextId: String? = null,
 )
 
 @Serializable
@@ -85,7 +88,7 @@ data class SatelliteTurnForm(
 
 /** What the turn card shows for one turn. */
 data class TurnCardState(
-    /** The hub's turn id ("actions:<id>" when the card came from the older /actions feed). */
+    /** The hub's turn id. */
     val turnId: String,
     val actions: List<VoiceAction> = emptyList(),
     val links: List<TurnLink> = emptyList(),
@@ -99,17 +102,32 @@ object VoiceTurnApi {
     /** Links shown on the card, at most. */
     const val MAX_LINKS = 3
 
-    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; explicitNulls = false }
-
     /** The turn in a /turns/latest body; null for {"turn": null}. Throws on a body that isn't JSON. */
-    fun parseLatestTurn(body: String): VoiceTurn? = json.decodeFromString<LatestTurnResponse>(body).turn
+    fun parseLatestTurn(body: String): VoiceTurn? = HubJson.decodeFromString<LatestTurnResponse>(body).turn
 
     fun parseSatelliteTurnResponse(body: String): SatelliteTurnResponse =
-        json.decodeFromString<SatelliteTurnResponse>(body)
+        HubJson.decodeFromString<SatelliteTurnResponse>(body)
 
     /** The /satellite/interrupt answer: {"ok": true, "cut": n, "marked": n}. Throws on a body that isn't JSON. */
     fun parseInterruptResponse(body: String): OdysseusLink.InterruptResult.Ok =
-        json.decodeFromString<InterruptResponse>(body).let { OdysseusLink.InterruptResult.Ok(it.cut, it.marked) }
+        HubJson.decodeFromString<InterruptResponse>(body).let { OdysseusLink.InterruptResult.Ok(it.cut, it.marked) }
+
+    /**
+     * The /turns/latest path: by [sinceEpochMs], and by the turn's [contextId] when known (the hub
+     * answers by the id then; a hub without it still answers by time, so the card stays right).
+     */
+    fun latestTurnPath(contextId: String?, sinceEpochMs: Long): String =
+        "/turns/latest?since=$sinceEpochMs" +
+            (if (contextId.isNullOrEmpty()) "" else "&context_id=" + URLEncoder.encode(contextId, "UTF-8"))
+
+    /** The turn is ours: the hub named our [contextId] on it, else (by time) it names this device. */
+    fun isOurTurn(turn: VoiceTurn, contextId: String?, deviceId: String): Boolean =
+        if (!contextId.isNullOrEmpty() && turn.contextId == contextId) true else isFromDevice(turn, deviceId)
+
+    /** The /satellite/interrupt form: the device, and the interrupted turn's [contextId] when known. */
+    fun interruptForm(deviceId: String, contextId: String?): String =
+        "device_id=" + URLEncoder.encode(deviceId, "UTF-8") +
+            (if (contextId.isNullOrEmpty()) "" else "&context_id=" + URLEncoder.encode(contextId, "UTF-8"))
 
     /** The links worth a chip: http(s) only, no duplicates, at most [max]. */
     fun displayLinks(links: List<TurnLink>, max: Int = MAX_LINKS): List<TurnLink> =
@@ -148,10 +166,6 @@ object VoiceTurnApi {
             answer = turn.answer?.trim()?.takeIf { it.isNotEmpty() && links.isNotEmpty() },
         )
     }
-
-    /** The card from the older /actions feed (no links, no confirmation). */
-    fun cardState(actions: List<VoiceAction>): TurnCardState? =
-        if (actions.isEmpty()) null else TurnCardState(turnId = "actions:" + actions.first().id, actions = actions)
 
     /** Action rows that fit the Echo Show 5's 480 px height next to the other parts of the card. */
     fun actionRows(state: TurnCardState, maxRows: Int = 4): Int {

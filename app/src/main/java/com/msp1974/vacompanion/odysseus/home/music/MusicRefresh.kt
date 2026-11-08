@@ -61,7 +61,7 @@ fun MusicRefresh(deviceManager: DeviceManager, isNetworkConnected: Boolean, isSe
     ensureMusicInstalled(context, deviceManager)
 
     // Remember that Music Assistant had rooms (MusicProbeSchedule: retry soon when they're gone).
-    val hasRooms by remember { derivedStateOf { MusicRepository.rooms.isNotEmpty() } }
+    val hasRooms by remember { derivedStateOf { MusicRepository.hasMaRooms() } }
     if (hasRooms) MusicProbeSchedule.hadRooms = true
 
     val showing = (HomeScreenController.destination as? HomeDestination.Page)
@@ -79,7 +79,7 @@ fun MusicRefresh(deviceManager: DeviceManager, isNetworkConnected: Boolean, isSe
         MusicRepository.probe(minAgeMs = if (fresh) 60_000L else 0L)
         var retry = 0
         while (true) {
-            val hasRooms = MusicRepository.rooms.isNotEmpty()
+            val hasRooms = MusicRepository.hasMaRooms()
             if (hasRooms) MusicProbeSchedule.hadRooms = true
             val lost = MusicProbeSchedule.roomsLost(MusicProbeSchedule.hadRooms, hasRooms)
             val wait = MusicProbeSchedule.delayMs(retry, lost)

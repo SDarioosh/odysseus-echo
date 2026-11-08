@@ -104,4 +104,13 @@ class PlayMenuTest {
         assertEquals("Added to the queue in Office", PlayMenu.doneText(PlayOption.ADD, "Office"))
         assertNull(PlayMenu.doneText(PlayOption.PLAY_NOW, "Office"))
     }
+
+    @Test
+    fun onlyMusicAssistantRoomsArePlayedIn() {
+        val tv = room("media_player.tv", "TV").copy(musicAssistant = false)
+        val den = room("media_player.den", "Den")
+        assertEquals(listOf(den), PlayMenu.rooms(listOf(tv, den), "media_player.tv").map { it.room })
+        // A selected plain room isn't the default: the first MA room is.
+        assertEquals(den, PlayMenu.defaultRoom(PlayMenu.rooms(listOf(tv, den), null), tv.entityId)?.room)
+    }
 }

@@ -6,14 +6,15 @@ package com.msp1974.vacompanion.odysseus.music
 object RoomChoice {
     /**
      * The room picker's default: this device's room, else the first room in [area] (the device's
-     * area, pushed by the VACA integration), else the room used last, else the first room. Null
-     * when there are no rooms.
+     * area, pushed by the VACA integration; a Music Assistant room before another media player),
+     * else the room used last, else the first room. Null when there are no rooms.
      */
     fun defaultRoom(rooms: List<Room>, self: SelfMatch?, area: String?, lastRoom: String?): String? {
         if (rooms.isEmpty()) return null
         self?.entityId?.takeIf { id -> rooms.any { it.entityId == id } }?.let { return it }
         if (!area.isNullOrBlank()) {
-            rooms.firstOrNull { it.area?.trim()?.equals(area.trim(), ignoreCase = true) == true }?.let { return it.entityId }
+            val here = rooms.filter { it.area?.trim()?.equals(area.trim(), ignoreCase = true) == true }
+            (here.firstOrNull { it.musicAssistant } ?: here.firstOrNull())?.let { return it.entityId }
         }
         lastRoom?.takeIf { id -> id.isNotBlank() && rooms.any { it.entityId == id } }?.let { return it }
         return rooms.first().entityId

@@ -18,7 +18,7 @@ class SendspinPlayerStateTest {
     )
 
     @Test fun mapsFields() {
-        val s = np.toPlayerState()
+        val s = np.toPlayerState(wallMinusElapsedMs = 1_793_000_000_000L)
         assertEquals("Fictional Song", s.title)
         assertEquals("The Placeholders", s.artist)
         assertEquals("Demo Album", s.album)
@@ -27,12 +27,19 @@ class SendspinPlayerStateTest {
         assertTrue(s.playing)
         assertEquals(180.5, s.durationS!!, 1e-9)
         assertEquals(42.0, s.positionS!!, 1e-9)
-        assertEquals(7_000L, s.positionAtMs)
+        assertEquals(1_793_000_007_000L, s.positionAtMs) // moved to the wall clock (PlayerClock)
         assertTrue(s.shuffle)
         assertEquals(Repeat.ALL, s.repeat)
         assertNull(s.volume)
         assertFalse(s.muted)
         assertEquals(setOf(Control.PLAY, Control.PAUSE, Control.NEXT, Control.PREVIOUS, Control.SHUFFLE, Control.REPEAT), s.can)
+    }
+
+    @Test fun theOffsetIsKeptSoTheSameStateConvertsTheSame() {
+        val o = PlayerClock.wallMinusElapsed()
+        assertEquals(o, PlayerClock.wallMinusElapsed())
+        assertEquals(np.toPlayerState(), np.toPlayerState())
+        assertEquals(7_000L, PlayerClock.wallToElapsed(PlayerClock.elapsedToWall(7_000L)))
     }
 
     @Test fun blanksAndNoDuration() {
@@ -46,7 +53,7 @@ class SendspinPlayerStateTest {
     @Test fun speedBecomesRate() {
         assertEquals(1.0, np.toPlayerState().rate, 1e-9) // speed not said
         assertEquals(1.0, np.copy(speed = 0).toPlayerState().rate, 1e-9)
-        val fast = np.copy(speed = 1_500).toPlayerState()
+        val fast = np.copy(speed = 1_500).toPlayerState(wallMinusElapsedMs = 0L) // both on one clock here
         assertEquals(1.5, fast.rate, 1e-9)
         // Matches Sendspin's own position: 2 s at 1.5x from 42 s.
         assertEquals(np.copy(speed = 1_500).positionNow(9_000) / 1000.0, fast.positionNow(9_000)!!, 1e-9)

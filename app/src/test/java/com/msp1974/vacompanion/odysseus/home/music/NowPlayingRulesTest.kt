@@ -127,4 +127,15 @@ class NowPlayingRulesTest {
         assertFalse(NowPlayingRules.hasTrack(state(title = " ", artist = null)))
         assertTrue(NowPlayingRules.hasTrack(state(title = null, artist = "Someone")))
     }
+
+    @Test
+    fun moveHereIsMusicAssistantsOnly() {
+        val tv = room("media_player.tv", "TV").copy(musicAssistant = false)
+        val den = room("media_player.den", "Den")
+        val office = room("media_player.office", "Office")
+        // Not to a plain room, not from one.
+        assertNull(NowPlayingRules.moveFrom(tv.entityId, listOf(tv, den), setOf(den.entityId)))
+        assertNull(NowPlayingRules.moveFrom(den.entityId, listOf(tv, den), setOf(tv.entityId)))
+        assertEquals(office.entityId, NowPlayingRules.moveFrom(den.entityId, listOf(tv, den, office), setOf(tv.entityId, office.entityId)))
+    }
 }

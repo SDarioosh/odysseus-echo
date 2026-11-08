@@ -1,13 +1,15 @@
 package com.msp1974.vacompanion.odysseus.home.today
 
-import com.msp1974.vacompanion.odysseus.ha.HaResponse
 import com.msp1974.vacompanion.odysseus.HubFixtures
+import com.msp1974.vacompanion.odysseus.HubHttp
+import com.msp1974.vacompanion.odysseus.HubReply
 import com.msp1974.vacompanion.odysseus.done.DoneApi
 import com.msp1974.vacompanion.odysseus.done.DoneTarget
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneId
@@ -21,7 +23,7 @@ class TodayHubFixturesTest {
 
     @Test
     fun readsAFullDay() {
-        val d = TodayClient(TodayHttp { HaResponse(200, HubFixtures.load("c1_today.json")) }).fetch()
+        val d = runBlocking { TodayClient(HubHttp { HubReply(200, HubFixtures.load("c1_today.json")) }).fetch() }
         assertEquals("2026-11-06", d.date)
         assertEquals("The dentist at three; the plumber is due today.", d.headline)
 

@@ -5,7 +5,6 @@ package com.msp1974.vacompanion.odysseus.player
 // any room's player. Colours come from MaterialTheme; controls go out as onControl(Control, value).
 
 import android.graphics.Bitmap
-import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -59,8 +58,6 @@ import kotlinx.coroutines.delay
 /** A player control and its value (seek seconds, volume 0..1, …; null for most). */
 typealias OnControl = (Control, Any?) -> Unit
 
-/** The clock of [PlayerState.positionAtMs] for Sendspin; a backend on another clock passes its own. */
-val elapsedRealtimeClock: () -> Long = { SystemClock.elapsedRealtime() }
 
 private fun TextUnit.times(f: Float): TextUnit = (value * f).sp
 
@@ -257,7 +254,7 @@ fun FullPlayer(
     onControl: OnControl,
     s: Float = 1f,
     showPaused: Boolean = !state.playing,
-    clock: () -> Long = elapsedRealtimeClock,
+    clock: () -> Long = PlayerClock.now,
 ) {
     val colors = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -296,7 +293,7 @@ fun FullPlayer(
 
 /** The song's progress as a thin bar, redrawn every second while it plays. */
 @Composable
-fun Progress(state: PlayerState, clock: () -> Long = elapsedRealtimeClock) {
+fun Progress(state: PlayerState, clock: () -> Long = PlayerClock.now) {
     var now by remember { mutableLongStateOf(clock()) }
     LaunchedEffect(state.playing, state.positionAtMs) {
         while (state.playing) {

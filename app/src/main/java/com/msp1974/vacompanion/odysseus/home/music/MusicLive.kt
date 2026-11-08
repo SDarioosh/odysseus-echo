@@ -23,7 +23,7 @@ private const val ART_MAX_PX = 512
 /**
  * The live player state of [roomId] (MusicBackend.player) while composed; null before the first
  * state, without a room or a backend. Its positionAtMs is on the wall clock
- * (MusicActions.clockFor). For this device's own room ([MusicRepository.selfRoom]) Sendspin's
+ * (PlayerClock). For this device's own room ([MusicRepository.selfRoom]) Sendspin's
  * pushed artwork ([sendspin], HomePageContext.nowPlaying) fills in `artwork` while Sendspin plays.
  * A failing flow keeps the last state.
  */

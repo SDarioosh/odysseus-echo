@@ -1,4 +1,8 @@
-# Echo Show 5 (2nd gen): device check and setup
+# Echo Show 5 (2nd gen): device facts, setup and checks
+
+What the device is, how it is set up, and how to check it. Tests of older builds and how
+the fork got here: [history.md](history.md). A new Echo, start to finish:
+[new-echo-runbook.md](new-echo-runbook.md).
 
 ## Device (checked 2026-11-03)
 
@@ -20,12 +24,10 @@
 
 ## Mic measurements
 
-Clips were recorded through the normal Android capture path (the same path the satellite
-app uses) with LineageOS Recorder in high-quality WAV mode, then converted to 16 kHz mono.
-They were analysed on the dev machine in a temp folder outside the repo and deleted
-afterwards. Levels are in dBFS: the floor is the 10th percentile of 50 ms frame RMS, and
-"loud" is the 95th percentile. Transcripts come from local faster-whisper `small.en`
-(int8, CPU).
+Clips went through the normal Android capture path (the one the satellite app uses), at
+16 kHz mono, and were deleted after analysis (how they were made: [history.md](history.md)).
+Levels are in dBFS: the floor is the 10th percentile of 50 ms frame RMS, and "loud" is the
+95th percentile. Transcripts come from local faster-whisper `small.en` (int8, CPU).
 
 | Clip | Floor | Loud | SNR | Whisper |
 |---|---|---|---|---|
@@ -49,39 +51,12 @@ Findings:
   background. A recording or a satellite that is started from the background records
   nothing. VACA avoids this because it starts as the home app with a foreground service.
 
-## Satellite app: this fork of View Assist Companion (VACA)
-
-VACA was chosen over the HA Companion app (minimal 2026.11.1):
-
-- VACA ships `armeabi-v7a` libraries. It has its own on-device wake word (microWakeWord,
-  openWakeWord) with **custom models served from HA** (for "Hey Athena"), a kiosk dashboard
-  and media ducking, and is known to work on cronos.
-- The HA Companion app's wake word is experimental and has only Okay Nabu, Hey Jarvis and
-  Hey Mycroft. There is an open bug where it streams audio at ~1/7 real time on low-end
-  tablets ([home-assistant/android#7683](https://github.com/home-assistant/android/issues/7683));
-  this SoC is weaker than the one in that report.
-
-Official VACA links Firebase Analytics, Crashlytics and Google ML Kit (see
-[ODYSSEUS.md](../../ODYSSEUS.md)). Official VACA only starts Firebase when Google Play services
-are present, and this device has none. This fork removes them anyway, so nothing depends on a
-DNS block. The official app (0.14.0, GitHub release, sha256
-`2cc9d8e2b61c1e54b96fd766dbcf90caa3bf03ec36224e109ce63fafc5a3525f`) was installed during the
-device check, never started, and then uninstalled.
-
-The official 0.14.0 release also lost the first ~0.4 s after the wake word. HA's VAD then
-never saw speech start, the turn timed out, and the next request was dropped (HA logged its
-audio as "Unexpected event from satellite"). Upstream `dev` fixed this, so the fork is based
-on it (`0.14.0+odysseus.2`). Measured on the device after the fix (test HA, faster-whisper
-`small-int8` on CPU, owner at 1 m): "what time is it" was answered by HA locally 1.85 s after
-the owner stopped speaking; a question routed to the (mock) conversation agent took 1.67 s.
-
-## Microphone processing (0.14.0+odysseus.16)
+## Microphone processing
 
 The Echo's audio front-end already does noise reduction and gain control (see Mic
-measurements). Upstream VACA (since 2026-10-30) runs WebRTC noise suppression, gain control
-and a high-pass filter on top of it. Doing it twice distorts speech: the owner was misheard at
-1 m in a quiet room, while the same microphone's unprocessed clips were word-perfect. The fork
-turns the app's processing off by default and sends the front-end's audio as it is.
+measurements). Upstream's WebRTC noise suppression, gain control and high-pass filter on top of
+it distort speech, so the fork turns the app's processing off by default and sends the
+front-end's audio as it is (`odysseus/MicProcessing.kt`; why: [history.md](history.md)).
 
 - Setting: Settings → Experimental → Voice assistant → **App microphone processing** (stored on
   the device, applies at once, also to the wake word engine). Settings → Audio → Audio
@@ -90,12 +65,16 @@ turns the app's processing off by default and sends the front-end's audio as it 
 - To compare, save Home Assistant's pipeline audio (`assist_pipeline: debug_recording_dir:
   /share/assist_pipeline` in `configuration.yaml`) and listen to a turn with the setting on and
   one with it off.
+- Files: `odysseus/MicProcessing.kt`; hooks in `audio/MicrophoneInput.kt` (`readShort`),
+  `ui/layouts/config/ExperimentalConfig.kt` (the setting), `ui/layouts/config/AudioConfig.kt`
+  (the labels).
 
 ## adb commands (fresh device)
 
 Setting up another new Echo? Follow [new-echo-runbook.md](new-echo-runbook.md): the steps below in order, with checks, for an agent.
+This table is the background: what each step does and how to undo it.
 
-If more than one device is attached, use `adb -s <serial>`. Everything below can be undone with adb (undo column). Steps 12–20 are
+If more than one device is attached, use `adb -s <serial>`. Everything below can be undone with adb (undo column). Steps 7–9, 12–17 and 24 are
 scripted in `scripts/odysseus/setup_device.sh`. `P=com.msp1974.vacompanion.odysseus`.
 
 | # | Command | Why | Undo |
@@ -109,8 +88,7 @@ scripted in `scripts/odysseus/setup_device.sh`. `P=com.msp1974.vacompanion.odyss
 | 7 | `adb shell settings put global stay_on_while_plugged_in 7` | keep the screen on while powered (was `0`) | `… 0` |
 | 8 | `adb shell locksettings set-disabled true` | no lock screen on a wall display (was `false`; there is no PIN) | `… false` |
 | 9 | `adb shell settings put secure screensaver_enabled 0` | no Daydream on top of the dashboard | `… 1` |
-| 10 | Mic tests: `adb shell pm grant org.lineageos.recorder android.permission.READ_PHONE_STATE`; Recorder settings → "Record in high quality" on; `am start -n org.lineageos.recorder/.RecorderActivity`; `input tap 480 342` (record/stop); `adb pull "/sdcard/Music/Sound records/…wav"` then `adb shell rm …` | 16 kHz mic test clips through the normal capture path | revoke the permission |
-| 11 | Music test: `adb push testmusic.ogg /sdcard/Music/` (public-domain US Coast Guard Band recording from Wikimedia Commons); `cmd media_session volume --stream 3 --set 10`; start recording **in the foreground first**, then `am start -a android.intent.action.VIEW -d file:///sdcard/Music/testmusic.ogg -t audio/ogg`; stop with `am startservice -n org.lineageos.recorder/.service.SoundRecorderService -a org.lineageos.recorder.service.STOP` | talking over playback | `adb shell rm /sdcard/Music/testmusic.ogg` |
+| 10–11 | (mic and music test clips, only for the measurements above; see [history.md](history.md)) | — | — |
 | 12 | `python3 scripts/odysseus/check_apk_privacy.py <apk>`; `adb install -r <apk>` | satellite app (this fork) | `adb uninstall $P` |
 | 13 | `adb shell pm grant $P android.permission.RECORD_AUDIO` | microphone for the wake word | `pm revoke …` |
 | 14 | `adb shell appops set $P WRITE_SETTINGS allow` | VACA controls brightness and screen timeout | `… default` |
@@ -133,88 +111,15 @@ Still to do:
 - Tailscale for use away from home: [tailscale.md](tailscale.md).
 - Check that the foreground service survives a reboot. A reboot needs the owner's OK.
 
-## "Hey Athena" wake word (0.14.0+odysseus.3)
+## Wake word, wake sound, feedback
 
-The app bundles a custom microWakeWord model, `app/src/main/assets/microwakeword/wakeWords/hey_athena.{tflite,json}`.
-It was trained locally with synthetic Piper voices (see `docs/odysseus/wake-word.md`).
-
-**Threshold.** VACA's global "wake word threshold" setting overrides `probability_cutoff` in the JSON.
-In HA, set the device's wake word threshold to **9.2** (that is 0.92) when you choose Hey Athena. The default of 6 (0.6) gives about 1.5 false wakes per hour.
-
-| Threshold | Missed "Hey Athena" (held-out voices) | False wakes per hour (5.3 h dinner-party test set) |
-|---|---|---|
-| 0.94 | 6.9 % | 0 |
-| 0.92 | 6.5 % | 0.19 |
-| 0.78 | 3.6 % | 0.38 |
-| 0.59 | 3.1 % | 1.5 |
-
-**adb commands for the update:**
-
-```sh
-# Update in place. -r keeps the app's data, permissions, appops and pairing.
-adb install -r odysseus-vaca-0.14.0+odysseus.3-debug.apk
-# Check that the speaker is still blocked for the app after the update.
-adb shell appops get com.msp1974.vacompanion.odysseus PLAY_AUDIO
-# Bring the app back as the home screen.
-adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME
-```
-
-## Listening feedback (0.14.0+odysseus.4)
-
-- **Visual:** the app draws its own overlay on top of the dashboard or the blank screen.
-  - A blue bar along the bottom pulses with "Listening…", and pulses faster once you start speaking.
-  - It turns violet with "Thinking…" while HA and Odysseus work, then green with "Answering…".
-  - It needs no HA configuration.
-- **Audio:** VACA's wake sound, set from HA: `select.<device>_wake_word_sound` = **Ding**.
-  - The app must be allowed to play audio, and VACA's do-not-disturb must be off. Use the device volume to keep it quiet.
-- **Barge-in:** saying "Hey Athena" while the device is still thinking or answering stops that turn and starts listening again.
-  The new turn starts only once HA has ended the interrupted one. In the meantime the app keeps what you say, for up to 15 s. HA reports the end once the agent has answered and Piper has synthesized it; the interrupted answer is then dropped and never played.
-  Since 0.14.0+odysseus.14 the app also tells Odysseus (`POST <base>/satellite/interrupt`, `odysseus/BargeIn.kt`), which ends that turn at once with an empty answer; HA then ends its run within about a second. Before, an Odysseus answer that took longer than 15 s meant the new question was dropped and the device went idle. A wake word after more than 15 s of "Thinking…" also counts as a barge-in now (it used to let the old answer play). Without the Odysseus link, or with an older Odysseus, the app waits for the old answer as before.
-  Reproduced and checked in the hub's sandbox (a real Home Assistant and an emulator of this code): `docs/fork/sandbox.md#voice-barge-in` in `SDarioosh/odysseus-expanded`.
-  Before 0.14.0+odysseus.5, a barge-in during "Thinking…" left the satellite deaf until it reconnected. The cause is in HA: `homeassistant/components/wyoming/assist_satellite.py` clears its run flag on any run's `RUN_END`. This is worth reporting to HA.
-
-```sh
-# Allow the app to play the wake sound and answers again (the silent test setup had denied it).
-adb shell appops set com.msp1974.vacompanion.odysseus PLAY_AUDIO allow
-```
-
-HA test-instance settings for this (made through the HA API, not adb):
-
-| Entity | Value |
-|---|---|
-| `switch.<device>_do_not_disturb` | off |
-| `select.<device>_wake_word_sound` | Ding |
-| `number.<device>_wake_word_threshold` | 9.2 |
-
-The app turns 9.2 into a cutoff of 0.91 (it rounds down). Owner choice: in the live test this caught all 7 wakes, with 1 false wake at 0.91.
-
-**Follow-ups and "prefer handling commands locally".** When the conversation agent asks for a follow-up (`continue_conversation`), HA sends the next turn in that chat session *only* to that agent and skips local intents. This is `prepare_recognize_intent`, `_intent_agent_only`, in `assist_pipeline/default_pipeline.py`.
-In the live test, a follow-up that Odysseus had asked for was interrupted, so a fresh "what time is it?" went to Odysseus instead of HA.
-The Odysseus voice endpoint should therefore ask for a follow-up only when its answer really is a question.
-
-## Voice actions card test (0.14.0+odysseus.6)
-
-This test runs against a stand-in for Odysseus's actions feed (`~/sbx/mock_actions.py` on the host, fictional actions); see `turn-card.md`. The adb commands, and why:
-
-```sh
-# The stand-in on the host is reached from the device over USB.
-adb reverse tcp:17020 tcp:17020
-# Root, only to inject the two-finger "swipe up" that opens Quick Actions
-# (adb shell input has one finger). adb root restarts adbd, so the tunnels are added again.
-adb root
-~/tools/two_finger_swipe.sh 40 400 40 560 300 0      # panel coordinates; the screen is rotated 90°
-adb shell input tap 716 393                            # Quick Actions → Menu
-adb shell input tap 780 193                            # Menu → Odysseus
-# Type the base URL, press Tab, then type the stand-in token. Tab is needed: with the keyboard
-# up, taps land on the wrong field.
-adb shell input text 'http://127.0.0.1:17020/api/chat/voice/v1'; adb shell input keyevent 61
-adb shell input text '<stand-in token>'; adb shell input keyevent 4
-adb shell input tap 110 390                            # Save and test → "Linked: Odysseus answered"
-adb unroot
-adb reverse tcp:18123 tcp:18123; adb reverse tcp:17020 tcp:17020; adb forward tcp:10800 tcp:10800
-```
-
-Then a turn started from HA's wake button showed the four fictional actions after the turn ended: three added (to-do with due time, list line, event) and one completed (an Athena item, struck through).
+- **Wake word:** "Hey Athena", bundled ([wake-word.md](wake-word.md)). In HA set the device's wake
+  word threshold to **9.2** (a cutoff of 0.92); the default of 6 gives about 1.5 false wakes per
+  hour. The phone setup sets it ([setup.md](setup.md)).
+- **Wake sound:** `select.<device>_wake_word_sound` = **Ding** in HA. The app must be allowed to
+  play audio (`appops set $P PLAY_AUDIO allow`, which the silent test setup, #22, denies), and
+  VACA's do-not-disturb must be off. Use the device volume to keep it quiet.
+- **On screen:** the listening indicator ([turn-card.md](turn-card.md#listening-indicator)).
 
 ## Privacy button: records (or mutes), never sleeps
 
@@ -327,7 +232,3 @@ changes nothing on it. It prints:
 
 It is the device half of the check; the hub half is the hub's `scripts/echo_verify.py`
 (odysseus-expanded `docs/fork/voice-assistant.md#checking-a-server-for-the-echos`).
-
-## Wake word threshold rounding
-
-VACA turned the HA threshold into a cutoff by truncating (`Float.round` used `toInt`), so 9.2 became 0.91. It rounds to the nearest value now, so 9.2 means 0.92. The scores come in steps of 1/255, so 0.92 rejects the two false wakes seen in testing (a cough and background speech), which both scored just under 0.92.

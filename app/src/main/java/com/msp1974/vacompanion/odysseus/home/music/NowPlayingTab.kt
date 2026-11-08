@@ -64,6 +64,7 @@ import com.msp1974.vacompanion.odysseus.music.QueueSummary
 import com.msp1974.vacompanion.odysseus.music.Repeat
 import com.msp1974.vacompanion.odysseus.player.Artwork
 import com.msp1974.vacompanion.odysseus.player.OnControl
+import com.msp1974.vacompanion.odysseus.player.PlayerClock
 import com.msp1974.vacompanion.odysseus.player.Progress
 import com.msp1974.vacompanion.odysseus.player.RoomChip
 import com.msp1974.vacompanion.odysseus.player.SkipButton
@@ -200,7 +201,7 @@ private fun Details(
     if (sub.isNotEmpty()) {
         Text(sub, fontSize = (17 * s).sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
-    val clock = MusicActions.clockFor(st)
+    val clock = PlayerClock.now
     if ((st.durationS ?: 0.0) > 0.0) {
         Progress(st, clock)
         NowPlayingTimes(st, clock, s)
@@ -311,7 +312,9 @@ private fun NothingPlaying(roomId: String?, idle: PlayerState?, onControl: OnCon
         Spacer(Modifier.height(8.dp))
         VolumeBar(idle, onControl, Modifier.fillMaxWidth(), iconSize = (24 * s).dp)
     }
-    val others = rooms.filter { it.entityId != roomId && it.available }.map { it.entityId }
+    // "Move here" is Music Assistant's: only MA rooms are followed, and only for an MA room.
+    val maHere = rooms.firstOrNull { it.entityId == roomId }?.musicAssistant == true
+    val others = if (!maHere) emptyList() else rooms.filter { it.entityId != roomId && it.available && it.musicAssistant }.map { it.entityId }
     val playing = rememberPlayingRooms(others)
     val from = NowPlayingRules.moveFrom(roomId, rooms, playing)
     if (from != null && roomId != null) {

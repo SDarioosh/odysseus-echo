@@ -108,8 +108,9 @@ voice base URL (`https://<hub>/api/chat/voice/v1` → `https://<hub>`), with the
   that works, the older name is used until the app restarts. A chunk answered 404 on both is
   "relay missing" (table below). A 404 on both for `/sessions/<id>/end` (session not found)
   is that end's refusal, as before.
-- Redirects are not followed (`HubRelayTransport`): the token would go to wherever a redirect
-  points. A 3xx is a retry. At most 16 KB of an answer's body is read.
+- Redirects are not followed (`HubRelayTransport`, through `OdysseusLink.send`, the app's one
+  hub request): the token would go to wherever a redirect points. A 3xx is a retry. At most
+  16 K characters of an answer's body are read; the read timeout is 60 s.
 - Chunks of a session still recording are uploaded as they come. Sessions go oldest first,
   and chunks by sequence.
 
@@ -204,14 +205,39 @@ RecorderController.state     // StateFlow<RecorderUiState>: recorder (Idle / Rec
 ## Sounds
 
 `assets/odysseus/record_start.wav` and `record_stop.wav` are made from sine waves by
-`scripts/odysseus/make_record_sounds.py`:
+`scripts/odysseus/make_sounds.py`:
 
 ```bash
-python3 scripts/odysseus/make_record_sounds.py app/src/main/assets/odysseus
+python3 scripts/odysseus/make_sounds.py app/src/main/assets/odysseus record_start.wav record_stop.wav
 ```
 
 They play through the app's sound-effect player (notification usage), not the satellite's, so
 they work without Home Assistant.
+
+## Files
+
+All in `odysseus/record/` unless named otherwise:
+
+| File | What |
+|---|---|
+| `RecorderController.kt` | the process-wide recorder: state, sounds, the mic-mute receiver; `press()`/`hold()` |
+| `RecorderStateMachine.kt` | gestures, limits, debounce (pure) |
+| `RecordingCapture.kt` | collects `SharedMicrophone.raw` |
+| `ChunkAssembler.kt` | 30 s WAV chunks and their timestamps |
+| `ChunkQueue.kt` | the durable queue in `files/odysseus/recordings/` |
+| `RecordingUploader.kt`, `UploadRules.kt`, `HubRelayTransport.kt` | uploads to the hub relay (contract C4), retry waits, the queue cap |
+| `RecordButton.kt`, `RecordButtonGestures.kt` | the privacy button: key and switch paths (pure gestures) |
+| `RecorderSettings.kt`, `RecordingSettingsSection.kt` | Menu → Odysseus → Recording (Privacy button: Record / Mute) |
+| `RecordingUi.kt`, `RecordingText.kt` | the REC/NOTE pill, the buttons (`Modifier.recordGestures()`), the wording |
+| `odysseus/ListeningIndicator.kt` | the "Microphone off" pill in Mute mode |
+| `assets/odysseus/record_start.wav`, `record_stop.wav` | the sounds (above) |
+| `scripts/odysseus/gpio-privacy-button.kl` | the key layout (scancode 116 → `MEDIA_RECORD`), installed in `/data` by `scripts/odysseus/setup_device.sh` |
+
+Also `odysseus/OdysseusLink.kt` (`bearerToken`), `odysseus/OdysseusSettingsLayout.kt`,
+`odysseus/home/ClockPage.kt` (the clock's button) and `odysseus/OdysseusOverlays.kt` (the pill).
+Hooks: `service/ForegroundService.kt` (installs `RecorderController`), `MainActivity.kt`
+(`dispatchKeyEvent` → `RecordButton`; the overlays), `ui/components/QuickActionsSheet.kt` (the
+Record button).
 
 ## Tests
 
@@ -229,7 +255,7 @@ they work without Home Assistant.
   the 404 fallback, a missing relay, sessions left by a killed run, half-written files, the
   cap).
 - `HubRelayTransportTest`: a local HTTP server: a redirect isn't followed (the token doesn't
-  go to its target), a long body is cut at 16 KB.
+  go to its target), a long body is cut at 16 K characters, no server is no answer.
 - `RecordingTextTest`: the pill and status wording.
 - `RecordButtonGesturesTest`: the privacy button's press and hold from key down/up, repeats,
   stale timers, the mute-switch fallback and how a key covers it, and the Record/Mute rules.

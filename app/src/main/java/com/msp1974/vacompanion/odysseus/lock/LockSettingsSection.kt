@@ -6,7 +6,6 @@ package com.msp1974.vacompanion.odysseus.lock
 // the work hours can't turn it off. "Lock now" needs no PIN. See docs/odysseus/lock-mode.md.
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -15,7 +14,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,6 +28,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.msp1974.vacompanion.odysseus.managed.ManagedSwitchRow
 
 @Composable
 fun LockSettingsSection() {
@@ -50,25 +49,14 @@ fun LockSettingsSection() {
         "Lock outside work hours", fontSize = 18.sp, color = colors.primary,
         modifier = Modifier.padding(top = 12.dp),
     )
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Switch(
-            checked = enabled,
-            // Tappable without a PIN too, so it can say why it doesn't turn on.
-            onCheckedChange = {
-                if (!LockSettings.hasPin) switchNote = "Set a PIN first, just below."
-                else { switchNote = ""; LockMode.setEnabled(it) }
-            },
-            enabled = canChange,
-        )
-        Column(Modifier.padding(start = 14.dp)) {
-            Text("Lock mode", fontSize = 16.sp, color = colors.onSurface)
-            Text(
-                "Monday to Friday, open from ${LockRules.timeLabel(open)} to ${LockRules.timeLabel(close)}; " +
-                    "locked the rest of the time and all weekend. While locked the screen shows only a clock " +
-                    "and a PIN pad, and the microphone, music, announcements, recording and this menu are off. " +
-                    "The PIN unlocks it until the next lock time. Takes effect as soon as it is turned on.",
-                fontSize = 13.sp, color = colors.onSurfaceVariant,
-            )
+    ManagedSwitchRow(
+        enabled, "Lock mode",
+        "Monday to Friday, open from ${LockRules.timeLabel(open)} to ${LockRules.timeLabel(close)}; " +
+            "locked the rest of the time and all weekend. While locked the screen shows only a clock " +
+            "and a PIN pad, and the microphone, music, announcements, recording and this menu are off. " +
+            "The PIN unlocks it until the next lock time. Takes effect as soon as it is turned on.",
+        enabled = canChange,
+        extra = {
             Text(
                 when {
                     !hasPin -> "Set a PIN below to turn it on."
@@ -78,7 +66,11 @@ fun LockSettingsSection() {
                 fontSize = 13.sp, color = colors.onSurfaceVariant,
             )
             if (switchNote.isNotEmpty()) Text(switchNote, fontSize = 13.sp, color = colors.error)
-        }
+        },
+    ) {
+        // Tappable without a PIN too, so it can say why it doesn't turn on.
+        if (!LockSettings.hasPin) switchNote = "Set a PIN first, just below."
+        else { switchNote = ""; LockMode.setEnabled(it) }
     }
 
     if (!canChange) {

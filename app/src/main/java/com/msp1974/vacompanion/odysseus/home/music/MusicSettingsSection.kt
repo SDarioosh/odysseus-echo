@@ -6,26 +6,21 @@ package com.msp1974.vacompanion.odysseus.home.music
 // OdysseusSettingsLayout.
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.msp1974.vacompanion.odysseus.managed.ManagedNote
-import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
+import com.msp1974.vacompanion.odysseus.managed.ManagedSwitchRow
 import com.msp1974.vacompanion.odysseus.music.How
 import com.msp1974.vacompanion.odysseus.music.MusicRepository
 import com.msp1974.vacompanion.odysseus.music.MusicSettings
@@ -59,16 +54,16 @@ fun MusicSettingsSection() {
     val enabled = MusicSettings.enabled
     Text("Music", fontSize = 18.sp, color = colors.primary, modifier = Modifier.padding(top = 12.dp))
 
-    SwitchRow(
-        enabled, MusicSettings.KEY_ENABLED, "Music page",
+    ManagedSwitchRow(
+        enabled, "Music page",
         "Right of the Today page: what plays in each room, volume, moving and grouping, from Music Assistant through Home Assistant." +
             if (MusicRepository.available) "" else " Shows once Home Assistant is signed in and Music Assistant has players.",
-        enabled = true,
+        managedKey = MusicSettings.KEY_ENABLED,
     ) { MusicSettings.enabled = it }
-    SwitchRow(
-        MusicSettings.stayWhilePlaying, MusicSettings.KEY_STAY_WHILE_PLAYING, "Stay while playing here",
+    ManagedSwitchRow(
+        MusicSettings.stayWhilePlaying, "Stay while playing here",
         "The Music page doesn't go back to the clock while something plays on this device.",
-        enabled = enabled,
+        managedKey = MusicSettings.KEY_STAY_WHILE_PLAYING, enabled = enabled,
     ) { MusicSettings.stayWhilePlaying = it }
 
     // "This device's player" (contract I3): Auto, or one of the rooms.
@@ -109,20 +104,5 @@ fun MusicSettingsSection() {
             "The chosen player is no longer in Home Assistant; Auto is used until you choose again.",
             fontSize = 13.sp, color = colors.error,
         )
-    }
-}
-
-@Composable
-private fun SwitchRow(
-    checked: Boolean, key: String, title: String, detail: String, enabled: Boolean, onChange: (Boolean) -> Unit,
-) {
-    val colors = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled && !ManagedSettings.isManaged(key))
-        Column(Modifier.padding(start = 14.dp)) {
-            Text(title, fontSize = 16.sp, color = colors.onSurface)
-            Text(detail, fontSize = 13.sp, color = colors.onSurfaceVariant)
-            ManagedNote(key)
-        }
     }
 }

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -23,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.msp1974.vacompanion.odysseus.OdysseusColors
 import com.msp1974.vacompanion.odysseus.managed.ManagedNote
 import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
+import com.msp1974.vacompanion.odysseus.managed.ManagedSwitchRow
 
 @Composable
 fun RecordingSettingsSection() {
@@ -33,13 +33,13 @@ fun RecordingSettingsSection() {
         "Recording", fontSize = 18.sp, color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 12.dp),
     )
-    Toggle(
+    ManagedSwitchRow(
         enabled, "Recording",
         "Record conversations (tap the record button) and voice notes (hold it 1 s) for Athena. " +
             "The audio goes only to your Odysseus hub. A red pill shows while anything records.",
         managedKey = "record.enabled",
     ) { RecorderSettings.enabled = it }
-    Toggle(
+    ManagedSwitchRow(
         RecorderSettings.clockButton, "Record button on the clock",
         "A small record button in the clock page's bottom right. Also in the quick actions sheet.",
         enabled = enabled,
@@ -57,25 +57,6 @@ fun RecordingSettingsSection() {
             "The recorder starts with the app's background service.",
             fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-@Composable
-private fun Toggle(
-    checked: Boolean, title: String, detail: String, enabled: Boolean = true,
-    managedKey: String? = null, // set by Odysseus: disabled + "Set by Odysseus" (odysseus/managed/)
-    onChange: (Boolean) -> Unit,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Switch(
-            checked = checked, onCheckedChange = onChange,
-            enabled = enabled && (managedKey == null || !ManagedSettings.isManaged(managedKey)),
-        )
-        Column(Modifier.padding(start = 14.dp)) {
-            Text(title, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-            Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (managedKey != null) ManagedNote(managedKey)
-        }
     }
 }
 

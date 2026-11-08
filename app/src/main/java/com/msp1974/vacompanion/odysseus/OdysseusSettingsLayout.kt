@@ -22,7 +22,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,7 +29,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
@@ -44,9 +42,9 @@ import com.msp1974.vacompanion.odysseus.home.weather.WeatherClient
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherEntity
 import com.msp1974.vacompanion.odysseus.home.players.OtherPlayers
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherRepository
-import com.msp1974.vacompanion.odysseus.managed.ManagedNote
 import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
-import com.msp1974.vacompanion.odysseus.managed.secondsLabel
+import com.msp1974.vacompanion.odysseus.managed.ManagedSwitchRow
+import com.msp1974.vacompanion.odysseus.managed.SecondsChips
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.ui.components.MenuLayout
 import kotlinx.coroutines.launch
@@ -92,13 +90,13 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
             )
-            Setting(show, "Show what a voice turn did", "Added and completed items, its sources, and questions waiting for a yes") {
+            ManagedSwitchRow(show, "Show what a voice turn did", "Added and completed items, its sources, and questions waiting for a yes") {
                 show = it; OdysseusLink.showActions = it
             }
-            Setting(checkVoice, "Check my voice", "Send the spoken command to Odysseus so Athena can tell if it's you. Not stored.") {
+            ManagedSwitchRow(checkVoice, "Check my voice", "Send the spoken command to Odysseus so Athena can tell if it's you. Not stored.") {
                 checkVoice = it; OdysseusLink.checkVoice = it
             }
-            Setting(thinking, "Thinking sound", "A soft tone once when an answer takes longer than 5 seconds") {
+            ManagedSwitchRow(thinking, "Thinking sound", "A soft tone once when an answer takes longer than 5 seconds") {
                 thinking = it; OdysseusLink.thinkingSound = it
             }
             com.msp1974.vacompanion.odysseus.followup.FollowUpSettingsSection() // answer without the wake word (odysseus/followup/)
@@ -136,22 +134,6 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
     }
 }
 
-@Composable
-private fun Setting(
-    checked: Boolean, title: String, detail: String,
-    managedKey: String? = null, // Odysseus fork: set by the hub = disabled + "Set by Odysseus" (odysseus/managed/)
-    onChange: (Boolean) -> Unit,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Switch(checked = checked, onCheckedChange = onChange, enabled = managedKey == null || !ManagedSettings.isManaged(managedKey))
-        Column(Modifier.padding(start = 14.dp)) {
-            Text(title, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-            Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (managedKey != null) ManagedNote(managedKey)
-        }
-    }
-}
-
 /** Menu → Odysseus → Home screen: the clock over the dashboard (odysseus/home/). */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -164,29 +146,19 @@ private fun HomeScreenSettings() {
         "Home screen", fontSize = 18.sp, color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 12.dp),
     )
-    Setting(
+    ManagedSwitchRow(
         enabled, "Clock home screen",
         "A clock and the playing song over the dashboard. Swipe right for the dashboard, left for the clock.",
         managedKey = "home.enabled",
     ) { HomeSettings.enabled = it }
     Text("Back to the clock after", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        HomeSettings.IDLE_CHOICES_SECONDS.forEach { seconds ->
-            FilterChip(
-                selected = idle == seconds,
-                onClick = { HomeSettings.idleSeconds = seconds },
-                label = { Text(secondsLabel(seconds)) },
-                enabled = enabled && !ManagedSettings.isManaged("home.idle_seconds"),
-            )
-        }
-    }
-    ManagedNote("home.idle_seconds", secondsLabel(idle))
+    SecondsChips(HomeSettings.IDLE_CHOICES_SECONDS, idle, "home.idle_seconds", enabled = enabled) { HomeSettings.idleSeconds = it }
 
     // Weather in the clock's top left (odysseus/home/weather/).
     val weatherOn = HomeSettings.weatherEnabled
     val chosen = HomeSettings.weatherEntity
     val entities = WeatherRepository.entities
-    Setting(
+    ManagedSwitchRow(
         weatherOn, "Weather",
         "Icon, temperature and today's high and low in the clock's top left, from a Home Assistant weather entity.",
         managedKey = "home.weather_enabled",
@@ -229,7 +201,7 @@ private fun OtherPlayersSettings() {
     val on = HomeSettings.otherPlayersEnabled
     val chosen = HomeSettings.otherPlayersEntity
     val seen = OtherPlayers.seen
-    Setting(
+    ManagedSwitchRow(
         on, "Music on other speakers",
         "While this Echo plays nothing, show the song another speaker plays, with play/pause, next and previous. " +
             "Read from Home Assistant's media players.",
@@ -272,23 +244,13 @@ private fun KioskSettingsSection() {
         "Kiosk", fontSize = 18.sp, color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 12.dp),
     )
-    Setting(
+    ManagedSwitchRow(
         KioskSettings.autoReload, "Reload a dashboard that failed to load",
         "Tries again after 5 s, then waits longer each time, up to every 5 minutes. Soon after Wi-Fi comes back.",
         managedKey = "kiosk.auto_reload",
     ) { KioskSettings.autoReload = it }
     Text("Back from other apps after", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        KioskSettings.RETURN_CHOICES_SECONDS.forEach { seconds ->
-            FilterChip(
-                selected = returnSeconds == seconds,
-                onClick = { KioskSettings.returnSeconds = seconds },
-                label = { Text(secondsLabel(seconds)) },
-                enabled = !ManagedSettings.isManaged("kiosk.return_seconds"),
-            )
-        }
-    }
-    ManagedNote("kiosk.return_seconds", secondsLabel(returnSeconds))
+    SecondsChips(KioskSettings.RETURN_CHOICES_SECONDS, returnSeconds, "kiosk.return_seconds") { KioskSettings.returnSeconds = it }
     Text(
         "When another app has been in front this long, this app comes back. Not while the screen is off.",
         fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,

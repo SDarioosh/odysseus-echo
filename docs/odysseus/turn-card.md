@@ -39,6 +39,7 @@ POST <base>/satellite/turn   multipart/form-data, Authorization: Bearer <voice t
 - **Audio:** exactly the frames the pipeline streamed to HA for this turn: the audio kept since the wake word, then live audio until HA's VAD stopped listening. The first 15 s are kept. It's held in memory for that turn only, never written to storage or logged.
 - **Hub side:** Odysseus forwards it to Athena's speaker check and never stores it. Athena compares it with the enrolled voices, so personal answers can be kept to the owner's voice (`FORK_VOICE_PRIVATE` on the hub).
 - **Off:** with "Check my voice" off, the post carries no audio; the hub still learns the device and area.
+- **The context id:** the answer's `context_id` names this turn at the hub. The device keeps it for the turn (`OdysseusTurn.contextId`) and sends it with the turn's later requests, so the hub joins them exactly instead of by time: the turn card's feed (`context_id=`), the timings and a barge-in's interrupt. Until the hub has answered, or when the post failed, the turn has no id and those requests go without one, matched by time or device as before.
 - **Logs:** the device logs the context id, the audio size and the speaker's `verified`/`is_owner`, never the audio.
 
 ## Thinking sound
@@ -51,9 +52,9 @@ When HA has the question (`AWAITING_RESPONSE`) and no answer has started 5 s lat
 
 ## Timings
 
-Each voice turn notes when it reached each pipeline stage, in milliseconds after the wake word (`odysseus/TurnTimings.kt`): run started, listening, speech started and stopped, transcript, speech output asked for, audio starting, first audio, playback done, ended. When the turn has ended, the device posts them to Odysseus in the background (`POST <base>/satellite/timing`, JSON), with three flags: the thinking sound played, a wake word interrupted the turn (`barge_in`), "Check my voice" was on. Odysseus joins them to its own times for the same turn (getting ready, the model's first token, each tool call, first sentence sent), so every step of a turn can be measured: Home Assistant's speech to text and text to speech on the device's clock, Odysseus's steps on its own.
+Each voice turn notes when it reached each pipeline stage, in milliseconds after the wake word (`odysseus/TurnTimings.kt`): run started, listening, speech started and stopped, transcript, speech output asked for, audio starting, first audio, playback done, ended. When the turn has ended, the device posts them to Odysseus in the background (`POST <base>/satellite/timing`, JSON), with three flags: the thinking sound played, a wake word interrupted the turn (`barge_in`), "Check my voice" was on, and the turn's `context_id` when the satellite post gave one (the post waits for that answer if the turn ended first). Odysseus joins them to its own times for the same turn (getting ready, the model's first token, each tool call, first sentence sent), exactly by `context_id`, else by device and time, so every step of a turn can be measured: Home Assistant's speech to text and text to speech on the device's clock, Odysseus's steps on its own.
 
-Only numbers, the device id and these flags are sent: never the question, the answer or audio. Nothing is sent without the Odysseus link; a failed post is only logged.
+Only numbers, the device id, the context id and these flags are sent: never the question, the answer or audio. Nothing is sent without the Odysseus link; a failed post is only logged.
 
 Read them on the server: `python scripts/voice_timings.py` in the Odysseus checkout (hub docs: `docs/fork/voice-assistant.md#timings`).
 
@@ -79,8 +80,9 @@ Home Assistant gives the satellite only the spoken answer. Extended OpenAI Conve
 <base> = the OpenAI base URL Home Assistant uses: https://<odysseus>/api/chat/voice/v1
 Authorization: Bearer <voice token>        401/403 without a `voice` token
 
-GET <base>/turns/latest?since=<epoch ms>
-200 {"turn": {"id", "started_at", "ended_at", "question", "answer",
+GET <base>/turns/latest?context_id=<id>      the turn of that context: null until it's finished (or the id is unknown)
+GET <base>/turns/latest?since=<epoch ms>     a turn without a context id: the newest finished one since then
+200 {"turn": {"id", "context_id", "started_at", "ended_at", "question", "answer",
               "links": [{"url", "label" | null}], "actions": [<action>, …],
               "awaiting_confirmation": "…?" | null, "device": {…} | null, "speaker": {…} | null,
               "session_id"}} | {"turn": null}
@@ -95,7 +97,8 @@ GET <base>/turns/latest?since=<epoch ms>
    "source": "odysseus" | "athena", "turn_id": "…"}
 ```
 
-- **When:** when the answer starts playing and again when the turn ends, from 2 s before that turn's wake word. If there's no turn yet, it asks once more 1.5 s later.
+- **When:** when the answer starts playing and again when the turn ends. If there's no turn yet, it asks once more 1.5 s later.
+- **Which turn:** by the turn's `context_id` once the satellite post has answered; that turn is this device's. Without one, from 2 s before that turn's wake word, and a turn the hub names for another satellite is not shown.
 - **Errors:** any answer but a 200 (a 404 too) is a failure: logged, no card. The device and the hub are deployed together, so the feed is always there.
 - **Unknown fields:** the device ignores them.
 
@@ -118,7 +121,7 @@ The URL must be reachable from the device: Odysseus's LAN or Tailscale address, 
 
 ## Files
 
-- `odysseus/OdysseusLink.kt`: settings, the Keystore-encrypted token, and the hub client (`fetchLatestTurn`, `fetchActions`, `postSatelliteTurn`, `postTimings`, `testLink`).
+- `odysseus/OdysseusLink.kt`: settings, the Keystore-encrypted token, and the hub client (`fetchLatestTurn`, `fetchActions`, `postSatelliteTurn`, `postTimings`, `interruptTurn`, `testLink`).
 - `odysseus/VoiceTurnApi.kt`: the turn and satellite-post JSON, link filtering, the card's content, the multipart body (pure, unit-tested).
 - `odysseus/TurnCard.kt`: the card, the source overlay, and fetching after a turn (`VoiceTurns`).
 - `odysseus/OdysseusTurn.kt`: one per voice turn: the satellite post, the thinking sound and the timings. Later per-turn features plug in here.

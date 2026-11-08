@@ -1,9 +1,11 @@
 package com.msp1974.vacompanion.odysseus.home.weather
 
-import com.msp1974.vacompanion.odysseus.ha.HaHttp
-import com.msp1974.vacompanion.odysseus.ha.HaResponse
+import com.msp1974.vacompanion.odysseus.ha.HaException
+import com.msp1974.vacompanion.odysseus.music.FakeHaApi
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -16,37 +18,22 @@ import java.time.ZoneId
 
 class WeatherClientTest {
 
-    private data class Call(val method: String, val path: String, val bearer: String?, val body: String?)
-
-    /** Answers by "METHOD path" and, for the template, by a marker in the template text. */
-    private class FakeHa(val answer: (Call) -> HaResponse) : HaHttp {
-        val calls = mutableListOf<Call>()
-        override fun call(method: String, url: String, bearer: String?, contentType: String?, body: String?): HaResponse {
-            val c = Call(method, url.removePrefix(BASE), bearer, body)
-            calls += c
-            return answer(c)
-        }
-    }
-
     companion object {
-        const val BASE = "http://ha.local:8123"
         val ZONE: ZoneId = ZoneId.of("Europe/Amsterdam")
         val TODAY: LocalDate = LocalDate.of(2026, 11, 5)
     }
 
+    private fun ha(template: String = "[]") = FakeHaApi().apply { templateAnswer = { template } }
+
     private fun obj(s: String): JsonObject = Json.parseToJsonElement(s).jsonObject
 
     @Test
-    fun listsEntitiesAndAutoPicksTheFirstAvailable() {
-        val fake = FakeHa {
-            HaResponse(200, """[{"id":"weather.a","name":"A","ok":false},{"id":"weather.home","name":"Home","ok":true}]""")
-        }
-        val list = WeatherClient(BASE, fake).entities("T")
+    fun listsEntitiesAndAutoPicksTheFirstAvailable() = runBlocking {
+        val fake = ha("""[{"id":"weather.a","name":"A","ok":false},{"id":"weather.home","name":"Home","ok":true}]""")
+        val list = WeatherClient(fake).entities()
         assertEquals(listOf(WeatherEntity("weather.a", "A", false), WeatherEntity("weather.home", "Home", true)), list)
         assertEquals("weather.home", WeatherClient.autoPick(list)?.entityId)
-        assertEquals("POST", fake.calls[0].method)
-        assertEquals("/api/template", fake.calls[0].path)
-        assertEquals("T", fake.calls[0].bearer)
+        assertTrue(fake.templates.single().contains("states.weather"))
     }
 
     @Test
@@ -56,72 +43,86 @@ class WeatherClientTest {
     }
 
     @Test
-    fun readsTheCurrentConditions() {
-        val fake = FakeHa {
-            HaResponse(200, """{"condition":"partlycloudy","temperature":12.4,"unit":"°C","night":true}""")
-        }
-        val now = WeatherClient(BASE, fake).current("T", "weather.home")!!
+    fun readsTheCurrentConditions() = runBlocking {
+        val fake = ha("""{"condition":"partlycloudy","temperature":12.4,"unit":"°C","night":true}""")
+        val now = WeatherClient(fake).current("weather.home")!!
         assertEquals(WeatherNow("weather.home", "partlycloudy", 12.4, "°C", true), now)
-        assertTrue(fake.calls[0].body!!.contains("states['weather.home']"))
+        assertTrue(fake.templates.single().contains("states['weather.home']"))
     }
 
     @Test
-    fun unavailableOrMissingEntityGivesNothing() {
+    fun unavailableOrMissingEntityGivesNothing() = runBlocking {
         for (body in listOf("""{"condition":"unavailable"}""", """{"condition":null}""")) {
-            assertNull(WeatherClient(BASE, FakeHa { HaResponse(200, body) }).current("T", "weather.home"))
+            assertNull(WeatherClient(ha(body)).current("weather.home"))
         }
     }
 
     @Test
-    fun refusesAnEntityIdThatIsNotAWeatherEntity() {
+    fun refusesAnEntityIdThatIsNotAWeatherEntity() = runBlocking {
         assertFalse(WeatherClient.isWeatherEntityId("weather.x' %}{{ states"))
         assertFalse(WeatherClient.isWeatherEntityId("sensor.temp"))
         assertTrue(WeatherClient.isWeatherEntityId("weather.forecast_home"))
         try {
-            WeatherClient(BASE, FakeHa { HaResponse(200, "{}") }).current("T", "weather.x']"); fail()
+            WeatherClient(ha("{}")).current("weather.x']"); fail()
         } catch (_: IllegalArgumentException) {
         }
     }
 
     @Test
-    fun httpErrorIsAWeatherException() {
+    fun anOddAnswerIsAnHaException() = runBlocking {
         try {
-            WeatherClient(BASE, FakeHa { HaResponse(401, "") }).entities("T"); fail()
-        } catch (e: WeatherException) {
+            WeatherClient(ha("not json")).entities(); fail()
+        } catch (_: HaException) {
+        }
+    }
+
+    private val daily = """{"weather.home":{"forecast":[
+        {"datetime":"2026-11-05T11:00:00+00:00","condition":"rainy","temperature":14.0,"templow":7.5},
+        {"datetime":"2026-11-06T11:00:00+00:00","condition":"sunny","temperature":16.0,"templow":9.0}]}}"""
+
+    @Test
+    fun highLowFromTheDailyForecast() = runBlocking {
+        val fake = ha().apply { answers["weather.get_forecasts"] = { Json.parseToJsonElement(daily) } }
+        assertEquals(14.0 to 7.5, WeatherClient(fake).todayHighLow("weather.home", TODAY, ZONE))
+        val call = fake.calls.single()
+        assertTrue(call.returnResponse)
+        assertEquals(JsonPrimitive("daily"), call.data["type"])
+        assertEquals(JsonPrimitive("weather.home"), call.data["entity_id"])
+    }
+
+    @Test
+    fun fallsBackToTwiceDailyWhenDailyIsNotSupported() = runBlocking {
+        val twice = Json.parseToJsonElement("""{"weather.home":{"forecast":[
+            {"datetime":"2026-11-05T06:00:00+00:00","is_daytime":true,"temperature":13.0},
+            {"datetime":"2026-11-05T18:00:00+00:00","is_daytime":false,"temperature":6.0},
+            {"datetime":"2026-11-06T06:00:00+00:00","is_daytime":true,"temperature":20.0}]}}""")
+        // REST answers 400, the websocket an error with code 0: both mean "not supported".
+        for (code in listOf(400, 0)) {
+            val fake = ha()
+            fake.answers["weather.get_forecasts"] = {
+                if (fake.calls.last().data["type"] == JsonPrimitive("daily")) throw HaException("not supported", code)
+                twice
+            }
+            assertEquals(13.0 to 6.0, WeatherClient(fake).todayHighLow("weather.home", TODAY, ZONE))
+            assertEquals(2, fake.calls.size)
+        }
+    }
+
+    @Test
+    fun noForecastAtAllGivesNoHighLow() = runBlocking {
+        val fake = ha().apply { answers["weather.get_forecasts"] = { throw HaException("bad request", 400) } }
+        assertEquals(null to null, WeatherClient(fake).todayHighLow("weather.home", TODAY, ZONE))
+    }
+
+    @Test
+    fun aRefusedSignInIsThrownNotRetriedAsTwiceDaily() = runBlocking {
+        val fake = ha().apply { answers["weather.get_forecasts"] = { throw HaException("refused", 401) } }
+        try {
+            WeatherClient(fake).todayHighLow("weather.home", TODAY, ZONE); fail()
+        } catch (e: HaException) {
             assertEquals(401, e.code)
         }
-    }
-
-    @Test
-    fun highLowFromTheDailyForecast() {
-        val fake = FakeHa {
-            HaResponse(200, """{"changed_states":[],"service_response":{"weather.home":{"forecast":[
-                {"datetime":"2026-11-05T11:00:00+00:00","condition":"rainy","temperature":14.0,"templow":7.5},
-                {"datetime":"2026-11-06T11:00:00+00:00","condition":"sunny","temperature":16.0,"templow":9.0}]}}}""")
-        }
-        assertEquals(14.0 to 7.5, WeatherClient(BASE, fake).todayHighLow("T", "weather.home", TODAY, ZONE))
-        assertEquals("/api/services/weather/get_forecasts?return_response", fake.calls[0].path)
-        assertTrue(fake.calls[0].body!!.contains("\"type\":\"daily\""))
         assertEquals(1, fake.calls.size)
-    }
-
-    @Test
-    fun fallsBackToTwiceDailyWhenDailyIsNotSupported() {
-        val fake = FakeHa { c ->
-            if (c.body!!.contains("\"daily\"")) HaResponse(400, """{"message":"Weather entity does not support 'daily'"}""")
-            else HaResponse(200, """{"service_response":{"weather.home":{"forecast":[
-                {"datetime":"2026-11-05T06:00:00+00:00","is_daytime":true,"temperature":13.0},
-                {"datetime":"2026-11-05T18:00:00+00:00","is_daytime":false,"temperature":6.0},
-                {"datetime":"2026-11-06T06:00:00+00:00","is_daytime":true,"temperature":20.0}]}}}""")
-        }
-        assertEquals(13.0 to 6.0, WeatherClient(BASE, fake).todayHighLow("T", "weather.home", TODAY, ZONE))
-        assertEquals(2, fake.calls.size)
-    }
-
-    @Test
-    fun noForecastAtAllGivesNoHighLow() {
-        val fake = FakeHa { HaResponse(400, "") }
-        assertEquals(null to null, WeatherClient(BASE, fake).todayHighLow("T", "weather.home", TODAY, ZONE))
     }
 
     @Test

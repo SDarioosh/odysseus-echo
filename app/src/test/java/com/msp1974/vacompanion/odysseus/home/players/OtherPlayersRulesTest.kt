@@ -1,13 +1,18 @@
 package com.msp1974.vacompanion.odysseus.home.players
 
+import com.msp1974.vacompanion.odysseus.ha.HaException
+import com.msp1974.vacompanion.odysseus.music.FakeHaApi
 import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class OtherPlayersRulesTest {
@@ -210,21 +215,54 @@ class OtherPlayersRulesTest {
     }
 
     @Test
-    fun serviceCalls() {
+    fun readsTheSnapshotThroughTheTemplate() = runBlocking {
+        val ha = FakeHaApi()
+        ha.templateAnswer = {
+            """{"now": 5.0, "players": [{"id": "media_player.kitchen", "name": "Kitchen", "state": "playing", "title": "T"}]}"""
+        }
+        val s = OtherPlayersRules.snapshot(ha)
+        assertEquals(listOf("media_player.kitchen"), s.players.map { it.entityId })
+        val template = ha.templates.single()
+        assertTrue(template.contains("states.media_player"))
+        assertTrue(template.contains("area_name(s.entity_id)"))
+    }
+
+    @Test
+    fun anOddAnswerIsAnError() = runBlocking {
+        for (answer in listOf("not json", "[]")) {
+            val ha = FakeHaApi().apply { templateAnswer = { answer } }
+            try {
+                OtherPlayersRules.snapshot(ha)
+                fail("expected an error for $answer")
+            } catch (_: HaException) {
+            }
+        }
+    }
+
+    @Test
+    fun commandCalls() {
         val r = OtherPlayersRules
-        assertEquals("media_play", r.serviceCall("media_player.a", "play")?.service)
-        assertEquals("media_pause", r.serviceCall("media_player.a", "pause")?.service)
-        assertEquals("media_next_track", r.serviceCall("media_player.a", "next")?.service)
-        assertEquals("media_previous_track", r.serviceCall("media_player.a", "previous")?.service)
-        val shuffle = r.serviceCall("media_player.a", "unshuffle")!!
+        for ((command, service) in listOf(
+            "play" to "media_play", "pause" to "media_pause",
+            "next" to "media_next_track", "previous" to "media_previous_track",
+        )) {
+            val call = r.commandCall("media_player.a", command)!!
+            assertEquals("media_player", call.domain)
+            assertEquals(service, call.service)
+            assertEquals(JsonObject(mapOf("entity_id" to JsonPrimitive("media_player.a"))), call.data)
+        }
+        val shuffle = r.commandCall("media_player.a", "unshuffle")!!
         assertEquals("shuffle_set", shuffle.service)
         assertEquals(JsonPrimitive(false), shuffle.data["shuffle"])
+        assertEquals(JsonPrimitive(true), r.commandCall("media_player.a", "shuffle")!!.data["shuffle"])
         assertEquals(JsonPrimitive("media_player.a"), shuffle.data["entity_id"])
-        val repeat = r.serviceCall("media_player.a", "repeat_one")!!
-        assertEquals("repeat_set", repeat.service)
-        assertEquals(JsonPrimitive("one"), repeat.data["repeat"])
-        assertNull(r.serviceCall("media_player.a", "seek"))
-        assertNull(r.serviceCall("light.kitchen", "play"))
+        for (mode in listOf("off", "all", "one")) {
+            val repeat = r.commandCall("media_player.a", "repeat_$mode")!!
+            assertEquals("repeat_set", repeat.service)
+            assertEquals(JsonPrimitive(mode), repeat.data["repeat"])
+        }
+        assertNull(r.commandCall("media_player.a", "seek"))
+        assertNull(r.commandCall("light.kitchen", "play"))
     }
 
     @Test

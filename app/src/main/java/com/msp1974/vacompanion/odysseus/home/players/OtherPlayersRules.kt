@@ -3,20 +3,26 @@ package com.msp1974.vacompanion.odysseus.home.players
 // Odysseus fork: music playing on other speakers, read from Home Assistant's media players
 // (docs/odysseus/home-screen.md#music-on-other-speakers). The Echo's own Sendspin player only
 // hears about its own Music Assistant group, so without this the clock and the now-playing card
-// stay empty while another speaker plays. Pure and unit-tested (OtherPlayersRulesTest).
+// stay empty while another speaker plays. Pure apart from snapshot(), which reads through HaApi;
+// unit-tested (OtherPlayersRulesTest).
 
+import com.msp1974.vacompanion.odysseus.ha.HaApi
+import com.msp1974.vacompanion.odysseus.ha.HaException
+import com.msp1974.vacompanion.odysseus.music.Control
+import com.msp1974.vacompanion.odysseus.music.HaCall
+import com.msp1974.vacompanion.odysseus.music.HaMusicJson
+import com.msp1974.vacompanion.odysseus.music.Repeat
 import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
-import kotlinx.serialization.json.put
 import kotlin.math.abs
 
 /** One Home Assistant media player that is playing or paused with a track. Times are epoch seconds (HA's clock). */
@@ -48,9 +54,6 @@ data class HaMediaPlayer(
 /** The template's answer: HA's clock and the candidate players. */
 data class HaMediaSnapshot(val haNow: Double, val players: List<HaMediaPlayer>)
 
-/** A Home Assistant service call: media_player.<service> with [data] (entity_id included). */
-data class HaServiceCall(val service: String, val data: JsonObject)
-
 /** What the other-speaker source currently shows. */
 data class OtherPlayer(val entityId: String, val name: String, val nowPlaying: SendspinNowPlaying)
 
@@ -69,6 +72,35 @@ object OtherPlayersRules {
     private val ENTITY_ID = Regex("^media_player\\.[a-z0-9_]+$")
 
     fun isMediaPlayerId(id: String) = ENTITY_ID.matches(id)
+
+    /**
+     * Every media player that is playing, buffering or paused. Attributes are read with get()
+     * so a missing one is null rather than an undefined value tojson can't write. Times are
+     * epoch seconds on HA's clock; 'ma' marks a Music Assistant player.
+     */
+    internal const val PLAYERS_TEMPLATE =
+        "{% set ns = namespace(l=[]) %}" +
+            "{% for s in states.media_player if s.state in ['playing', 'paused', 'buffering'] %}" +
+            "{% set a = s.attributes %}" +
+            "{% set ns.l = ns.l + [{'id': s.entity_id, 'name': s.name, 'state': s.state, " +
+            "'area': area_name(s.entity_id), " +
+            "'title': a.get('media_title'), 'artist': a.get('media_artist'), " +
+            "'album': a.get('media_album_name'), 'picture': a.get('entity_picture'), " +
+            "'duration': a.get('media_duration'), 'position': a.get('media_position'), " +
+            "'position_at': as_timestamp(a.get('media_position_updated_at'), none), " +
+            "'features': a.get('supported_features', 0), " +
+            "'shuffle': a.get('shuffle'), 'repeat': a.get('repeat'), " +
+            "'changed': as_timestamp(s.last_changed), " +
+            "'ma': 'mass_player_type' in a}] %}" +
+            "{% endfor %}" +
+            "{{ {'now': as_timestamp(now()), 'players': ns.l} | tojson }}"
+
+    /** The media players that are playing, buffering or paused, with HA's clock (POST /api/template). */
+    suspend fun snapshot(ha: HaApi): HaMediaSnapshot {
+        val text = ha.template(PLAYERS_TEMPLATE)
+        return parse(runCatching { Json.parseToJsonElement(text) }.getOrNull())
+            ?: throw HaException("Unexpected media player list from Home Assistant")
+    }
 
     /** Reads the template's JSON ({"now": …, "players": […]}); null if it isn't that. */
     fun parse(root: JsonElement?): HaMediaSnapshot? {
@@ -200,32 +232,22 @@ object OtherPlayersRules {
         return if (abs(previous.positionNow(nowMs) - next.positionMs) < 2_000) previous else next
     }
 
-    /** The Home Assistant service call for a control's [command], or null if there is none. */
-    fun serviceCall(entityId: String, command: String): HaServiceCall? {
+    /** The media_player call for a control's [command] (the Music page's mapping), or null if there is none. */
+    fun commandCall(entityId: String, command: String): HaCall? {
         if (!isMediaPlayerId(entityId)) return null
-        fun call(service: String, extra: Pair<String, Any>? = null) = HaServiceCall(
-            service,
-            buildJsonObject {
-                put("entity_id", entityId)
-                when (val v = extra?.second) {
-                    is Boolean -> put(extra.first, v)
-                    is String -> put(extra.first, v)
-                    else -> Unit
-                }
-            },
-        )
-        return when (command) {
-            "play" -> call("media_play")
-            "pause" -> call("media_pause")
-            "next" -> call("media_next_track")
-            "previous" -> call("media_previous_track")
-            "shuffle" -> call("shuffle_set", "shuffle" to true)
-            "unshuffle" -> call("shuffle_set", "shuffle" to false)
-            "repeat_off" -> call("repeat_set", "repeat" to "off")
-            "repeat_all" -> call("repeat_set", "repeat" to "all")
-            "repeat_one" -> call("repeat_set", "repeat" to "one")
-            else -> null
+        val (control, value) = when (command) {
+            "play" -> Control.PLAY to null
+            "pause" -> Control.PAUSE to null
+            "next" -> Control.NEXT to null
+            "previous" -> Control.PREVIOUS to null
+            "shuffle" -> Control.SHUFFLE to true
+            "unshuffle" -> Control.SHUFFLE to false
+            "repeat_off" -> Control.REPEAT to Repeat.OFF
+            "repeat_all" -> Control.REPEAT to Repeat.ALL
+            "repeat_one" -> Control.REPEAT to Repeat.ONE
+            else -> return null
         }
+        return HaMusicJson.controlCall(entityId, control, value)
     }
 
     /**

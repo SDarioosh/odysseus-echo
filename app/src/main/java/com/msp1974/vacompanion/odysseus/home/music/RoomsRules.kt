@@ -55,7 +55,7 @@ object RoomsRules {
 
     /** The other rooms [room] is joined with (its group members without itself); empty when none. */
     fun groupedWith(room: Room): List<String> =
-        if (room.entityId in room.groupMembers) room.groupMembers.filter { it != room.entityId }.distinct() else emptyList()
+        if (room.musicAssistant && room.entityId in room.groupMembers) room.groupMembers.filter { it != room.entityId }.distinct() else emptyList()
 
     /** True when [room] leads a group it formed (HA lists the leader first in group_members). */
     fun isLeader(room: Room): Boolean =
@@ -77,22 +77,26 @@ object RoomsRules {
         b.entityId in groupedWith(a) || a.entityId in groupedWith(b)
 
     /**
-     * The rooms whose music "Move music here" can bring to [target]: available, playing, not
+     * The rooms whose music "Move music here" can bring to [target]: Music Assistant rooms only
+     * (both ends; none for a target that isn't one), available, playing, not
      * [target] itself, not grouped with it, not a member of another room's group (its leader
      * is the one to move), and not a Music Assistant group player that contains [target] (nor one
      * [target] contains), as NowPlayingRules.moveFrom. None when [target] itself is unavailable.
      * [states]: the rooms' player states by entity id.
      */
     fun transferSources(target: Room, rooms: List<Room>, states: Map<String, PlayerState?>): List<Room> =
-        if (!target.available) emptyList() else rooms.filter { r ->
-            r.entityId != target.entityId && r.available && !isMember(r) && !sameGroup(r, target) &&
+        if (!target.available || !target.musicAssistant) emptyList() else rooms.filter { r ->
+            r.entityId != target.entityId && r.available && r.musicAssistant && !isMember(r) && !sameGroup(r, target) &&
                 target.entityId !in r.groupMembers && r.entityId !in target.groupMembers &&
                 states[r.entityId]?.playing == true
         }
 
-    /** True when [room] can lead or join a group: available, a plain player, and its player takes GROUP. */
+    /**
+     * True when [room] can lead or join a group: an available Music Assistant player (not an MA
+     * group player) whose player takes GROUP. Other media players are never grouped here.
+     */
     fun canGroup(room: Room, state: PlayerState?): Boolean =
-        room.available && !room.isGroup && state != null && Control.GROUP in state.can
+        room.available && room.musicAssistant && !room.isGroup && state != null && Control.GROUP in state.can
 
     /**
      * The rooms [leader] can be grouped with: other rooms that can group ([canGroup]); none when

@@ -66,8 +66,8 @@ fun MusicSettingsSection() {
         managedKey = MusicSettings.KEY_STAY_WHILE_PLAYING, enabled = enabled,
     ) { MusicSettings.stayWhilePlaying = it }
 
-    // "This device's player" (contract I3): Auto, or one of the rooms.
-    val rooms = MusicRepository.rooms
+    // "This device's player" (contract I3): Auto, or one of the Music Assistant rooms.
+    val rooms = MusicRepository.rooms.filter { it.musicAssistant }
     val override = MusicSettings.selfOverride
     val match = MusicRepository.selfRoom
     Text("This device's player", fontSize = 16.sp, color = colors.onSurface)

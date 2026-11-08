@@ -47,7 +47,10 @@ object MusicRepository {
     private var job: Job? = null
     private var lastProbeMs = 0L
 
-    /** The MA rooms, this device first. Live while attached; the last list otherwise. */
+    /**
+     * The rooms: every Music Assistant player and the other media players that are on
+     * (Room.musicAssistant), this device first. Live while attached; the last list otherwise.
+     */
     var rooms by mutableStateOf<List<Room>>(emptyList())
         private set
 
@@ -138,7 +141,7 @@ object MusicRepository {
 
     private fun update(list: List<Room>) {
         rooms = list
-        available = signedIn() && list.isNotEmpty()
+        available = signedIn() && hasMaRooms(list)
         reselect()
     }
 
@@ -146,6 +149,9 @@ object MusicRepository {
         val chosen = RoomChoice.keepOrDefault(selectedRoomId, rooms, selfRoom, area(), MusicSettings.lastRoom)
         if (chosen != selectedRoomId) selectedRoomId = chosen
     }
+
+    /** True when [list] has a Music Assistant player: the page is offered only then. */
+    fun hasMaRooms(list: List<Room> = rooms): Boolean = list.any { it.musicAssistant }
 
     /** The page's room picker chose [roomId]. */
     fun select(roomId: String) {
@@ -187,7 +193,7 @@ object MusicRepository {
             if (b is HaMusicBackend) {
                 reloadSelf(b)
             } else {
-                update(withTimeoutOrNull(PROBE_TIMEOUT_MS) { b.rooms.first { it.isNotEmpty() } } ?: emptyList())
+                update(withTimeoutOrNull(PROBE_TIMEOUT_MS) { b.rooms.first { hasMaRooms(it) } } ?: emptyList())
             }
         } catch (e: CancellationException) {
             throw e

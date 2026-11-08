@@ -168,4 +168,28 @@ class RoomsRulesTest {
         assertNull(RoomsRules.playPauseControl(state(can = emptySet())))
         assertNull(RoomsRules.playPauseControl(null))
     }
+
+    @Test
+    fun aPlainPlayerIsNeverMovedNorGrouped() {
+        val tv = room("tv").copy(musicAssistant = false)
+        val kitchen = room("kitchen")
+        val states = mapOf(
+            tv.entityId to state("Show", playing = true),
+            kitchen.entityId to state("Song", playing = true),
+        )
+        val rooms = listOf(tv, kitchen)
+        // Neither to it nor from it.
+        assertTrue(RoomsRules.transferSources(tv, rooms, states).isEmpty())
+        assertTrue(RoomsRules.transferSources(kitchen, rooms, states).isEmpty())
+        // Not grouped, even though its player says it can.
+        assertFalse(RoomsRules.canGroup(tv, states[tv.entityId]))
+        assertTrue(RoomsRules.groupCandidates(tv, rooms, states).isEmpty())
+        assertTrue(RoomsRules.groupCandidates(kitchen, rooms, states).isEmpty())
+        // Its own group_members are no group here.
+        val sonos = tv.copy(groupMembers = listOf(tv.entityId, kitchen.entityId))
+        assertTrue(RoomsRules.groupedWith(sonos).isEmpty())
+        assertNull(RoomsRules.groupLabel(sonos))
+        // Its transport stays.
+        assertEquals(Control.PAUSE, RoomsRules.playPauseControl(states[tv.entityId]))
+    }
 }

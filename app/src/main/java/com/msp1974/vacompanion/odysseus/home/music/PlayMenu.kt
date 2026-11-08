@@ -77,9 +77,12 @@ object PlayMenu {
         else -> PlayOption.entries - PlayOption.RADIO
     }
 
-    /** The rooms to choose from: this device's room first ("here"), then the others; available ones only. */
+    /**
+     * The rooms to choose from: this device's room first ("here"), then the others; available
+     * Music Assistant rooms only (only MA plays its library).
+     */
     fun rooms(rooms: List<Room>, selfId: String?): List<PlayRoom> {
-        val usable = rooms.filter { it.available }
+        val usable = rooms.filter { it.available && it.musicAssistant }
         val here = usable.filter { it.entityId == selfId }.map { PlayRoom(it, here = true) }
         return here + usable.filter { it.entityId != selfId }.map { PlayRoom(it, here = false) }
     }

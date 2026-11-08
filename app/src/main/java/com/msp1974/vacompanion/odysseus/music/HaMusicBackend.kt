@@ -6,7 +6,9 @@ package com.msp1974.vacompanion.odysseus.music
 // keeps the rooms live and finds this device's own player (SelfPlayer.kt, contract I3).
 //
 // Every call that changes what plays (play, control, transfer, group, ungroup) throws MusicLocked
-// while Lock mode is on.
+// while Lock mode is on. The rooms are every media player (RoomListing): Music Assistant's, and the
+// others while they are on; play, transfer and grouping refuse a room known not to be MA's, and
+// queue() is null for one.
 
 import com.msp1974.vacompanion.odysseus.OdysseusLink
 import com.msp1974.vacompanion.odysseus.ha.HaApi
@@ -98,10 +100,18 @@ class HaMusicBackend(
 
     private val _rooms = MutableStateFlow<List<Room>>(emptyList())
 
+    private val _live = MutableStateFlow<Map<String, LivePlayer>>(emptyMap())
+    /**
+     * The listed rooms' live states (HA state text, PlayerState, last update), as of the last
+     * rooms update; live while [rooms] is collected. The clock's other speakers read it.
+     */
+    val live: StateFlow<Map<String, LivePlayer>> = _live.asStateFlow()
+
     /**
      * Live while collected (and 5 s after): the rooms template runs at once, then every
-     * [roomsRefreshMs] and when a player appears or goes away; the players' states are watched in
-     * between. Keeps its last value while nobody collects; [loadRooms] updates it too.
+     * [roomsRefreshMs] and when a player appears or goes away; the states of every media player
+     * the template returned (also those not listed now: a speaker turned on is listed at once) are
+     * watched in between. Keeps its last value while nobody collects; [loadRooms] updates it too.
      */
     override val rooms: StateFlow<List<Room>> = _rooms.asStateFlow()
 
@@ -200,19 +210,33 @@ class HaMusicBackend(
         loaded
     }
 
-    private suspend fun statesRows() = HaMusicJson.roomRowsFromStates(ha.states { HaMusicJson.isMaPlayerState(it) })
+    private suspend fun statesRows() = HaMusicJson.roomRowsFromStates(ha.states { it.entityId.startsWith("media_player.") })
 
     /** Recomputes this device's player and the rooms from the last rows and states. */
     private fun publish(): List<Room> {
         val r = rows
         val s = states
-        val candidates = r.map { HaMusicJson.candidate(it, s[it.entityId]) }
+        // Only a Music Assistant player can be this device's (contract I3).
+        val candidates = r.filter { it.musicAssistant }.map { HaMusicJson.candidate(it, s[it.entityId]) }
         val match = matchSelf(selfClientId(), uuid(), area(), selfOverride(), candidates)
         if (match != _self.value) {
             Timber.i("Music: this device's player: %s (%s)", match?.entityId ?: "none", match?.how ?: "-")
             _self.value = match
         }
-        return HaMusicJson.buildRooms(r, s, match).also { _rooms.value = it }
+        val list = HaMusicJson.buildRooms(r, s, match)
+        _live.value = HaMusicJson.livePlayers(list, s, clock())
+        _rooms.value = list
+        return list
+    }
+
+    /** False when [entityId] is a room known not to be Music Assistant's (unknown ids pass: HA decides). */
+    private fun isMa(entityId: String): Boolean = rows.firstOrNull { it.entityId == entityId }?.musicAssistant ?: true
+
+    private fun requireMa(entityId: String) {
+        if (!isMa(entityId)) {
+            val name = rows.firstOrNull { it.entityId == entityId }?.name ?: entityId
+            throw IllegalArgumentException("$name isn't a Music Assistant player")
+        }
     }
 
     override fun player(entityId: String): Flow<PlayerState> =
@@ -222,6 +246,7 @@ class HaMusicBackend(
             .distinctUntilChanged()
 
     override suspend fun queue(entityId: String): QueueSummary? {
+        if (!isMa(entityId)) return null
         val c = HaMusicJson.queueCall(entityId)
         val response = try {
             ha.call(c.domain, c.service, c.data, returnResponse = true)
@@ -296,6 +321,7 @@ class HaMusicBackend(
 
     override suspend fun play(item: MediaItem, roomId: String, enqueue: Enqueue, radio: Boolean) {
         guard()
+        requireMa(roomId)
         run(HaMusicJson.playCall(item, roomId, enqueue, radio))
     }
 
@@ -307,17 +333,22 @@ class HaMusicBackend(
     override suspend fun transfer(fromRoomId: String, toRoomId: String) {
         guard()
         if (fromRoomId == toRoomId) return
+        requireMa(fromRoomId)
+        requireMa(toRoomId)
         run(HaMusicJson.transferCall(fromRoomId, toRoomId))
     }
 
     override suspend fun group(leaderId: String, memberIds: List<String>) {
         guard()
         if (memberIds.none { it != leaderId }) return
+        requireMa(leaderId)
+        memberIds.forEach(::requireMa)
         run(HaMusicJson.joinCall(leaderId, memberIds))
     }
 
     override suspend fun ungroup(roomId: String) {
         guard()
+        requireMa(roomId)
         run(HaMusicJson.unjoinCall(roomId))
     }
 }

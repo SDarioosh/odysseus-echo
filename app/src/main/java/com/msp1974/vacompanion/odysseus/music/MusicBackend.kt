@@ -16,19 +16,23 @@ data class MediaItem(val uri: String, val kind: MediaKind, val name: String,
 
 data class Room(val entityId: String, val name: String, val area: String?,
                 val isThisDevice: Boolean, val isGroup: Boolean,
-                val groupMembers: List<String>, val available: Boolean)
+                val groupMembers: List<String>, val available: Boolean,
+                // Odysseus fork: a Music Assistant player (library, queue, play, move and group
+                // work); false for any other media player (its own transport and volume only).
+                val musicAssistant: Boolean = true)
 
 data class QueueSummary(val current: MediaItem?, val next: MediaItem?, val count: Int)
 data class LibraryPage(val items: List<MediaItem>, val offset: Int, val hasMore: Boolean)
 enum class LibraryOrder { NAME, RECENT, ADDED, MOST_PLAYED, RANDOM }
 
 interface MusicBackend {
-    val rooms: StateFlow<List<Room>>                       // live while collected
+    val rooms: StateFlow<List<Room>>                       // live while collected; every media player (Room.musicAssistant)
     fun player(entityId: String): Flow<PlayerState>       // live
-    suspend fun queue(entityId: String): QueueSummary?     // null: not an MA queue
+    suspend fun queue(entityId: String): QueueSummary?     // null: not an MA queue (always for a non-MA room)
     suspend fun library(kind: MediaKind, order: LibraryOrder, favoritesOnly: Boolean,
                         offset: Int, limit: Int = 50): LibraryPage
     suspend fun search(text: String, kinds: Set<MediaKind>, limit: Int = 10): Map<MediaKind, List<MediaItem>>
+    // play, transfer, group and ungroup take Music Assistant rooms only (IllegalArgumentException otherwise).
     suspend fun play(item: MediaItem, roomId: String, enqueue: Enqueue, radio: Boolean = false)
     suspend fun control(roomId: String, control: Control, value: Any? = null) // seek s, volume 0..1, …
     suspend fun transfer(fromRoomId: String, toRoomId: String)

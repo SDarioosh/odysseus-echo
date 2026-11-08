@@ -17,13 +17,83 @@ class HaMusicJsonTest {
     // ---- rooms ----
 
     @Test
-    fun templateIsTheContractsText() {
+    fun templateListsEveryMediaPlayerWithItsMaFlag() {
         val t = HaMusicJson.ROOMS_TEMPLATE
-        assertTrue(t.startsWith("{% set ns = namespace(r=[]) %}"))
-        assertTrue(t.contains("integration_entities('music_assistant')"))
-        assertTrue(t.contains("state_attr(e, 'device_class') != 'tv'"))
-        assertTrue(t.contains("| map('list') | list"))
+        assertTrue(t.startsWith("{% set ma = integration_entities('music_assistant') %}"))
+        assertTrue(t.contains("{% for s in states.media_player %}"))
+        assertTrue(t.contains("e in ma and s.attributes.get('device_class') != 'tv'"))
+        assertTrue(t.contains("'state': s.state, 'ma': m"))
+        assertTrue(t.contains("| map('list') | list) if m else []"))
         assertTrue(t.endsWith("{% endfor %}{{ ns.r | to_json }}"))
+    }
+
+    @Test
+    fun parsesMaAndOtherRows() {
+        val rows = HaMusicJson.parseRooms(MusicFixtures.text("rooms_template_all.json"))
+        assertEquals(5, rows.size)
+        val ma = rows[0]
+        assertTrue(ma.musicAssistant)
+        assertEquals("player", ma.type)
+        assertEquals(listOf(listOf("music_assistant", "RINCON_fictional01")), ma.ids)
+        assertEquals("01JFICTIONALENTRY0000000000", ma.entry)
+        assertEquals("idle", ma.state)
+        val plain = rows[1]
+        assertFalse(plain.musicAssistant)
+        assertEquals("media_player.kitchen", plain.entityId)
+        assertEquals("Kitchen", plain.area)
+        assertEquals("playing", plain.state)
+        assertNull(plain.type)
+        assertTrue(plain.ids.isEmpty() && plain.members.isEmpty())
+        assertNull(plain.entry)
+        // A plain row never carries MA's fields, whatever the answer holds.
+        val odd = HaMusicJson.parseRooms("""[{"entity_id": "media_player.x", "ma": false, "type": "player", "entry": "E", "members": ["a"]}]""").single()
+        assertNull(odd.type); assertNull(odd.entry); assertTrue(odd.members.isEmpty())
+    }
+
+    @Test
+    fun listsMaPlayersAndOtherPlayersThatAreOnWithoutTwins() {
+        val rows = HaMusicJson.parseRooms(MusicFixtures.text("rooms_template_all.json"))
+        val rooms = HaMusicJson.buildRooms(rows, emptyMap(), null)
+        // The Sonos "Kitchen" is MA's kitchen_2 again (MA's device has no area); the Cast is off.
+        assertEquals(
+            listOf("media_player.kitchen_2", "media_player.living_room_tv", "media_player.study_speaker"),
+            rooms.map { it.entityId },
+        )
+        assertTrue(rooms[0].musicAssistant)
+        assertFalse(rooms[1].musicAssistant)
+        // Live states win over the template's: the Cast turned on, the TV went off.
+        val live = HaMusicJson.buildRooms(rows, mapOf(
+            "media_player.bedroom_cast" to MusicFixtures.state("media_player.bedroom_cast", "idle"),
+            "media_player.living_room_tv" to MusicFixtures.state("media_player.living_room_tv", "standby"),
+        ), null)
+        assertEquals(
+            listOf("media_player.bedroom_cast", "media_player.kitchen_2", "media_player.study_speaker"),
+            live.map { it.entityId },
+        )
+    }
+
+    @Test
+    fun aPlainPlayersOwnGroupIsNotShown() {
+        val rows = listOf(RoomRow("media_player.sonos", "Sonos", "", null, emptyList(), emptyList(), null, musicAssistant = false, state = "playing"))
+        val states = mapOf("media_player.sonos" to MusicFixtures.state("media_player.sonos", "playing",
+            obj("""{"group_members": ["media_player.sonos", "media_player.other"]}""")))
+        val room = HaMusicJson.buildRooms(rows, states, null).single()
+        assertTrue(room.groupMembers.isEmpty())
+        assertFalse(room.isGroup)
+    }
+
+    @Test
+    fun livePlayersCoverTheListedRooms() {
+        val rows = HaMusicJson.parseRooms(MusicFixtures.text("rooms_template_all.json"))
+        val states = mapOf(
+            "media_player.kitchen_2" to MusicFixtures.state("media_player.kitchen_2", "paused", updatedMs = 5_000L),
+            "media_player.bedroom_cast" to MusicFixtures.state("media_player.bedroom_cast", "off"),
+        )
+        val rooms = HaMusicJson.buildRooms(rows, states, null)
+        val live = HaMusicJson.livePlayers(rooms, states, 9_000L)
+        assertEquals(setOf("media_player.kitchen_2"), live.keys)
+        assertEquals("paused", live.getValue("media_player.kitchen_2").status)
+        assertEquals(5_000L, live.getValue("media_player.kitchen_2").updatedMs)
     }
 
     @Test
@@ -77,10 +147,14 @@ class HaMusicJsonTest {
         val rows = HaMusicJson.roomRowsFromStates(listOf(
             MusicFixtures.state("media_player.kitchen_echo", "idle", obj("""{"friendly_name": "Kitchen Echo", "mass_player_type": "player"}""")),
             MusicFixtures.state("media_player.tv", "idle", obj("""{"mass_player_type": "player", "device_class": "tv"}""")),
-            MusicFixtures.state("media_player.cast", "idle", obj("""{"friendly_name": "Cast"}""")),
+            MusicFixtures.state("media_player.cast", "off", obj("""{"friendly_name": "Cast"}""")),
+            MusicFixtures.state("light.kitchen", "on"),
         ))
-        assertEquals(listOf("media_player.kitchen_echo"), rows.map { it.entityId })
+        assertEquals(listOf("media_player.kitchen_echo", "media_player.tv", "media_player.cast"), rows.map { it.entityId })
+        assertEquals(listOf(true, false, false), rows.map { it.musicAssistant })
+        assertEquals("off", rows[2].state)
         assertNull(rows[0].entry)
+        assertNull(rows[1].type)
     }
 
     // ---- player ----

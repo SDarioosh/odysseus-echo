@@ -99,7 +99,8 @@ class MusicPageShotsTest(private val screen: Screen, private val mode: Mode) {
         shuffle: Boolean = false, repeat: Repeat = Repeat.OFF,
     ) = PlayerState(
         title = title, artist = artist, album = album, artUrl = null, artwork = art, playing = playing,
-        durationS = duration, positionS = position, positionAtMs = 0L, shuffle = shuffle, repeat = repeat,
+        // On the wall clock, as every PlayerState is (PlayerClock).
+        durationS = duration, positionS = position, positionAtMs = System.currentTimeMillis(), shuffle = shuffle, repeat = repeat,
         volume = volume, muted = false, can = all,
     )
 
@@ -129,7 +130,10 @@ class MusicPageShotsTest(private val screen: Screen, private val mode: Mode) {
     )
 
     /** Installs the fake backend, attaches, and selects [room] and [tab]; [reachable] false: HA offline. */
-    private fun setUp(room: String, tab: String, reachable: Boolean = true, states: Map<String, PlayerState> = this.states) {
+    private fun setUp(
+        room: String, tab: String, reachable: Boolean = true, states: Map<String, PlayerState> = this.states,
+        rooms: List<Room> = this.rooms,
+    ) {
         val backend = FakeMusicBackend(rooms, states, queues)
         MusicRepository.install(RuntimeEnvironment.getApplication(), backend, signedIn = { true }, area = { "Kitchen" })
         MusicRepository.attach()
@@ -194,6 +198,32 @@ class MusicPageShotsTest(private val screen: Screen, private val mode: Mode) {
     @Test fun roomsOffline() {
         setUp(KITCHEN, MusicTabs.ROOMS, reachable = false)
         page("rooms-offline")
+    }
+
+    /**
+     * Other media players beside Music Assistant's (Room.musicAssistant false): a TV playing and a
+     * Cast speaker idle, with their transport and volume only (no ⋮ for Move or Group).
+     */
+    private val TV = "media_player.living_room_tv"
+    private val CAST = "media_player.garage_cast"
+    private val withOthers = rooms + listOf(
+        Room(TV, "Living Room TV", "Living Room", isThisDevice = false, isGroup = false, groupMembers = emptyList(), available = true, musicAssistant = false),
+        Room(CAST, "Garage Cast", "Garage", isThisDevice = false, isGroup = false, groupMembers = emptyList(), available = true, musicAssistant = false),
+    )
+    private val othersStates = states + mapOf(
+        TV to track("Night Garden", "Fictional Channel", "", null, playing = true, position = 1_204.0, duration = 2_700.0, volume = 0.3f)
+            .copy(can = setOf(Control.PLAY, Control.PAUSE, Control.VOLUME, Control.MUTE, Control.SEEK)),
+        CAST to idle(volume = 0.5f, can = setOf(Control.PLAY, Control.PAUSE, Control.VOLUME, Control.MUTE, Control.NEXT, Control.PREVIOUS)),
+    )
+
+    @Test fun roomsWithOtherPlayers() {
+        setUp(KITCHEN, MusicTabs.ROOMS, states = othersStates, rooms = withOthers)
+        page("rooms-other-players")
+    }
+
+    @Test fun playingOnAnotherPlayer() {
+        setUp(TV, MusicTabs.NOW_PLAYING, states = othersStates, rooms = withOthers)
+        page("playing-other-player")
     }
 
     /** Composed beside the clock, out of sight (HomeHost's strip on page 0): the rail only, no player followed. */

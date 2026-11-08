@@ -18,6 +18,8 @@ package com.msp1974.vacompanion.odysseus.announce
 import android.content.Context
 import androidx.core.content.edit
 import com.msp1974.vacompanion.BuildConfig
+import com.msp1974.vacompanion.odysseus.HubCall
+import com.msp1974.vacompanion.odysseus.HubReply
 import com.msp1974.vacompanion.odysseus.OdysseusLink
 import com.msp1974.vacompanion.odysseus.managed.ManagedSettings
 import com.msp1974.vacompanion.settings.APPConfig
@@ -66,7 +68,7 @@ object Announcements : EventListener {
 
     private fun hubNow() = System.currentTimeMillis() + clockOffsetMs
 
-    private fun noteClock(reply: OdysseusLink.HubReply) {
+    private fun noteClock(reply: HubReply) {
         reply.dateMs?.takeIf { it > 0 }?.let { clockOffsetMs = it - System.currentTimeMillis() }
     }
 
@@ -166,7 +168,7 @@ object Announcements : EventListener {
             sayHello(form, saying, now)?.let { return it }
         }
 
-        val reply = OdysseusLink.hubRequest(AnnouncementApi.feedPath(deviceId, feed.sinceFor(hubNow())))
+        val reply = OdysseusLink.request(HubCall(AnnouncementApi.feedPath(deviceId, feed.sinceFor(hubNow()))))
         noteClock(reply)
         return when (reply.code) {
             200 -> {
@@ -186,7 +188,7 @@ object Announcements : EventListener {
     /** Returns an outcome to stop at (token refused), or null to go on to the feed. */
     private suspend fun sayHello(form: HelloForm, saying: String, now: Long): AnnouncementPolling.Outcome? {
         val body = AnnouncementApi.formBody(form.fields()).toByteArray()
-        val reply = OdysseusLink.hubRequest(AnnouncementApi.HELLO_PATH, "application/x-www-form-urlencoded", body, readTimeoutMs = 4000)
+        val reply = OdysseusLink.request(HubCall(AnnouncementApi.HELLO_PATH, "application/x-www-form-urlencoded", body, readTimeoutMs = 4000))
         noteClock(reply)
         when (reply.code) {
             in 200..299 -> {

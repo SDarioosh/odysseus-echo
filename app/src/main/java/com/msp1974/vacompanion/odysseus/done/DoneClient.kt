@@ -1,25 +1,15 @@
 package com.msp1974.vacompanion.odysseus.done
 
-// Odysseus fork: sends the Done and Undo requests of contract C5 (DoneApi.kt). HTTP goes through
-// DoneHttp so the client is unit-tested with a fake (DoneClientTest); on the device it is
-// OdysseusLink.hubRequest, asked for error bodies so the kinds of 409 and 503 are told apart.
-// Never throws (but passes cancellation on).
+// Odysseus fork: sends the Done and Undo requests of contract C5 (DoneApi.kt) through HubHttp
+// (OdysseusLink on the device, a fake in DoneApiTest), asked for error bodies so the kinds of 409
+// and 503 are told apart. Never throws (but passes cancellation on).
 
+import com.msp1974.vacompanion.odysseus.HubCall
+import com.msp1974.vacompanion.odysseus.HubHttp
 import com.msp1974.vacompanion.odysseus.OdysseusLink
 import kotlin.coroutines.cancellation.CancellationException
 
-/** One JSON POST to the hub, path relative to the voice base URL. Throws on network errors. */
-interface DoneHttp {
-    suspend fun post(path: String, json: String): OdysseusLink.HubReply
-}
-
-/** The device's link to Odysseus. */
-object LinkDoneHttp : DoneHttp {
-    override suspend fun post(path: String, json: String): OdysseusLink.HubReply =
-        OdysseusLink.hubRequest(path, "application/json", json.toByteArray(), readTimeoutMs = 10_000, errorBody = true)
-}
-
-class DoneClient(private val http: DoneHttp = LinkDoneHttp) {
+class DoneClient(private val http: HubHttp = OdysseusLink) {
 
     /** [title]: the row's text as shown, sent for a line named by its index (DoneApi.sendsTitle). */
     suspend fun done(target: DoneTarget, deviceId: String, title: String? = null): DoneOutcome =
@@ -32,7 +22,7 @@ class DoneClient(private val http: DoneHttp = LinkDoneHttp) {
     }
 
     private suspend fun send(path: String, json: String): DoneOutcome = try {
-        val r = http.post(path, json)
+        val r = http.request(HubCall(path, "application/json", json.toByteArray(), readTimeoutMs = 10_000, errorBody = true))
         DoneApi.classify(r.code, r.body)
     } catch (e: CancellationException) {
         throw e

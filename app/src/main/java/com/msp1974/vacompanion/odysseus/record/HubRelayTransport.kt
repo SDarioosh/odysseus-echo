@@ -5,10 +5,6 @@ package com.msp1974.vacompanion.odysseus.record
 // /api/codex/athena (UploadRules.hubOrigin). Audio goes nowhere else.
 
 import com.msp1974.vacompanion.odysseus.OdysseusLink
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
 
 class HubRelayTransport : RelayTransport {
     override fun post(path: String, contentType: String, body: ByteArray): RelayReply {
@@ -23,46 +19,21 @@ class HubRelayTransport : RelayTransport {
 
     companion object {
         /** The most of an answer's body that is read (the relay answers a few bytes of JSON). */
-        const val MAX_BODY_BYTES = 16 * 1024
+        const val MAX_BODY_CHARS = 16 * 1024
 
         /**
-         * One POST with the token. Redirects are not followed (the token would go to wherever a
-         * redirect points): a 3xx comes back as its code, which UploadRules classes as "try again
-         * later". At most [MAX_BODY_BYTES] of a 2xx body are read. Never throws.
+         * One POST with the token (OdysseusLink.send). Redirects are not followed: a 3xx comes back
+         * as its code, which UploadRules classes as "try again later". At most [MAX_BODY_CHARS] of
+         * a 2xx body are read; other answers have no body. Never throws.
          */
         fun postTo(url: String, token: String, contentType: String, body: ByteArray): RelayReply = try {
-            val conn = URL(url).openConnection() as HttpURLConnection
-            try {
-                conn.instanceFollowRedirects = false
-                conn.connectTimeout = 10_000
-                conn.readTimeout = 60_000
-                conn.requestMethod = "POST"
-                conn.doOutput = true
-                conn.setRequestProperty("Authorization", "Bearer $token")
-                conn.setRequestProperty("Accept", "application/json")
-                conn.setRequestProperty("Content-Type", contentType)
-                conn.setFixedLengthStreamingMode(body.size)
-                conn.outputStream.use { it.write(body) }
-                val code = conn.responseCode
-                val text = if (code in 200..299) conn.inputStream.use { readCapped(it) } else null
-                RelayReply(code, text)
-            } finally {
-                conn.disconnect()
-            }
+            val r = OdysseusLink.send(
+                url, token, contentType, body,
+                readTimeoutMs = 60_000, connectTimeoutMs = 10_000, maxBodyChars = MAX_BODY_CHARS,
+            )
+            RelayReply(r.code, r.body.takeIf { r.code in 200..299 })
         } catch (e: Exception) {
             RelayReply(null, null)
-        }
-
-        /** Up to [max] bytes of [input] as UTF-8 text; the rest is left unread. */
-        fun readCapped(input: InputStream, max: Int = MAX_BODY_BYTES): String {
-            val out = ByteArrayOutputStream()
-            val buf = ByteArray(4096)
-            while (out.size() < max) {
-                val n = input.read(buf, 0, minOf(buf.size, max - out.size()))
-                if (n < 0) break
-                out.write(buf, 0, n)
-            }
-            return out.toString(Charsets.UTF_8.name())
         }
     }
 }

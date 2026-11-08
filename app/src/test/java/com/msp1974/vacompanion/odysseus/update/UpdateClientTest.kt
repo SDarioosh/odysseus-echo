@@ -77,7 +77,7 @@ class UpdateClientTest {
     @Test
     fun latestNoReleaseAndFailures() {
         assertEquals(CheckResult.NoRelease, UpdateClient(FakeHub(UpdateResponse(404, """{"error": "no release"}"""))).latest())
-        assertEquals(CheckResult.Failed("token refused (403)"), UpdateClient(FakeHub(UpdateResponse(403))).latest())
+        assertEquals(CheckResult.Failed("Token refused (403)"), UpdateClient(FakeHub(UpdateResponse(403))).latest())
         assertEquals(CheckResult.Failed("HTTP 500"), UpdateClient(FakeHub(UpdateResponse(500))).latest())
         assertEquals(CheckResult.Failed("connection refused"), UpdateClient(FakeHub(null)).latest())
         assertTrue(UpdateClient(FakeHub(UpdateResponse(200, "<html>"))).latest() is CheckResult.Failed)
@@ -187,7 +187,7 @@ class UpdateClientTest {
     @Test
     fun reportsHttpErrors() {
         val dir = tmp.newFolder("upd")
-        assertEquals(DownloadResult.Failed("token refused (401)"), UpdateClient(FakeHub(apkCode = 401)).download(release, dir))
+        assertEquals(DownloadResult.Failed("Token refused (401)"), UpdateClient(FakeHub(apkCode = 401)).download(release, dir))
         assertEquals(DownloadResult.Failed("the hub has no APK (404)"), UpdateClient(FakeHub(apkCode = 404)).download(release, dir))
     }
 }

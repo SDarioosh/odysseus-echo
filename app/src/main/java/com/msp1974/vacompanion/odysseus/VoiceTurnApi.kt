@@ -11,7 +11,6 @@ package com.msp1974.vacompanion.odysseus
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
 import java.net.URI
 
@@ -99,17 +98,15 @@ object VoiceTurnApi {
     /** Links shown on the card, at most. */
     const val MAX_LINKS = 3
 
-    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; explicitNulls = false }
-
     /** The turn in a /turns/latest body; null for {"turn": null}. Throws on a body that isn't JSON. */
-    fun parseLatestTurn(body: String): VoiceTurn? = json.decodeFromString<LatestTurnResponse>(body).turn
+    fun parseLatestTurn(body: String): VoiceTurn? = HubJson.decodeFromString<LatestTurnResponse>(body).turn
 
     fun parseSatelliteTurnResponse(body: String): SatelliteTurnResponse =
-        json.decodeFromString<SatelliteTurnResponse>(body)
+        HubJson.decodeFromString<SatelliteTurnResponse>(body)
 
     /** The /satellite/interrupt answer: {"ok": true, "cut": n, "marked": n}. Throws on a body that isn't JSON. */
     fun parseInterruptResponse(body: String): OdysseusLink.InterruptResult.Ok =
-        json.decodeFromString<InterruptResponse>(body).let { OdysseusLink.InterruptResult.Ok(it.cut, it.marked) }
+        HubJson.decodeFromString<InterruptResponse>(body).let { OdysseusLink.InterruptResult.Ok(it.cut, it.marked) }
 
     /** The links worth a chip: http(s) only, no duplicates, at most [max]. */
     fun displayLinks(links: List<TurnLink>, max: Int = MAX_LINKS): List<TurnLink> =

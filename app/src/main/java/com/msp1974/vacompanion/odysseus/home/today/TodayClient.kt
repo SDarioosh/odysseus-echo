@@ -4,14 +4,16 @@ package com.msp1974.vacompanion.odysseus.home.today
 // device already holds (OdysseusLink):
 //   GET <voice base>/today   ->  contract C1 (docs/odysseus/plans/2026-11-today-updates-announce-record.md)
 // Parsing is lenient: unknown keys are ignored, a missing or null section is empty, and one
-// malformed item is skipped rather than failing the whole page. HTTP goes through TodayHttp so it
+// malformed item is skipped rather than failing the whole page. HTTP goes through HubHttp so it
 // is unit-tested with a fake (TodayClientTest).
 
-import com.msp1974.vacompanion.odysseus.ha.HaResponse
+import com.msp1974.vacompanion.odysseus.HubCall
+import com.msp1974.vacompanion.odysseus.HubHttp
+import com.msp1974.vacompanion.odysseus.HubJson
+import com.msp1974.vacompanion.odysseus.hubStatusText
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -71,34 +73,21 @@ data class TodayData(
 
 class TodayException(message: String, val code: Int = 0) : Exception(message)
 
-/** One GET to the hub, path relative to the voice base URL. Throws on network errors. */
-fun interface TodayHttp {
-    fun get(path: String): HaResponse
-}
-
-class TodayClient(private val http: TodayHttp) {
+class TodayClient(private val http: HubHttp) {
 
     /** GET /today. Throws [TodayException] on any answer but a 200 with a JSON object. */
-    fun fetch(): TodayData {
-        val r = http.get(PATH)
-        if (r.code != 200) throw TodayException(describe(r.code), r.code)
+    suspend fun fetch(): TodayData {
+        val r = http.request(HubCall(PATH))
+        if (r.code != 200) throw TodayException(hubStatusText(r.code), r.code)
         return parse(r.body) ?: throw TodayException("Unexpected answer from Odysseus")
     }
 
     companion object {
         const val PATH = "/today"
 
-        private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true }
-
-        fun describe(code: Int): String = when (code) {
-            401, 403 -> "Odysseus refused the token ($code): link the device again"
-            404 -> "This Odysseus has no Today route yet (404)"
-            else -> "Odysseus answered HTTP $code"
-        }
-
         /** Contract C1 from [body], or null when it isn't a JSON object. */
         fun parse(body: String): TodayData? {
-            val root = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull() ?: return null
+            val root = runCatching { HubJson.parseToJsonElement(body) as? JsonObject }.getOrNull() ?: return null
             fun str(key: String) = (root[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
             return TodayData(
                 date = str("date").orEmpty(),
@@ -109,7 +98,7 @@ class TodayClient(private val http: TodayHttp) {
                 todos = list(root, "todos", TodayTodo.serializer()).filter { it.title.isNotBlank() },
                 actionItems = list(root, "action_items", TodayActionItem.serializer()).filter { it.title.isNotBlank() },
                 counts = (root["counts"] as? JsonObject)
-                    ?.let { runCatching { json.decodeFromJsonElement(TodayCounts.serializer(), it) }.getOrNull() }
+                    ?.let { runCatching { HubJson.decodeFromJsonElement(TodayCounts.serializer(), it) }.getOrNull() }
                     ?: TodayCounts(),
             )
         }
@@ -118,7 +107,7 @@ class TodayClient(private val http: TodayHttp) {
         private fun <T> list(root: JsonObject, key: String, serializer: KSerializer<T>): List<T> {
             val arr = root[key] as? JsonArray ?: return emptyList()
             return arr.mapNotNull { el ->
-                (el as? JsonObject)?.let { runCatching { json.decodeFromJsonElement(serializer, it) }.getOrNull() }
+                (el as? JsonObject)?.let { runCatching { HubJson.decodeFromJsonElement(serializer, it) }.getOrNull() }
             }
         }
     }

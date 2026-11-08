@@ -7,7 +7,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.io.ByteArrayInputStream
 import java.net.InetSocketAddress
 import java.util.Collections
 
@@ -56,14 +55,8 @@ class HubRelayTransportTest {
     fun aLongBodyIsCut() {
         val r = HubRelayTransport.postTo("$base/big", "secret-token", "application/json", "{}".toByteArray())
         assertEquals(200, r.code)
-        assertEquals(HubRelayTransport.MAX_BODY_BYTES, r.body!!.length)
+        assertEquals(HubRelayTransport.MAX_BODY_CHARS, r.body!!.length)
         assertEquals(UploadClass.OK, UploadRules.classify(r.code, r.body))
-    }
-
-    @Test
-    fun readCappedStopsAtTheCap() {
-        assertEquals("abc", HubRelayTransport.readCapped(ByteArrayInputStream("abcdef".toByteArray()), 3))
-        assertEquals("ab", HubRelayTransport.readCapped(ByteArrayInputStream("ab".toByteArray()), 3))
     }
 
     @Test

@@ -9,9 +9,9 @@ package com.msp1974.vacompanion.odysseus.announce
 //
 // <base> is the voice base URL (OdysseusLink.baseUrl): https://<odysseus>/api/chat/voice/v1
 
+import com.msp1974.vacompanion.odysseus.HubJson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import java.net.URLEncoder
 
@@ -80,8 +80,6 @@ data class HelloForm(
 }
 
 object AnnouncementApi {
-    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true }
-
     fun feedPath(deviceId: String, sinceEpochMs: Long): String =
         "/announcements?device_id=${enc(deviceId)}&since=$sinceEpochMs"
 
@@ -89,10 +87,10 @@ object AnnouncementApi {
 
     /** The feed's announcements; ones without an id are dropped (they couldn't be shown once only). */
     fun parseFeed(body: String): List<Announcement> =
-        json.decodeFromString<AnnouncementsResponse>(body.ifBlank { "{}" }).announcements.filter { it.id.isNotBlank() }
+        HubJson.decodeFromString<AnnouncementsResponse>(body.ifBlank { "{}" }).announcements.filter { it.id.isNotBlank() }
 
     fun parseHello(body: String): Boolean =
-        runCatching { json.decodeFromString<HelloResponse>(body.ifBlank { "{}" }).ok }.getOrDefault(false)
+        runCatching { HubJson.decodeFromString<HelloResponse>(body.ifBlank { "{}" }).ok }.getOrDefault(false)
 
     fun formBody(fields: List<Pair<String, String>>): String =
         fields.joinToString("&") { (k, v) -> "${enc(k)}=${enc(v)}" }

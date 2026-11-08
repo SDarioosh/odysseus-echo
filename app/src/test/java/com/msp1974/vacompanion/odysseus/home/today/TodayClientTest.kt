@@ -1,6 +1,9 @@
 package com.msp1974.vacompanion.odysseus.home.today
 
-import com.msp1974.vacompanion.odysseus.ha.HaResponse
+import com.msp1974.vacompanion.odysseus.HubCall
+import com.msp1974.vacompanion.odysseus.HubHttp
+import com.msp1974.vacompanion.odysseus.HubReply
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -24,18 +27,18 @@ class TodayClientTest {
         }
     """.trimIndent()
 
-    private class FakeHub(val answer: HaResponse) : TodayHttp {
+    private class FakeHub(val answer: HubReply) : HubHttp {
         val paths = mutableListOf<String>()
-        override fun get(path: String): HaResponse {
-            paths += path
+        override suspend fun request(call: HubCall): HubReply {
+            paths += call.path
             return answer
         }
     }
 
     @Test
     fun parsesTheContract() {
-        val hub = FakeHub(HaResponse(200, c1))
-        val d = TodayClient(hub).fetch()
+        val hub = FakeHub(HubReply(200, c1))
+        val d = runBlocking { TodayClient(hub).fetch() }
         assertEquals(listOf("/today"), hub.paths)
         assertEquals("2026-11-06", d.date)
         assertEquals("Two meetings this afternoon; the boiler service is due.", d.headline)
@@ -93,14 +96,14 @@ class TodayClientTest {
     fun httpErrorsThrowWithTheCode() {
         for (code in listOf(401, 403, 404, 500)) {
             try {
-                TodayClient(FakeHub(HaResponse(code, ""))).fetch()
+                runBlocking { TodayClient(FakeHub(HubReply(code, ""))).fetch() }
                 fail("no exception for $code")
             } catch (e: TodayException) {
                 assertEquals(code, e.code)
             }
         }
         try {
-            TodayClient(FakeHub(HaResponse(200, "oops"))).fetch()
+            runBlocking { TodayClient(FakeHub(HubReply(200, "oops"))).fetch() }
             fail("no exception for a bad body")
         } catch (e: TodayException) {
             assertEquals(0, e.code)

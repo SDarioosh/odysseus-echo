@@ -1,6 +1,8 @@
 package com.msp1974.vacompanion.odysseus.done
 
-import com.msp1974.vacompanion.odysseus.OdysseusLink
+import com.msp1974.vacompanion.odysseus.HubCall
+import com.msp1974.vacompanion.odysseus.HubHttp
+import com.msp1974.vacompanion.odysseus.HubReply
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -124,17 +126,17 @@ class DoneApiTest {
         assertTrue(DoneApi.unreachable().reason.length <= 28)
     }
 
-    private class FakeHub(val reply: () -> OdysseusLink.HubReply) : DoneHttp {
+    private class FakeHub(val reply: () -> HubReply) : HubHttp {
         val sent = mutableListOf<Pair<String, String>>()
-        override suspend fun post(path: String, json: String): OdysseusLink.HubReply {
-            sent += path to json
+        override suspend fun request(call: HubCall): HubReply {
+            sent += call.path to String(call.body!!)
             return reply()
         }
     }
 
     @Test
     fun clientSendsAndClassifies() = runBlocking {
-        val hub = FakeHub { OdysseusLink.HubReply(200, """{"ok": true, "already": false}""") }
+        val hub = FakeHub { HubReply(200, """{"ok": true, "already": false}""") }
         val c = DoneClient(hub)
         assertEquals(DoneOutcome.Ok(), c.done(DoneTarget.Todo("todo:41:2"), "dev-1"))
         assertEquals(DoneOutcome.Ok(), c.undo(DoneTarget.ActionItem("ai_17"), "dev-1"))
@@ -144,7 +146,7 @@ class DoneApiTest {
 
     @Test
     fun clientSendsTheTitleWithADoneOnly() = runBlocking {
-        val hub = FakeHub { OdysseusLink.HubReply(409, """{"error": "changed"}""") }
+        val hub = FakeHub { HubReply(409, """{"error": "changed"}""") }
         val c = DoneClient(hub)
         val r = c.done(DoneTarget.Todo("todo:41:2"), "dev-1", "Call the plumber")
         assertTrue(r is DoneOutcome.Failed && r.kind == DoneOutcome.Kind.CHANGED)
@@ -155,7 +157,7 @@ class DoneApiTest {
 
     @Test
     fun clientNeverSendsAReminderUndo() = runBlocking {
-        val hub = FakeHub { OdysseusLink.HubReply(200, "{}") }
+        val hub = FakeHub { HubReply(200, "{}") }
         val r = DoneClient(hub).undo(DoneTarget.Reminder("todo:41"), "dev-1")
         assertTrue(r is DoneOutcome.Failed && r.kind == DoneOutcome.Kind.OTHER)
         assertTrue(hub.sent.isEmpty())

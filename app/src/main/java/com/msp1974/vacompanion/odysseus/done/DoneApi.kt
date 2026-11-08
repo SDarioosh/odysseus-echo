@@ -16,9 +16,10 @@ package com.msp1974.vacompanion.odysseus.done
 //   {"error": "too late to undo"}. The app and the hub are deployed together: every route is there.
 //
 // Pure: paths, bodies and what an answer means, unit-tested (DoneApiTest). The requests go
-// through DoneHttp (DoneClient.kt), OdysseusLink.hubRequest on the device.
+// through HubHttp (DoneClient.kt), OdysseusLink on the device.
 
-import kotlinx.serialization.json.Json
+import com.msp1974.vacompanion.odysseus.HubJson
+import com.msp1974.vacompanion.odysseus.hubStatusText
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -58,8 +59,6 @@ sealed interface DoneOutcome {
 }
 
 object DoneApi {
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
-
     fun donePath(target: DoneTarget): String = when (target) {
         is DoneTarget.Todo -> "/todos/done"
         is DoneTarget.Reminder -> "/reminders/done"
@@ -102,7 +101,7 @@ object DoneApi {
         (obj(body)?.get("error") as? JsonPrimitive)?.contentOrNull?.trim()?.lowercase()
 
     private fun obj(body: String): JsonObject? =
-        runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
+        runCatching { HubJson.parseToJsonElement(body) as? JsonObject }.getOrNull()
 
     /**
      * What the hub's answer means. [body] is the answer's body, also for errors (the start of it):
@@ -122,7 +121,7 @@ object DoneApi {
             }
         }
         400 -> DoneOutcome.Failed(DoneOutcome.Kind.BAD_REQUEST, "Odysseus refused it (400)")
-        401, 403 -> DoneOutcome.Failed(DoneOutcome.Kind.REFUSED, "Token refused ($code)")
+        401, 403 -> DoneOutcome.Failed(DoneOutcome.Kind.REFUSED, hubStatusText(code))
         404 -> DoneOutcome.Failed(DoneOutcome.Kind.NOT_FOUND, "Not found in Odysseus")
         // "changed": the line was edited or removed in Odysseus; any other 409 is the undo's.
         409 -> if (error(body) == "changed") {

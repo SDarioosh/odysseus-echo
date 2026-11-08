@@ -138,7 +138,10 @@ object OtherPlayersRules {
      * [PAUSED_KEEP_SEC]; this device's room first, then playing before paused, then Music
      * Assistant's entity before another one for the same speaker, then the most recently changed.
      * A track playing on several entities (a group, or a speaker that has a Music Assistant
-     * entity beside its own) is listed once.
+     * entity beside its own) is listed once. Another Echo's Sendspin player is a candidate like
+     * any speaker (it is another speaker, often in this room); nothing here names a player as this
+     * device's, so the Music page's isOtherVacaPlayer rule doesn't apply. This Echo's own player
+     * never covers its own music: showOther prefers [SendspinNowPlaying] from the Echo itself.
      */
     fun candidates(snapshot: HaMediaSnapshot, area: String): List<HaMediaPlayer> {
         val room = area.trim().lowercase()

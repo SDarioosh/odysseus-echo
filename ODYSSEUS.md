@@ -53,7 +53,7 @@ section.
 | Home screen: clock styles, weather and the song playing here or elsewhere, dashboard one swipe away | a glanceable idle screen with the dashboard close | [home-screen](docs/odysseus/home-screen.md) |
 | Today page: calendar, to-dos and Athena's items from Odysseus | a day overview in the kitchen without asking | [home-screen](docs/odysseus/home-screen.md#today-page) |
 | Done buttons on Today rows and reminder cards, with Undo | tick things off without speaking | [home-screen](docs/odysseus/home-screen.md#done) |
-| Music page: rooms, player, library and search through Home Assistant; two panes on tablets | control the music in every room from the screen | [music](docs/odysseus/music.md) |
+| Music page: rooms (every media player; Music Assistant's with library, queue, move and group), player, library and search through Home Assistant; two panes on tablets | control the music in every room from the screen | [music](docs/odysseus/music.md) |
 | One Home Assistant client (`odysseus/ha/`: REST and websocket) | live states for the Music page; one tested client instead of one per feature | [home-assistant-client](docs/odysseus/home-assistant-client.md) |
 | Kiosk: back from other apps, reload a failed dashboard | unattended screens should always end up on the dashboard | [kiosk](docs/odysseus/kiosk.md) |
 | Lock mode: locked outside work hours, PIN to unlock | an Echo in an office shouldn't listen or play after hours | [lock-mode](docs/odysseus/lock-mode.md) |

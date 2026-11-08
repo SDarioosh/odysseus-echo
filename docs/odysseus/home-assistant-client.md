@@ -5,9 +5,11 @@ a websocket for live states and actions while something watches them. Built for 
 (plan `docs/odysseus/plans/2026-11-music.md`, contract I1). Its users:
 
 - the **Music page** (`music/MusicRepository` over `HaMusicBackend`): templates, service calls,
-  and the only `watch()`, so the websocket is open only while the Music page watches;
-- **music on other speakers** (`home/players/OtherPlayers`): a template every 4 s, and
-  `media_player.*` calls for the buttons ([home-screen.md](home-screen.md#music-on-other-speakers));
+  and the only `watch()` (every media player), so the websocket is open only while the Music page,
+  the clock's selected room or the other speakers watch;
+- **music on other speakers** (`home/players/OtherPlayers`): no calls of its own, it reads the
+  Music backend's list and live states and controls through it
+  ([home-screen.md](home-screen.md#music-on-other-speakers));
 - the **clock's weather** (`home/weather/WeatherClient`): templates and `weather.get_forecasts`
   with its response.
 

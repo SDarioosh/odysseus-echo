@@ -37,7 +37,7 @@ Menu → Odysseus → **Home screen**. Stored on the Echo only, not sent to Home
 | Today page | on / off (shown only while linked to Odysseus) | on |
 | Music page (Menu → Odysseus → Music, [music.md](music.md)) | on / off (shown only while Music Assistant has players) | on |
 | Music on other speakers | on / off (also the dashboard's now-playing card) | on |
-| Speaker to follow | Auto (this room first), or one of the media players playing now | Auto |
+| Speaker to follow | Auto (this room first), or one of the listed media players (the Music page's list) | Auto |
 | Clock style | a preset, then fonts, colours and elements (below) | Classic |
 
 ## Clock style
@@ -159,47 +159,53 @@ under it.
 
 The Echo's Sendspin player only hears about its own Music Assistant group, so music playing on
 other speakers never reached it: the clock and the now-playing card stayed empty. Now, while the
-Echo itself plays nothing, they show what another speaker plays, read from Home Assistant's
-`media_player.*` entities, and the buttons control that speaker.
+Echo itself plays nothing, they show what another speaker plays, and the buttons control that
+speaker. The speakers are the Music page's list of media players ([music.md](music.md), "Which
+media players are rooms"): every Music Assistant player, and Home Assistant's other media players
+(Cast, Sonos, TVs…) while they are on, a native twin of an MA player left out.
 
 On the clock this applies while its style's **Now playing from** is *This device*; with
 *Selected room* the clock follows the Music page's room instead. The Music page itself always
 treats only the Echo's own Sendspin player as "this device" (`HomePageContext.nowPlaying`); the
 other speakers reach the clock through `clockNowPlaying` / `onClockCommand`.
 
-- **Which speaker** (*Auto*): media players that are playing or buffering, or paused in the last
-  15 minutes, with a title or artist. The Echo's own room (the HA `area` the integration pushes)
-  first, then playing before paused, then a Music Assistant entity before another entity of the
-  same speaker, then the one that changed last. A song playing on several entities (a group, a
-  speaker that also has a Music Assistant entity) counts once. *Speaker to follow* can pin one
-  entity instead; it shows only while that one plays or was paused in the last 15 minutes.
+- **Which speaker** (*Auto*, `OtherPlayersRules.pick`, pure, `OtherPlayersRulesTest`): listed
+  speakers that are playing or buffering, or paused in the last 15 minutes (counted from when Home
+  Assistant reported the pause, kept while it stays paused), with a title or artist. The Echo's own
+  room (the HA `area` the integration pushes) first, then playing before paused, then a Music
+  Assistant player before another, then the one updated last. A song playing on several players (a
+  group) counts once. *Speaker to follow* can pin one listed player instead; it shows only while
+  that one plays or was paused in the last 15 minutes. A player chosen before that is now hidden
+  as an MA player's twin no longer shows: choose the MA one.
 - **The Echo's own music wins**: while its Sendspin player plays, nothing changes. While it is
   paused, another speaker that is playing takes over the line and the card.
-- **Buttons**: play, pause, next, previous, shuffle and repeat, as far as the entity supports them
-  (`supported_features`), sent as `media_player.media_play`, `media_pause`, `media_next_track`,
-  `media_previous_track`, `shuffle_set`, `repeat_set` (the Music page's mapping,
-  `HaMusicJson.controlCall`). The state is read again right after.
-- **Refresh**: every 4 seconds while the app is in front and the screen is on, and the clock or the
-  dashboard's now-playing card is turned on; not while locked, not with the setting off. Whatever
-  stops it forgets the speaker, so an old song doesn't flash up when the screen comes back, and a
-  read still under way when it stops is thrown away. The polling is one coroutine on the main
-  thread, owned by `OtherPlayers.Driver`'s effect; a new run first waits for the one before it to
-  end, and a button press only asks the run to read again. One `POST /api/template` per read (a
-  few hundred bytes per playing speaker).
+- **Buttons**: play, pause, next, previous, shuffle and repeat, as far as the player supports them
+  (`supported_features`), through the Music backend's `control` (`media_player.media_play`,
+  `media_pause`, `media_next_track`, `media_previous_track`, `shuffle_set`, `repeat_set`;
+  `HaMusicJson.controlCall`). Not while locked (`MusicLocked`). The new state comes back over the
+  websocket.
+- **Live**: while the app is in front and the screen is on, and the clock or the dashboard's
+  now-playing card is turned on; not while locked, not with the setting off. `OtherPlayers.Driver`
+  then collects `HaMusicBackend.rooms` and `.live` (which keeps them live: the rooms template every
+  minute and Home Assistant's websocket on every media player, the same subscription the Music page
+  uses), and picks again on every change and every 30 s. A speaker turned on shows at its next
+  state; one newly added to Home Assistant within a minute. Whatever stops it forgets the speaker,
+  so an old song doesn't flash up when the screen comes back. (It used to be a template every 4 s.)
 - **Other Echos**: another Echo's Sendspin player is a speaker like any other (often in this
   room), so it can show here and its buttons control it. The Music page's rule that its room guess
   never claims another Echo's player (`isOtherVacaPlayer`) is about which player is *this*
   device, which this feature never decides; this Echo's own music always wins (above).
-- **Artwork**: the entity's `entity_picture`, through Home Assistant's own media proxy (it carries
-  its own access token). A picture URL on another host (Music Assistant's LAN address) may not load
-  over Tailscale; the music-note placeholder shows then.
+- **Artwork**: the player's `entity_picture_local` or `entity_picture`, through Home Assistant's own
+  media proxy (it carries its own access token). A picture URL on another host (Music Assistant's
+  LAN address) may not load over Tailscale; the music-note placeholder shows then.
+- **Time**: the upstream card draws `SendspinNowPlaying` on `elapsedRealtime`; the one conversion
+  from Home Assistant's wall clock is `OtherPlayersRules.toNowPlaying` (`player/PlayerClock`).
 - **Home Assistant**: no change and no re-pairing. It goes through the app's Home Assistant
   client (`HaClient`, [home-assistant-client.md](home-assistant-client.md)) with the access token
-  the Echo already holds for the dashboard, like the weather: one token refresh on a 401, none
-  for a non-admin user's 401. `/api/template` needs that user to be an administrator (the weather
-  needs the same).
-- **Failures**: a failed read keeps the last speaker for 30 seconds, then hides it. Logcat shows
-  `Other players: ...` lines.
+  the Echo already holds for the dashboard. The template needs an administrator; for another user
+  the list comes from `/api/states` (no areas, so "this room first" doesn't apply).
+- **Failures**: Home Assistant unreachable (the rooms template failing) for over 30 seconds hides
+  the speaker. Logcat shows `Other players: ...` lines.
 
 ## Today page
 
@@ -336,7 +342,7 @@ read `LocalHomeStripPosition` (the strip's position, null outside `HomeHost`) in
 | `odysseus/home/clock/ClockToday.kt` | next event, open counts, headline for the clock. Plain Kotlin |
 | `odysseus/home/clock/ClockTheming.kt` | fonts, colours handed to Material, the background |
 | `odysseus/home/clock/ClockElements.kt` | one composable per element and look |
-| `odysseus/player/` | the shared player pieces over `music/PlayerState`, Sendspin mapping, `PlayerMetrics`, `VolumeBar`, `RoomChip` |
+| `odysseus/player/` | the shared player pieces over `music/PlayerState`, Sendspin mapping, `PlayerClock`, `PlayerMetrics`, `VolumeBar`, `RoomChip` |
 | `odysseus/home/clock/NightRules.kt`, `NightMode.kt` | the night look: when (plain Kotlin), light sensor, backlight |
 | `odysseus/home/clock/ClockStyleSettingsSection.kt` | Menu → Odysseus → Home screen → Clock style |
 | `res/font/clock_*.ttf` | the clock fonts (SIL OFL, `assets/licenses/*-OFL.txt`) |
@@ -345,8 +351,8 @@ read `LocalHomeStripPosition` (the strip's position, null outside `HomeHost`) in
 | `odysseus/home/weather/WeatherRepository.kt` | the process-wide weather state and refresh |
 | `odysseus/home/weather/WeatherBadge.kt` | the badge in the clock's top left |
 | `res/drawable/odysseus_mdi_*.xml` | weather icons from @mdi/js 7.4.47 (`assets/licenses/MDI-LICENSE.txt`) |
-| `odysseus/home/players/OtherPlayersRules.kt` | music on other speakers: the template and its parsing, which speaker, buttons → services. Plain Kotlin apart from `snapshot(HaApi)` |
-| `odysseus/home/players/OtherPlayers.kt` | the process-wide state, polling, and where a button press goes |
+| `odysseus/home/players/OtherPlayersRules.kt` | music on other speakers: which speaker, pause time, buttons → controls, the one `PlayerState` → `SendspinNowPlaying` adapter. Plain Kotlin |
+| `odysseus/home/players/OtherPlayers.kt` | the process-wide state, the `Driver` over the Music list (`HaMusicBackend.rooms` / `.live`, [music.md](music.md)), and where a button press goes |
 | `odysseus/home/today/TodayClient.kt` | contract C1: the call (through `HubHttp`, faked in tests) and lenient parsing |
 | `odysseus/home/today/TodayStore.kt` | what the page shows: not linked, loading, unreachable, ready/stale; the 2 h rule. Plain Kotlin |
 | `odysseus/home/today/TodayFormat.kt` | times in the device's zone, due tags, "and N more", what fits. Plain Kotlin |
@@ -365,6 +371,6 @@ read `LocalHomeStripPosition` (the strip's position, null outside `HomeHost`) in
 | `app/src/test/.../odysseus/home/HomeNavigatorTest.kt` | tests of the rules |
 | `app/src/test/.../odysseus/home/clock/{ClockStyle,ClockToday,NightRules}Test.kt` | tests of the style model, presets, JSON and the clock's Today labels |
 | `app/src/test/.../odysseus/home/weather/WeatherClientTest.kt` | tests of the weather calls (a fake `HaApi`) and rules |
-| `app/src/test/.../odysseus/home/players/OtherPlayersRulesTest.kt` | tests of the other-speaker reads (a fake `HaApi`), picks and buttons |
+| `app/src/test/.../odysseus/home/players/OtherPlayersRulesTest.kt` | tests of the other-speaker picks, pause times, buttons and the adapter |
 | `app/src/test/.../odysseus/home/today/Today{Client,Store,Format}Test.kt` | tests of the Today parsing, staleness and layout rules |
 | `app/src/test/.../odysseus/done/Done{Api,Marks}Test.kt` | tests of the Done requests, answers and row states |

@@ -215,7 +215,7 @@ To-dos and action items can be marked done from it (below); everything else is r
   is blank.
 - **Failures**: the last result stays for up to 2 hours, with "Odysseus unreachable · Updated
   8:15" at the bottom (also while the device has no network); after that, or with nothing
-  fetched yet, the page says "Can't reach Odysseus" and why ("Token refused (401)", "HTTP 503",
+  fetched yet, the page says "Can't reach Odysseus" and why ("Odysseus refused the token (401): link the device again", "HTTP 503",
   or the network error). A result from before midnight is dropped; midnight and
   "Today"/"Overdue" follow the hub's day (the offset of its `generated` time and its `date`), so
   a device left on another time zone still shows the current result. Logcat shows `Today: ...`

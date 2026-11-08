@@ -78,7 +78,11 @@ class TodayClient(private val http: HubHttp) {
     /** GET /today. Throws [TodayException] on any answer but a 200 with a JSON object. */
     suspend fun fetch(): TodayData {
         val r = http.request(HubCall(PATH))
-        if (r.code != 200) throw TodayException(hubStatusText(r.code), r.code)
+        if (r.code != 200) throw TodayException(
+            if (r.code == 401 || r.code == 403) "Odysseus refused the token (${r.code}): link the device again"
+            else hubStatusText(r.code),
+            r.code,
+        )
         return parse(r.body) ?: throw TodayException("Unexpected answer from Odysseus")
     }
 

@@ -1,7 +1,5 @@
 package com.msp1974.vacompanion
 
-import com.msp1974.vacompanion.odysseus.ListeningIndicator // Odysseus fork
-
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
@@ -21,7 +19,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.StrictMode
 import android.provider.Settings
-import android.view.KeyEvent // Odysseus fork
 import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.Toast
@@ -205,18 +202,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                             }
                         }
 
-                        // Odysseus fork: listening/thinking/answering overlay over any layout.
-                        if (vaUiState.satelliteRunning) ListeningIndicator()
-                        // Odysseus fork: what a voice turn did: actions, sources, confirmation (odysseus/TurnCard.kt)
-                        if (vaUiState.satelliteRunning) com.msp1974.vacompanion.odysseus.TurnCard()
-                        // Odysseus fork: announcement / reminder card (odysseus/announce/AnnouncementCard.kt)
-                        com.msp1974.vacompanion.odysseus.announce.AnnouncementCard()
-                        // Odysseus fork: Sendspin pairing code / approval (odysseus/SendspinPairingOverlay.kt)
-                        com.msp1974.vacompanion.odysseus.SendspinPairingOverlay()
-                        // Odysseus fork: red REC / NOTE pill over every screen while recording (odysseus/record/RecordingUi.kt)
-                        com.msp1974.vacompanion.odysseus.record.RecordingPill()
-                        // Odysseus fork: Lock mode covers everything above while locked (odysseus/lock/LockOverlay.kt)
-                        com.msp1974.vacompanion.odysseus.lock.LockOverlay()
+                        // Odysseus fork: overlays over any layout; Lock mode closes the menu (odysseus/OdysseusOverlays.kt)
+                        com.msp1974.vacompanion.odysseus.OdysseusOverlays(vaUiState.satelliteRunning) { viewModel.setShowMenu(false) }
 
                         vaUiState.onboardingDeviceId?.let { defaultId ->
                             UUIDEditDialog(
@@ -258,13 +245,6 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         // satellite actually starts, well after this runs). Running them before setContent used
         // to sit in front of the splash screen's dismissal for no benefit, since WebView
         // construction and Firebase init are two of the costlier parts of a cold start.
-        // Odysseus fork: Lock mode closes the settings menu when it locks (odysseus/lock/LockMode.kt).
-        lifecycleScope.launch {
-            com.msp1974.vacompanion.odysseus.lock.LockMode.locked.collect { locked ->
-                if (locked) viewModel.setShowMenu(false)
-            }
-        }
-
         lifecycleScope.launch {
             initWebView()
             firebaseManager = try {
@@ -602,7 +582,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         return super.dispatchTouchEvent(ev)
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         // Odysseus fork: the Echo Show's privacy button records (odysseus/record/RecordButton.kt)
         if (com.msp1974.vacompanion.odysseus.record.RecordButton.onKeyEvent(event)) return true
         return super.dispatchKeyEvent(event)
@@ -730,9 +710,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 "screenSaver" -> if (!screenOffStartUp) onScreenSaver(event.newValue as Boolean)
                 "screenOrientationMode" -> screen.setScreenOrientation(this@MainActivity, event.newValue as String)
                 "deviceBump" -> if (config.screenOnBump) applyScreenMode(ScreenOnMode.ON)
-                "sendspinPairingPrompt" -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: show the pairing code
-                com.msp1974.vacompanion.odysseus.announce.Announcements.EVENT_NEW -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: show the announcement card
-                com.msp1974.vacompanion.odysseus.record.RecorderController.EVENT_STARTED -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: show the REC pill
+                in com.msp1974.vacompanion.odysseus.OdysseusUi.SCREEN_ON_EVENTS -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: pairing code, announcement, REC pill
                 "proximity" -> if (config.screenOnProximity && event.newValue as Float == 0f) applyScreenMode(ScreenOnMode.ON)
                 "motion" -> onMotion(event.newValue as Boolean)
                 "showToastMessage" -> Toast.makeText(

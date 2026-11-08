@@ -116,11 +116,6 @@ object VoiceTurns {
 
     fun closeLink() { _openLink.value = null }
 
-    /**
-     * Does nothing: there is no older feed to fall back from any more. Kept only because the link
-     * settings (OdysseusSettingsLayout) still call it; remove with that call.
-     */
-    fun resetFeed() = Unit
 
     /** Asks Odysseus what the current turn did and shows it. */
     suspend fun refresh() {

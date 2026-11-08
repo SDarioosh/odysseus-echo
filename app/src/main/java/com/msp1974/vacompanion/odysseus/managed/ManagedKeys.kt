@@ -10,7 +10,7 @@ package com.msp1974.vacompanion.odysseus.managed
 // out of range are ignored (and logged by the caller): the device keeps its own value for them.
 // Values are plain Kotlin: Boolean, Int or String.
 
-import kotlinx.serialization.json.Json
+import com.msp1974.vacompanion.odysseus.HubJson
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -71,7 +71,7 @@ object ManagedKeys {
         specs.associateBy { it.key }.also { check(it.size == specs.size) { "a managed key is declared twice" } }
     }
 
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    private val json = HubJson
 
     fun path(deviceId: String): String =
         "/devices/${java.net.URLEncoder.encode(deviceId, "UTF-8").replace("+", "%20")}/settings"

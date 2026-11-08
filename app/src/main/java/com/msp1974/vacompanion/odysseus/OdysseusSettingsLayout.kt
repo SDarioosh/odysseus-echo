@@ -112,7 +112,6 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
                     OdysseusLink.baseUrl = url
                     if (token.isNotBlank()) OdysseusLink.setToken(token)
                     token = ""
-                    VoiceTurns.resetFeed()
                     status = "Saved. Testing…"
                     scope.launch { status = OdysseusLink.testLink().second }
                 }) { Text("Save and test") }

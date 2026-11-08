@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import com.msp1974.vacompanion.odysseus.HubCall
 import com.msp1974.vacompanion.odysseus.OdysseusLink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -134,7 +135,7 @@ object ManagedSettings {
     private suspend fun fetch(why: String): Boolean {
         val id = deviceId()
         if (!OdysseusLink.isConfigured || id.isBlank()) return true
-        val reply = OdysseusLink.hubRequest(ManagedKeys.path(id))
+        val reply = OdysseusLink.request(HubCall(ManagedKeys.path(id)))
         when (reply.code) {
             200 -> {
                 val parsed = ManagedKeys.parse(reply.body)

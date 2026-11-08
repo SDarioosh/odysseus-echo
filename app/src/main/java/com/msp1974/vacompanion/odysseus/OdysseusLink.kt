@@ -12,7 +12,7 @@ package com.msp1974.vacompanion.odysseus
 //   GET <base>/today                                   -> the home screen's Today page (home/today/)
 //   GET <base>/app/latest, GET <base>/app/apk          -> updates from the hub (odysseus/update/; the APK by openGet)
 //   POST <base>/todos/done, /reminders/done, /action-items/done, /todos/undo, /action-items/undo
-//                                                      -> Done buttons (odysseus/done/, hubRequest)
+//                                                      -> Done buttons (odysseus/done/, through HubHttp)
 //
 
 // The token is the same `voice`-scope token Home Assistant uses (read-only plus voice actions).
@@ -233,12 +233,6 @@ object OdysseusLink : HubHttp {
     override suspend fun request(call: HubCall): HubReply = withContext(Dispatchers.IO) {
         sendToHub(call.path, call.contentType, call.body, call.readTimeoutMs, errorBody = call.errorBody)
     }
-
-    /** [request] with defaults, for callers that shape their own requests (odysseus/managed/). */
-    suspend fun hubRequest(
-        path: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000,
-        errorBody: Boolean = false,
-    ): HubReply = request(HubCall(path, contentType, body, readTimeoutMs, errorBody))
 
     /**
      * An authorised GET to the hub for the streamed APK download (odysseus/update/), not yet

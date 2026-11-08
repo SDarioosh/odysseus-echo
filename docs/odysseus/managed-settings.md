@@ -23,7 +23,7 @@ When it asks:
 
 - at start (the background task starts the announcements, which start this),
 - after each hello (`POST /satellite/hello`: at start, hourly, and when the name, area or link
-  changes; an older hub without the hello route counts too),
+  changes),
 - when the announcements feed has a new item with `"kind": "settings"` (the hub sends one when the
   device's settings change, so a change arrives within 30 s). That item never shows a card.
 

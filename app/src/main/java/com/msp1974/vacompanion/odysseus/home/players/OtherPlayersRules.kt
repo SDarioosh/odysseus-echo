@@ -1,218 +1,127 @@
 package com.msp1974.vacompanion.odysseus.home.players
 
-// Odysseus fork: music playing on other speakers, read from Home Assistant's media players
-// (docs/odysseus/home-screen.md#music-on-other-speakers). The Echo's own Sendspin player only
-// hears about its own Music Assistant group, so without this the clock and the now-playing card
-// stay empty while another speaker plays. Pure apart from snapshot(), which reads through HaApi;
+// Odysseus fork: music playing on other speakers (docs/odysseus/home-screen.md#music-on-other-speakers).
+// The Echo's own Sendspin player only hears about its own Music Assistant group, so without this
+// the clock and the now-playing card stay empty while another speaker plays. The speakers are the
+// Music page's list of media players (HaMusicBackend.rooms and .live, music/RoomListing); this
+// picks one and turns it into the SendspinNowPlaying the clock and the upstream card draw. Pure,
 // unit-tested (OtherPlayersRulesTest).
 
-import com.msp1974.vacompanion.odysseus.ha.HaApi
-import com.msp1974.vacompanion.odysseus.ha.HaException
 import com.msp1974.vacompanion.odysseus.music.Control
-import com.msp1974.vacompanion.odysseus.music.HaCall
-import com.msp1974.vacompanion.odysseus.music.HaMusicJson
+import com.msp1974.vacompanion.odysseus.music.LivePlayer
+import com.msp1974.vacompanion.odysseus.music.PlayerState
 import com.msp1974.vacompanion.odysseus.music.Repeat
+import com.msp1974.vacompanion.odysseus.music.Room
+import com.msp1974.vacompanion.odysseus.player.PlayerClock
 import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.longOrNull
-import kotlin.math.abs
 
-/** One Home Assistant media player that is playing or paused with a track. Times are epoch seconds (HA's clock). */
-data class HaMediaPlayer(
-    val entityId: String,
-    val name: String,
-    val state: String,
-    val area: String = "",
-    val title: String = "",
-    val artist: String = "",
-    val album: String = "",
-    /** entity_picture: usually a path on Home Assistant with its own access token. */
-    val picture: String? = null,
-    val durationSec: Double = 0.0,
-    val positionSec: Double? = null,
-    val positionAt: Double? = null,
-    val features: Long = 0,
-    val shuffle: Boolean = false,
-    val repeat: String = "off",
-    /** When the state last changed (e.g. when it was paused). */
-    val changedAt: Double = 0.0,
-    /** A Music Assistant player: its next/previous work on the queue. */
-    val musicAssistant: Boolean = false,
-) {
-    val playing: Boolean get() = state == "playing" || state == "buffering"
-    val trackKey: String get() = "${title.trim().lowercase()}\u0000${artist.trim().lowercase()}"
+/** A listed media player with its live state; [pausedSinceMs] (wall clock) while it is paused. */
+data class Speaker(val room: Room, val live: LivePlayer, val pausedSinceMs: Long? = null) {
+    val entityId: String get() = room.entityId
+    val playing: Boolean get() = OtherPlayersRules.isPlaying(live.status)
+    val hasTrack: Boolean get() = !live.player.title.isNullOrBlank() || !live.player.artist.isNullOrBlank()
+    val trackKey: String get() =
+        "${live.player.title.orEmpty().trim().lowercase()}\u0000${live.player.artist.orEmpty().trim().lowercase()}"
 }
-
-/** The template's answer: HA's clock and the candidate players. */
-data class HaMediaSnapshot(val haNow: Double, val players: List<HaMediaPlayer>)
 
 /** What the other-speaker source currently shows. */
 data class OtherPlayer(val entityId: String, val name: String, val nowPlaying: SendspinNowPlaying)
 
 object OtherPlayersRules {
     /** A paused player is offered for this long after it was paused, then forgotten. */
-    const val PAUSED_KEEP_SEC = 15 * 60.0
+    const val PAUSED_KEEP_MS = 15 * 60_000L
 
-    // media_player supported_features bits (homeassistant.components.media_player.MediaPlayerEntityFeature).
-    const val FEATURE_PAUSE = 1L
-    const val FEATURE_PREVIOUS = 16L
-    const val FEATURE_NEXT = 32L
-    const val FEATURE_PLAY = 16384L
-    const val FEATURE_SHUFFLE = 32768L
-    const val FEATURE_REPEAT = 262144L
-
-    private val ENTITY_ID = Regex("^media_player\\.[a-z0-9_]+$")
-
-    fun isMediaPlayerId(id: String) = ENTITY_ID.matches(id)
+    fun isPlaying(status: String): Boolean = status == "playing" || status == "buffering"
 
     /**
-     * Every media player that is playing, buffering or paused. Attributes are read with get()
-     * so a missing one is null rather than an undefined value tojson can't write. Times are
-     * epoch seconds on HA's clock; 'ma' marks a Music Assistant player.
+     * When each paused player in [live] was paused (wall clock): kept from [previous] while it stays
+     * paused, else its last update in Home Assistant (the moment it paused, as the websocket reports
+     * it). Players that aren't paused are dropped.
      */
-    internal const val PLAYERS_TEMPLATE =
-        "{% set ns = namespace(l=[]) %}" +
-            "{% for s in states.media_player if s.state in ['playing', 'paused', 'buffering'] %}" +
-            "{% set a = s.attributes %}" +
-            "{% set ns.l = ns.l + [{'id': s.entity_id, 'name': s.name, 'state': s.state, " +
-            "'area': area_name(s.entity_id), " +
-            "'title': a.get('media_title'), 'artist': a.get('media_artist'), " +
-            "'album': a.get('media_album_name'), 'picture': a.get('entity_picture'), " +
-            "'duration': a.get('media_duration'), 'position': a.get('media_position'), " +
-            "'position_at': as_timestamp(a.get('media_position_updated_at'), none), " +
-            "'features': a.get('supported_features', 0), " +
-            "'shuffle': a.get('shuffle'), 'repeat': a.get('repeat'), " +
-            "'changed': as_timestamp(s.last_changed), " +
-            "'ma': 'mass_player_type' in a}] %}" +
-            "{% endfor %}" +
-            "{{ {'now': as_timestamp(now()), 'players': ns.l} | tojson }}"
+    fun pausedSince(previous: Map<String, Long>, live: Map<String, LivePlayer>): Map<String, Long> =
+        live.filterValues { it.status == "paused" }.mapValues { (id, p) -> previous[id] ?: p.updatedMs }
 
-    /** The media players that are playing, buffering or paused, with HA's clock (POST /api/template). */
-    suspend fun snapshot(ha: HaApi): HaMediaSnapshot {
-        val text = ha.template(PLAYERS_TEMPLATE)
-        return parse(runCatching { Json.parseToJsonElement(text) }.getOrNull())
-            ?: throw HaException("Unexpected media player list from Home Assistant")
-    }
+    /** The listed [rooms] with a live state, as speakers. */
+    fun speakers(rooms: List<Room>, live: Map<String, LivePlayer>, paused: Map<String, Long>): List<Speaker> =
+        rooms.mapNotNull { r -> live[r.entityId]?.let { Speaker(r, it, paused[r.entityId]) } }
 
-    /** Reads the template's JSON ({"now": …, "players": […]}); null if it isn't that. */
-    fun parse(root: JsonElement?): HaMediaSnapshot? {
-        val o = root as? JsonObject ?: return null
-        val now = o.num("now") ?: return null
-        val list = o["players"] as? JsonArray ?: return null
-        val players = list.mapNotNull { el ->
-            val p = el as? JsonObject ?: return@mapNotNull null
-            val id = p.str("id")?.takeIf { isMediaPlayerId(it) } ?: return@mapNotNull null
-            HaMediaPlayer(
-                entityId = id,
-                name = p.str("name") ?: id,
-                state = p.str("state").orEmpty(),
-                area = p.str("area").orEmpty(),
-                title = p.str("title").orEmpty(),
-                artist = p.str("artist").orEmpty(),
-                album = p.str("album").orEmpty(),
-                picture = p.str("picture")?.takeIf { it.isNotBlank() },
-                durationSec = p.num("duration")?.coerceAtLeast(0.0) ?: 0.0,
-                positionSec = p.num("position"),
-                positionAt = p.num("position_at"),
-                features = (p["features"] as? JsonPrimitive)?.longOrNull
-                    ?: p.num("features")?.toLong() ?: 0L,
-                shuffle = (p["shuffle"] as? JsonPrimitive)?.booleanOrNull ?: false,
-                repeat = p.str("repeat")?.takeIf { it in setOf("off", "all", "one") } ?: "off",
-                changedAt = p.num("changed") ?: 0.0,
-                musicAssistant = (p["ma"] as? JsonPrimitive)?.booleanOrNull ?: false,
-            )
-        }
-        return HaMediaSnapshot(now, players)
-    }
+    /** Has a track, and is playing (or buffering) or was paused at most [PAUSED_KEEP_MS] ago. */
+    fun showable(s: Speaker, nowMs: Long): Boolean =
+        s.hasTrack && (s.playing || (s.live.status == "paused" && s.pausedSinceMs != null && nowMs - s.pausedSinceMs <= PAUSED_KEEP_MS))
 
     /**
-     * The players worth showing, best first: those with a track, playing or paused within
-     * [PAUSED_KEEP_SEC]; this device's room first, then playing before paused, then Music
-     * Assistant's entity before another one for the same speaker, then the most recently changed.
-     * A track playing on several entities (a group, or a speaker that has a Music Assistant
-     * entity beside its own) is listed once. Another Echo's Sendspin player is a candidate like
-     * any speaker (it is another speaker, often in this room); nothing here names a player as this
-     * device's, so the Music page's isOtherVacaPlayer rule doesn't apply. This Echo's own player
-     * never covers its own music: showOther prefers [SendspinNowPlaying] from the Echo itself.
+     * The speakers worth showing, best first: [showable] ones; this device's area first, then
+     * playing before paused, then a Music Assistant player before another one, then the most
+     * recently updated. A track playing on several players (a group) is listed once. Another
+     * Echo's Sendspin player is a speaker like any other (often in this room); this Echo's own
+     * music wins anyway ([showOther]).
      */
-    fun candidates(snapshot: HaMediaSnapshot, area: String): List<HaMediaPlayer> {
+    fun candidates(speakers: List<Speaker>, area: String, nowMs: Long): List<Speaker> {
         val room = area.trim().lowercase()
-        return snapshot.players
-            .filter { showable(it, snapshot.haNow) }
+        return speakers
+            .filter { showable(it, nowMs) }
             .sortedWith(
-                compareByDescending<HaMediaPlayer> { room.isNotEmpty() && it.area.trim().lowercase() == room }
+                compareByDescending<Speaker> { room.isNotEmpty() && it.room.area?.trim()?.lowercase() == room }
                     .thenByDescending { it.playing }
-                    .thenByDescending { it.musicAssistant }
-                    .thenByDescending { it.changedAt }
+                    .thenByDescending { it.room.musicAssistant }
+                    .thenByDescending { it.live.updatedMs }
                     .thenBy { it.entityId },
             )
             .distinctBy { it.trackKey }
     }
 
-    /** Has a track, and is playing or was paused at most [PAUSED_KEEP_SEC] ago. */
-    fun showable(p: HaMediaPlayer, haNow: Double): Boolean =
-        (p.title.isNotBlank() || p.artist.isNotBlank()) &&
-            (p.playing || (p.state == "paused" && haNow - p.changedAt <= PAUSED_KEEP_SEC))
-
-    /**
-     * The player to show: [chosen] (an entity id) when set and [showable], else the best
-     * candidate. Null = nothing to show.
-     */
-    fun pick(snapshot: HaMediaSnapshot, area: String, chosen: String): HaMediaPlayer? {
-        if (chosen.isNotBlank()) {
-            return snapshot.players.firstOrNull { it.entityId == chosen }?.takeIf { showable(it, snapshot.haNow) }
-        }
-        return candidates(snapshot, area).firstOrNull()
+    /** The speaker to show: [chosen] (an entity id) when set and [showable], else the best candidate. */
+    fun pick(speakers: List<Speaker>, area: String, chosen: String, nowMs: Long): Speaker? {
+        if (chosen.isNotBlank()) return speakers.firstOrNull { it.entityId == chosen }?.takeIf { showable(it, nowMs) }
+        return candidates(speakers, area, nowMs).firstOrNull()
     }
 
-    /** The commands the now-playing controls may send, from the player's supported features. */
-    fun commands(p: HaMediaPlayer): Set<String> = buildSet {
-        if (p.features and FEATURE_PLAY != 0L) add("play")
-        if (p.features and FEATURE_PAUSE != 0L) add("pause")
-        if (p.features and FEATURE_PREVIOUS != 0L) add("previous")
-        if (p.features and FEATURE_NEXT != 0L) add("next")
-        if (p.features and FEATURE_SHUFFLE != 0L) { add("shuffle"); add("unshuffle") }
-        if (p.features and FEATURE_REPEAT != 0L) { add("repeat_off"); add("repeat_all"); add("repeat_one") }
+    /** The Sendspin-style commands the clock and the card may send, from the player's controls. */
+    fun commands(can: Set<Control>): Set<String> = buildSet {
+        if (Control.PLAY in can) add("play")
+        if (Control.PAUSE in can) add("pause")
+        if (Control.PREVIOUS in can) add("previous")
+        if (Control.NEXT in can) add("next")
+        if (Control.SHUFFLE in can) { add("shuffle"); add("unshuffle") }
+        if (Control.REPEAT in can) { add("repeat_off"); add("repeat_all"); add("repeat_one") }
+    }
+
+    /** A command from the clock or the card as the Music backend's control and value; null for none. */
+    fun control(command: String): Pair<Control, Any?>? = when (command) {
+        "play" -> Control.PLAY to null
+        "pause" -> Control.PAUSE to null
+        "next" -> Control.NEXT to null
+        "previous" -> Control.PREVIOUS to null
+        "shuffle" -> Control.SHUFFLE to true
+        "unshuffle" -> Control.SHUFFLE to false
+        "repeat_off" -> Control.REPEAT to Repeat.OFF
+        "repeat_all" -> Control.REPEAT to Repeat.ALL
+        "repeat_one" -> Control.REPEAT to Repeat.ONE
+        else -> null
     }
 
     /**
-     * [p] as the now-playing state the clock and the card draw. [nowMs] is the Echo's
-     * elapsedRealtime when the snapshot arrived; the position is moved on from HA's report to
-     * HA's "now", so the two clocks never need to agree. [haBase] makes a relative picture
-     * path absolute.
+     * [live] as the now-playing state the clock and the upstream card draw. The one place a Home
+     * Assistant state goes from the wall clock to Sendspin's elapsedRealtime ([wallMinusElapsedMs],
+     * PlayerClock); [haBase] makes a relative picture path absolute.
      */
-    fun toNowPlaying(p: HaMediaPlayer, haNow: Double, nowMs: Long, haBase: String): SendspinNowPlaying {
-        val reported = p.positionSec
-        val positionSec = when {
-            reported == null -> 0.0
-            p.playing && p.positionAt != null -> reported + (haNow - p.positionAt).coerceAtLeast(0.0)
-            else -> reported
-        }
-        val durationMs = (p.durationSec * 1000).toLong()
-        var positionMs = (positionSec * 1000).toLong().coerceAtLeast(0)
-        if (durationMs > 0) positionMs = positionMs.coerceAtMost(durationMs)
+    fun toNowPlaying(live: LivePlayer, haBase: String, wallMinusElapsedMs: Long = PlayerClock.wallMinusElapsed()): SendspinNowPlaying {
+        val p: PlayerState = live.player
+        val playing = isPlaying(live.status)
         return SendspinNowPlaying(
-            title = p.title,
-            artist = p.artist,
-            album = p.album,
-            artworkUrl = pictureUrl(p.picture, haBase),
-            durationMs = durationMs,
-            positionMs = positionMs,
-            positionAtMs = nowMs,
-            speed = if (p.playing) 1000 else 0,
+            title = p.title.orEmpty(),
+            artist = p.artist.orEmpty(),
+            album = p.album.orEmpty(),
+            artworkUrl = pictureUrl(p.artUrl, haBase),
+            durationMs = ((p.durationS ?: 0.0) * 1000).toLong(),
+            positionMs = ((p.positionS ?: 0.0) * 1000).toLong(),
+            positionAtMs = PlayerClock.wallToElapsed(p.positionAtMs, wallMinusElapsedMs),
+            speed = if (playing) 1000 else 0,
             active = true,
-            playing = p.playing,
-            commands = commands(p),
+            playing = playing,
+            commands = commands(p.can),
             shuffle = p.shuffle,
-            repeat = p.repeat,
+            repeat = p.repeat.name.lowercase(),
         )
     }
 
@@ -225,35 +134,6 @@ object OtherPlayersRules {
     }
 
     /**
-     * [next] unless it is the same track in the same state as [previous] with a position that
-     * only moved as expected: then [previous] is kept, so the screen isn't redrawn every poll.
-     */
-    fun settle(previous: SendspinNowPlaying?, next: SendspinNowPlaying, nowMs: Long): SendspinNowPlaying {
-        if (previous == null) return next
-        val same = previous.copy(positionMs = 0, positionAtMs = 0) == next.copy(positionMs = 0, positionAtMs = 0)
-        if (!same) return next
-        return if (abs(previous.positionNow(nowMs) - next.positionMs) < 2_000) previous else next
-    }
-
-    /** The media_player call for a control's [command] (the Music page's mapping), or null if there is none. */
-    fun commandCall(entityId: String, command: String): HaCall? {
-        if (!isMediaPlayerId(entityId)) return null
-        val (control, value) = when (command) {
-            "play" -> Control.PLAY to null
-            "pause" -> Control.PAUSE to null
-            "next" -> Control.NEXT to null
-            "previous" -> Control.PREVIOUS to null
-            "shuffle" -> Control.SHUFFLE to true
-            "unshuffle" -> Control.SHUFFLE to false
-            "repeat_off" -> Control.REPEAT to Repeat.OFF
-            "repeat_all" -> Control.REPEAT to Repeat.ALL
-            "repeat_one" -> Control.REPEAT to Repeat.ONE
-            else -> return null
-        }
-        return HaMusicJson.controlCall(entityId, control, value)
-    }
-
-    /**
      * Whether the screen shows [other] rather than this Echo's own Sendspin player: the Echo's
      * own music wins while it plays, and while it is paused unless another speaker is playing.
      */
@@ -263,9 +143,4 @@ object OtherPlayersRules {
         if (own.hasContent && !other.playing) return false
         return true
     }
-
-    private fun JsonObject.str(key: String): String? =
-        (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull
-    private fun JsonObject.num(key: String): Double? =
-        (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.doubleOrNull
 }

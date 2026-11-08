@@ -203,7 +203,7 @@ private fun OtherPlayersSettings() {
     ManagedSwitchRow(
         on, "Music on other speakers",
         "While this Echo plays nothing, show the song another speaker plays, with play/pause, next and previous. " +
-            "Read from Home Assistant's media players.",
+            "Read from Home Assistant's media players (the Music page's list).",
     ) { HomeSettings.otherPlayersEnabled = it }
     Text("Speaker to follow", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -226,8 +226,8 @@ private fun OtherPlayersSettings() {
         }
     }
     Text(
-        if (seen.isEmpty()) "Speakers appear here while they play something."
-        else "Listed: the speakers playing or paused now.",
+        if (seen.isEmpty()) "Speakers appear here while the clock or the dashboard shows."
+        else "Listed: Music Assistant's players and the other media players that are on now.",
         fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }

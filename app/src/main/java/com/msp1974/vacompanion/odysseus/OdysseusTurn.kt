@@ -6,7 +6,8 @@ package com.msp1974.vacompanion.odysseus
 //
 //   - VOICE_STOPPED (the owner stopped speaking): POST /satellite/turn in the background with the
 //     device, area, wake word and, with "Check my voice" on, the command as WAV (≤ 15 s). It never
-//     blocks or fails the pipeline.
+//     blocks or fails the pipeline. Its answer names the turn's context id (contextId), which the
+//     timings, a barge-in (BargeIn.kt) and the turn card (VoiceTurns) then name to the hub.
 //   - AWAITING_RESPONSE for ThinkingChime.DELAY_MS without TTS: the thinking sound, once.
 //   - every stage: its time after the wake word (TurnTimings); at ENDED the times go to Odysseus
 //     (POST /satellite/timing) in the background.
@@ -31,6 +32,8 @@ import timber.log.Timber
 class OdysseusTurn private constructor(
     private val config: APPConfig,
     private val startedAtMs: Long,
+    /** VoiceTurns.turnStartedAt when this turn began: the card turn the context id belongs to. */
+    private val cardTurn: Long,
     private val recorder: TurnAudioRecorder?,
     private val active: Boolean,
     startMode: PipelineStartMode,
@@ -44,6 +47,16 @@ class OdysseusTurn private constructor(
     @Volatile private var posted = false
     @Volatile private var chimePlayed = false
     private var chimeJob: Job? = null
+
+    /**
+     * The hub's context id for this turn, from the /satellite/turn answer: written once by that
+     * request's coroutine, read by the timings and a barge-in. Null until the hub has answered,
+     * and for good when the post failed: then the hub matches by time, as before.
+     */
+    @Volatile var contextId: String? = null
+        private set
+    /** The /satellite/turn request, so the timings can wait for its answer. */
+    @Volatile private var contextJob: Job? = null
 
     /** The pipeline's microphone flow, also feeding the recorder when the voice check is on. */
     fun tee(frames: Flow<ShortArray>): Flow<ShortArray> = recorder?.tee(frames) ?: frames
@@ -77,10 +90,13 @@ class OdysseusTurn private constructor(
     private fun postTimings() {
         if (timingsPosted) return
         timingsPosted = true
-        if (current === this) current = null
-        val body = timings.toJson(config.uuid)
+        val posting = contextJob
         scope.launch {
-            if (OdysseusLink.postTimings(body)) Timber.d("Odysseus turn timings sent: ${timings.marks()}")
+            posting?.join() // a turn can end before the hub answered /satellite/turn (≤ its 10 s timeout)
+            val id = contextId
+            if (OdysseusLink.postTimings(timings.toJson(config.uuid, id))) {
+                Timber.d("Odysseus turn timings sent (context $id): ${timings.marks()}")
+            }
         }
     }
 
@@ -93,12 +109,17 @@ class OdysseusTurn private constructor(
             wakeWord = config.wakeWord,
             startedAtMs = startedAtMs,
         )
-        scope.launch {
+        contextJob = scope.launch {
             when (val r = OdysseusLink.postSatelliteTurn(form, wav)) {
-                is OdysseusLink.PostResult.Ok -> Timber.i(
-                    "Odysseus satellite turn: context ${r.response.contextId}, audio ${wav?.size ?: 0} bytes, " +
-                        "speaker verified=${r.response.speaker?.verified} owner=${r.response.speaker?.isOwner}"
-                )
+                is OdysseusLink.PostResult.Ok -> {
+                    val id = r.response.contextId?.takeIf { it.isNotBlank() }
+                    contextId = id
+                    if (id != null) VoiceTurns.onContext(cardTurn, id)
+                    Timber.i(
+                        "Odysseus satellite turn: context $id, audio ${wav?.size ?: 0} bytes, " +
+                            "speaker verified=${r.response.speaker?.verified} owner=${r.response.speaker?.isOwner}"
+                    )
+                }
                 is OdysseusLink.PostResult.Failed -> Timber.w("Odysseus satellite turn: ${r.message}")
             }
         }
@@ -128,8 +149,12 @@ class OdysseusTurn private constructor(
     companion object {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-        /** The turn running now (the one a barge-in interrupts), until it ends. */
-        @Volatile var current: OdysseusTurn? = null
+        /**
+         * The latest turn that listened with the link: the one a barge-in interrupts. It isn't
+         * cleared when its pipeline ends: the interrupt stops the pipeline first, and HA's run
+         * (and Odysseus's turn) outlive it. Satellite begins the next turn only after BargeIn.
+         */
+        @Volatile var last: OdysseusTurn? = null
             private set
 
         /** A wake word older than this isn't this turn's start (a pipeline started some other way). */
@@ -149,7 +174,8 @@ class OdysseusTurn private constructor(
             val startedAt = if (startMode == PipelineStartMode.WAKE_WORD_DETECTED && wakeAt > 0 && now - wakeAt < WAKE_RECENT_MS) wakeAt else now
             val active = listens && OdysseusLink.isConfigured
             val recorder = if (active && OdysseusLink.checkVoice) TurnAudioRecorder(config.sampleRate) else null
-            return OdysseusTurn(config, startedAt, recorder, active, startMode).also { if (active) current = it }
+            return OdysseusTurn(config, startedAt, VoiceTurns.turnStartedAt, recorder, active, startMode)
+                .also { if (active) last = it }
         }
     }
 }

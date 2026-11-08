@@ -4,7 +4,8 @@ package com.msp1974.vacompanion.odysseus
 // Pure data and functions only (no Android), so they are unit-tested on the JVM; the HTTP calls
 // are in OdysseusLink.
 //
-//   GET  <base>/turns/latest?since=<epoch ms>  -> {"turn": VoiceTurn | null}
+//   GET  <base>/turns/latest?context_id=<id>   -> {"turn": VoiceTurn | null}  (null until it's finished)
+//   GET  <base>/turns/latest?since=<epoch ms>  -> the same, for a turn without a context id
 //   POST <base>/satellite/turn  (multipart)    -> {"ok": true, "context_id": "…", "speaker": … | null}
 //
 // Unknown fields are ignored, missing ones get defaults, so additive hub changes stay compatible.
@@ -13,6 +14,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.ByteArrayOutputStream
 import java.net.URI
+import java.net.URLEncoder
 
 @Serializable
 data class TurnLink(
@@ -107,6 +109,16 @@ object VoiceTurnApi {
     /** The /satellite/interrupt answer: {"ok": true, "cut": n, "marked": n}. Throws on a body that isn't JSON. */
     fun parseInterruptResponse(body: String): OdysseusLink.InterruptResult.Ok =
         HubJson.decodeFromString<InterruptResponse>(body).let { OdysseusLink.InterruptResult.Ok(it.cut, it.marked) }
+
+    /** The /turns/latest path: by the turn's [contextId] when known, else by [sinceEpochMs]. */
+    fun latestTurnPath(contextId: String?, sinceEpochMs: Long): String =
+        if (contextId.isNullOrEmpty()) "/turns/latest?since=$sinceEpochMs"
+        else "/turns/latest?context_id=" + URLEncoder.encode(contextId, "UTF-8")
+
+    /** The /satellite/interrupt form: the device, and the interrupted turn's [contextId] when known. */
+    fun interruptForm(deviceId: String, contextId: String?): String =
+        "device_id=" + URLEncoder.encode(deviceId, "UTF-8") +
+            (if (contextId.isNullOrEmpty()) "" else "&context_id=" + URLEncoder.encode(contextId, "UTF-8"))
 
     /** The links worth a chip: http(s) only, no duplicates, at most [max]. */
     fun displayLinks(links: List<TurnLink>, max: Int = MAX_LINKS): List<TurnLink> =

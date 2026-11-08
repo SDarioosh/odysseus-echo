@@ -6,9 +6,11 @@ package com.msp1974.vacompanion.odysseus
 //
 //   <base> is the same OpenAI base URL Home Assistant uses: https://<odysseus>/api/chat/voice/v1,
 //   every request with Authorization: Bearer <voice token>.
-//   GET <base>/turns/latest?since=<epoch ms>           -> {"turn": VoiceTurn | null}  (VoiceTurnApi.kt)
-//   POST <base>/satellite/turn (multipart)             -> device, area, wake word and the spoken command
-//   POST <base>/satellite/interrupt (form: device_id)  -> a barge-in: end this device's turn now (BargeIn.kt)
+//   GET <base>/turns/latest?context_id=<id> | ?since=<epoch ms> -> {"turn": VoiceTurn | null}  (VoiceTurnApi.kt)
+//   POST <base>/satellite/turn (multipart)             -> device, area, wake word and the spoken command;
+//                                                         answers the turn's context id
+//   POST <base>/satellite/interrupt (form: device_id, context_id?) -> a barge-in: end that turn now (BargeIn.kt)
+//   POST <base>/satellite/timing (JSON, context_id?)   -> the turn's stage times (TurnTimings.kt)
 //   GET <base>/today                                   -> the home screen's Today page (home/today/)
 //   GET <base>/app/latest, GET <base>/app/apk          -> updates from the hub (odysseus/update/; the APK by openGet)
 //   POST <base>/todos/done, /reminders/done, /action-items/done, /todos/undo, /action-items/undo
@@ -273,9 +275,12 @@ object OdysseusLink : HubHttp {
         return out.toString()
     }
 
-    /** GET /turns/latest: the newest finished voice turn that started at or after [sinceEpochMs]. */
-    suspend fun fetchLatestTurn(sinceEpochMs: Long): TurnResult = try {
-        val r = request(HubCall("/turns/latest?since=$sinceEpochMs"))
+    /**
+     * GET /turns/latest: the finished turn of [contextId] when known (the /satellite/turn answer),
+     * else the newest finished voice turn that started at or after [sinceEpochMs].
+     */
+    suspend fun fetchLatestTurn(contextId: String?, sinceEpochMs: Long, http: HubHttp = this): TurnResult = try {
+        val r = http.request(HubCall(VoiceTurnApi.latestTurnPath(contextId, sinceEpochMs)))
         if (r.code != 200) TurnResult.Failed(hubStatusText(r.code))
         else TurnResult.Ok(VoiceTurnApi.parseLatestTurn(r.body))
     } catch (e: CancellationException) {
@@ -309,11 +314,12 @@ object OdysseusLink : HubHttp {
 
     /**
      * POST /satellite/interrupt: this device's wake word interrupted its turn, so Odysseus ends
-     * that turn at once and Home Assistant can end its run (odysseus/BargeIn.kt).
+     * that turn at once and Home Assistant can end its run (odysseus/BargeIn.kt). With
+     * [contextId] (the interrupted turn's) only that turn is cut; without, this device's turns.
      */
-    suspend fun interruptTurn(deviceId: String): InterruptResult = try {
-        val body = "device_id=" + java.net.URLEncoder.encode(deviceId, "UTF-8")
-        val r = request(HubCall("/satellite/interrupt", "application/x-www-form-urlencoded", body.toByteArray(), readTimeoutMs = 4000))
+    suspend fun interruptTurn(deviceId: String, contextId: String?, http: HubHttp = this): InterruptResult = try {
+        val body = VoiceTurnApi.interruptForm(deviceId, contextId)
+        val r = http.request(HubCall("/satellite/interrupt", "application/x-www-form-urlencoded", body.toByteArray(), readTimeoutMs = 4000))
         if (r.code != 200) InterruptResult.Failed(hubStatusText(r.code))
         else VoiceTurnApi.parseInterruptResponse(r.body)
     } catch (e: CancellationException) {
@@ -341,7 +347,7 @@ object OdysseusLink : HubHttp {
 
     /** Tests the saved link with the turn feed: (ok, message to show). */
     suspend fun testLink(): Pair<Boolean, String> =
-        when (val t = fetchLatestTurn(System.currentTimeMillis() - 86_400_000L)) {
+        when (val t = fetchLatestTurn(null, System.currentTimeMillis() - 86_400_000L)) {
             is TurnResult.Ok -> true to "Linked: Odysseus answered"
             is TurnResult.Failed -> false to "Saved, but the test failed: ${t.message}"
         }

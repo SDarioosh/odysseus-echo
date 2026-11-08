@@ -5,7 +5,8 @@ package com.msp1974.vacompanion.odysseus
 //   - up to three of its sources as chips; a tap opens the page in an overlay with a close button,
 //   - while Odysseus waits for a spoken "yes", the question it asked.
 // It asks the hub for the turn (GET /turns/latest, OdysseusLink.fetchLatestTurn) when the answer
-// starts and again when the turn ends.
+// starts and again when the turn ends: by the turn's context id once /satellite/turn has answered
+// (OdysseusTurn), else by the time of the wake word.
 // The card shows for SHOW_MS (AWAITING_SHOW_MS while a confirmation waits), until tapped, or until
 // the next wake word. Nothing is fetched when the device isn't linked to Odysseus.
 
@@ -79,7 +80,7 @@ object VoiceTurns {
     const val AWAITING_SHOW_MS = 60_000L
     /** Odysseus may record a turn a moment after the answer starts; ask again once. */
     private const val RETRY_MS = 1_500L
-    /** A little before the wake word, so clocks a second apart don't hide a turn. */
+    /** A little before the wake word, so clocks a second apart don't hide a turn (asking by time). */
     private const val CLOCK_SLACK_MS = 2_000L
 
     private val _shown = MutableStateFlow<TurnCardState?>(null)
@@ -97,6 +98,15 @@ object VoiceTurns {
 
     /** The turn (its turnStartedAt) the card in [shown] was fetched for; 0 = none yet. */
     @Volatile private var shownFor = 0L
+
+    /** The hub's context id and the turn (its turnStartedAt) it belongs to; one reference, so both change together. */
+    @Volatile private var context: Pair<Long, String>? = null
+
+    /** The /satellite/turn answer for the turn that started at [turn] (OdysseusTurn); ignored once a newer one started. */
+    fun onContext(turn: Long, contextId: String) { context = turn to contextId }
+
+    /** The context id of the turn that started at [since], if the hub gave one. */
+    private fun contextFor(since: Long): String? = context?.takeIf { it.first == since }?.second
 
     /** A wake word: a new turn, so the previous card and page go. */
     fun onTurnStarted() {
@@ -121,7 +131,7 @@ object VoiceTurns {
     suspend fun refresh() {
         val since = turnStartedAt
         if (since == 0L || !OdysseusLink.showActions || !OdysseusLink.isConfigured) return
-        findCard(since)?.let { show(it, since) }
+        findCard(since, contextFor(since))?.let { show(it, since) }
     }
 
     /**
@@ -133,16 +143,18 @@ object VoiceTurns {
         val since = turnStartedAt
         if (since == 0L || !OdysseusLink.isConfigured) return false
         if (shownFor == since) return _shown.value?.awaitingConfirmation != null
-        val found = findCard(since) ?: return false
+        val found = findCard(since, contextFor(since)) ?: return false
         if (OdysseusLink.showActions) show(found, since)
         return found.state?.awaitingConfirmation != null
     }
 
-    /** The turn that started at [since], asked twice ([RETRY_MS] apart) while the hub has none yet; null if none or failed. */
-    private suspend fun findCard(since: Long): Fetched.Card? {
-        val from = since - CLOCK_SLACK_MS
+    /**
+     * The turn of [contextId], or without one the turn that started at [since]; asked twice
+     * ([RETRY_MS] apart) while the hub has none yet (not finished); null if none or failed.
+     */
+    internal suspend fun findCard(since: Long, contextId: String?, http: HubHttp = OdysseusLink): Fetched.Card? {
         repeat(2) { attempt ->
-            when (val found = fetch(from)) {
+            when (val found = fetch(since, contextId, http)) {
                 Fetched.Stop -> return null
                 Fetched.NoTurn -> if (attempt == 0) delay(RETRY_MS)
                 is Fetched.Card -> return found
@@ -156,21 +168,23 @@ object VoiceTurns {
         if (turnStartedAt == since) { _shown.value = found.state; shownFor = since }
     }
 
-    private sealed interface Fetched {
+    internal sealed interface Fetched {
         /** A turn was found; a null state means it did nothing worth showing (clears the card). */
         data class Card(val state: TurnCardState?) : Fetched
         data object NoTurn : Fetched
         data object Stop : Fetched
     }
 
-    private suspend fun fetch(from: Long): Fetched = when (val r = OdysseusLink.fetchLatestTurn(from)) {
-        is OdysseusLink.TurnResult.Ok -> {
-            val turn = r.turn
-            if (turn == null || !VoiceTurnApi.isFromDevice(turn, deviceId)) Fetched.NoTurn
-            else Fetched.Card(VoiceTurnApi.cardState(turn))
+    private suspend fun fetch(since: Long, contextId: String?, http: HubHttp): Fetched =
+        when (val r = OdysseusLink.fetchLatestTurn(contextId, since - CLOCK_SLACK_MS, http)) {
+            is OdysseusLink.TurnResult.Ok -> {
+                val turn = r.turn
+                // By context id the turn is ours; by time it may be another satellite's.
+                if (turn == null || (contextId == null && !VoiceTurnApi.isFromDevice(turn, deviceId))) Fetched.NoTurn
+                else Fetched.Card(VoiceTurnApi.cardState(turn))
+            }
+            is OdysseusLink.TurnResult.Failed -> { Timber.w("Odysseus turn: ${r.message}"); Fetched.Stop }
         }
-        is OdysseusLink.TurnResult.Failed -> { Timber.w("Odysseus turn: ${r.message}"); Fetched.Stop }
-    }
 }
 
 // An Odysseus web app card (OdysseusTheme.kt): panel, 1 px border, 8 px corners. It floats over the

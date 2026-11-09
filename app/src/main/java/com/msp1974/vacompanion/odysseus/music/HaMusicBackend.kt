@@ -217,8 +217,8 @@ class HaMusicBackend(
         val r = rows
         val s = states
         // Only a Music Assistant player can be this device's (contract I3).
-        val candidates = r.filter { it.musicAssistant }.map { HaMusicJson.candidate(it, s[it.entityId]) }
-        val match = matchSelf(selfClientId(), uuid(), area(), selfOverride(), candidates)
+        val candidates = HaMusicJson.candidates(r, s)
+        val match = matchSelf(selfClientId(), uuid(), area(), selfOverride(), candidates, HaMusicJson.echoAreas(r))
         if (match != _self.value) {
             Timber.i("Music: this device's player: %s (%s)", match?.entityId ?: "none", match?.how ?: "-")
             _self.value = match

@@ -67,7 +67,7 @@ is reachable over Tailscale where MA's LAN address isn't. Code: `app/src/main/ja
 
 | Backend call | Home Assistant |
 |---|---|
-| `rooms` | the rooms template (`HaMusicJson.ROOMS_TEMPLATE`, fixed text, no user input: every `media_player`, with `ma` = in `integration_entities('music_assistant')` and not `device_class: tv`) at once, every minute and when a player appears or goes away (at most every 10 s); between runs `HaApi.watch()` on every media player the template returned (listed or not) for state, names, availability and group members. Which are listed: `RoomListing` (below) |
+| `rooms` | the rooms template (`HaMusicJson.ROOMS_TEMPLATE`, fixed text, no user input: every `media_player`, with `ma` = in `integration_entities('music_assistant')` and not `device_class: tv`, and `vaca` = in `integration_entities('vaca')` with its device's name) at once, every minute and when a player appears or goes away (at most every 10 s); between runs `HaApi.watch()` on every media player the template returned (listed or not) for state, names, availability and group members. Which are listed: `RoomListing` (below) |
 | `player(id)` | `watch()` attributes: title, artist, album, duration, position (+ `media_position_updated_at`), shuffle, repeat, volume, mute, `entity_picture_local` ?: `entity_picture` (a HA path, loaded with `HaApi.bytes`), `supported_features` → `can` |
 | `queue(id)` | `music_assistant.get_queue` (return_response, keyed by entity id); "No active queue" → null; a room that isn't MA's → null, nothing asked |
 | `library` | `music_assistant.get_library` `{config_entry_id, media_type, order_by, favorite, offset, limit}`; `favorite` is sent only when true (MA reads `false` as "not favourites"); `hasMore` while a full page came back |
@@ -84,7 +84,9 @@ is reachable over Tailscale where MA's LAN address isn't. Code: `app/src/main/ja
   `unavailable` or `unknown`; its live state, else the template's). A non-MA player with the same
   name (any case, whitespace collapsed) as an MA player, in the same area or with no area on either
   side, is that speaker's native twin (a Sonos as `media_player.kitchen` and MA's
-  `media_player.kitchen_2`) and is left out. Every media player the template returned is watched,
+  `media_player.kitchen_2`) and is left out. An Echo's own media player from the VACA integration
+  (`vaca`, e.g. "Bedroom Echo Media Player": its announcements and sounds) is never listed: the
+  Echo's music player is its Sendspin player in MA. Every media player the template returned is watched,
   so a speaker that is turned on is listed at its next state, without a template run; one added to
   Home Assistant comes with the next run (≤ 1 min).
 - **Non-MA rooms** (`Room.musicAssistant` false): `player` and `control` as for any player (the
@@ -118,10 +120,16 @@ is reachable over Tailscale where MA's LAN address isn't. Code: `app/src/main/ja
 2. **LEGACY_ID**: `["music_assistant", "vaca-<uuid>"]` (the id before Sendspin v0.9 derived it from
    the device key), only if that player is available.
 3. **NAME**: exactly one player named `VACA <uuid> Sendspin Player` (any case).
-4. **AREA**: exactly one player of type `player` in this device's area (`config.area`). A guess; the
-   page shows it as one ("Kitchen speaker?"). Other devices' Sendspin players are left out (Music
-   Assistant's default name `VACA … Sendspin Player`, or a `vaca-` or 43-character key id that isn't
-   this device's), so two Echos in one room never claim each other's player.
+4. **AREA**: exactly one Echo player of type `player` in this device's area (`config.area`). A
+   guess; the page shows it as one ("Bedroom Echo · This Echo?"). An Echo player is a Sendspin
+   player by its shape (Music Assistant's default name `VACA … Sendspin Player`, or a `vaca-` or
+   43-character key id) or one with the same name as an Echo's device of the VACA integration
+   (`HaMusicJson.candidates`; it then has that device's area when it has none of its own). Never a
+   TV or another speaker: an Echo plays music only through its Sendspin player. While Home
+   Assistant has more than one Echo in this area there is no guess; while it has just this one, any
+   Echo player there is this one's; while the Echos aren't known, other devices' Sendspin players
+   (an id or default name that isn't this device's) are left out, so two Echos in one room never
+   claim each other's player.
 5. Otherwise none: no "Play here"; the room picker offers to set the override.
 
 The room the page starts on (`RoomChoice.defaultRoom`): this device's room, else the first room in

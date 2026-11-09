@@ -174,6 +174,13 @@ class HaMusicBackendTest {
     @Test
     fun aNewKeyFallsBackToTheAreaGuess() = runBlocking {
         clientId = "a-new-key-id"
+        // The Kitchen Echo's VACA device makes its Sendspin player an Echo player.
+        ha.templateAnswer = {
+            MusicFixtures.text("rooms_template.json").trim().removeSuffix("]") +
+                """, {"entity_id": "media_player.kitchen_echo_media_player", "name": "Kitchen Echo Media Player",
+                     "area": "Kitchen", "ma": false, "type": null, "members": [], "ids": [], "entry": null,
+                     "vaca": true, "device": "Kitchen Echo"}]"""
+        }
         val b = backend()
         b.loadRooms()
         assertEquals(SelfMatch("media_player.kitchen_echo", How.AREA), b.self.value)

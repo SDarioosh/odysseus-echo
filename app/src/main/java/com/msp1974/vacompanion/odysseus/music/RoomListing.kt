@@ -10,10 +10,12 @@ object RoomListing {
     /**
      * True when [row] is listed with its live [state] (HA's state text; null: not known yet, the
      * template's [RoomRow.state] then): a Music Assistant player always (as before), any other
-     * media player while it is on.
+     * media player while it is on, except an Echo's own VACA media player (its announcements and
+     * sounds; the Echo's music player is its Sendspin player in Music Assistant).
      */
     fun listed(row: RoomRow, state: String?): Boolean {
         if (row.musicAssistant) return true
+        if (row.vaca) return false
         val s = state ?: row.state ?: return false
         return s !in HIDDEN_STATES
     }

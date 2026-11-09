@@ -85,18 +85,39 @@ class SelfPlayerTest {
     }
 
     @Test
-    fun aNewKeyFallsBackToTheOnePlayerInTheArea() {
+    fun aNewKeyFallsBackToTheOneEchoPlayerInTheArea() {
         val group = c("kitchen_group", "Kitchen Group", "Kitchen", type = "group")
+        val echo = kitchen.copy(echo = true)
         assertEquals(
             SelfMatch("media_player.kitchen_echo", How.AREA),
-            matchSelf("a-new-key-id", uuid, "kitchen", null, listOf(kitchen, living, group)),
+            matchSelf("a-new-key-id", uuid, "kitchen", null, listOf(echo, living, group)),
         )
     }
 
     @Test
-    fun twoPlayersInOneAreaIsNull() {
-        val second = c("kitchen_radio", "Kitchen Radio", "Kitchen")
-        assertNull(matchSelf("a-new-key-id", uuid, "Kitchen", null, listOf(kitchen, second, living)))
+    fun theAreaGuessNeverClaimsATvOrAnotherSpeaker() {
+        // The one player in the area is a TV: not this Echo.
+        val tv = c("bedroom_tv", "Bedroom TV", "Bedroom", playerId = "roku_fictional01")
+        assertNull(matchSelf("a-new-key-id", uuid, "Bedroom", null, listOf(tv, living)))
+        assertNull(matchSelf("a-new-key-id", uuid, "Bedroom", null, listOf(tv, living), echoAreas = listOf("Bedroom")))
+        // With this Echo's player beside it (no area of its own: the Echo's), the Echo's is the guess.
+        val echo = c("bedroom_echo", "Bedroom Echo", "Bedroom", playerId = "some-other-id").copy(echo = true)
+        assertEquals(
+            SelfMatch("media_player.bedroom_echo", How.AREA),
+            matchSelf("a-new-key-id", uuid, "Bedroom", null, listOf(tv, echo, living), echoAreas = listOf("Bedroom", "Kitchen")),
+        )
+    }
+
+    @Test
+    fun twoEchoPlayersInOneAreaIsNull() {
+        val second = c("kitchen_echo_2", "Kitchen Echo 2", "Kitchen").copy(echo = true)
+        assertNull(matchSelf("a-new-key-id", uuid, "Kitchen", null, listOf(kitchen.copy(echo = true), second, living)))
+    }
+
+    @Test
+    fun twoEchosInTheAreaIsNoGuess() {
+        val echo = kitchen.copy(echo = true)
+        assertNull(matchSelf("a-new-key-id", uuid, "Kitchen", null, listOf(echo, living), echoAreas = listOf("kitchen", "Kitchen ")))
     }
 
     @Test
@@ -118,11 +139,18 @@ class SelfPlayerTest {
         assertNull(matchSelf(null, uuid, "Kitchen", null, listOf(legacyA)))
         val namedA = c("echo_a", "VACA another-uuid Sendspin Player", "Kitchen", playerId = "ma_x")
         assertNull(matchSelf(null, uuid, "Kitchen", null, listOf(namedA)))
-        // With a speaker beside it, the speaker is the one guess.
+        // A speaker beside it is never the guess either.
         val speaker = c("kitchen_speaker", "Kitchen Speaker", "Kitchen", playerId = "ma_kitchen01")
+        assertNull(matchSelf("this-echos-new-key", uuid, "Kitchen", null, listOf(echoA, speaker)))
+    }
+
+    @Test
+    fun theOnlyEchoInTheAreaClaimsAnEchoPlayerThereWhateverItsId() {
+        // Home Assistant has one Echo in the Kitchen (this one): a Sendspin player there is this one's.
+        val echoA = c("echo_a", "Echo A", "Kitchen", playerId = otherKey)
         assertEquals(
-            SelfMatch("media_player.kitchen_speaker", How.AREA),
-            matchSelf("this-echos-new-key", uuid, "Kitchen", null, listOf(echoA, speaker)),
+            SelfMatch("media_player.echo_a", How.AREA),
+            matchSelf("this-echos-new-key", uuid, "Kitchen", null, listOf(echoA), echoAreas = listOf("Kitchen", "Bedroom")),
         )
     }
 
@@ -132,5 +160,7 @@ class SelfPlayerTest {
         assertFalse(isOtherVacaPlayer(c("a", playerId = otherKey), setOf(otherKey)))
         assertFalse(isOtherVacaPlayer(c("a", "Kitchen Speaker", playerId = "ma_kitchen01"), emptySet()))
         assertFalse(isOtherVacaPlayer(c("a", "Kitchen Speaker"), emptySet()))
+        assertTrue(looksLikeVacaPlayer(c("a", "VACA x Sendspin Player")))
+        assertFalse(looksLikeVacaPlayer(c("a", "Bedroom TV", playerId = "roku_fictional01")))
     }
 }

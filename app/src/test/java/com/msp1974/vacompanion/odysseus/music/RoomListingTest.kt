@@ -30,6 +30,12 @@ class RoomListingTest {
     }
 
     @Test
+    fun anEchosOwnVacaPlayerIsNeverListed() {
+        val vaca = row("media_player.bedroom_echo_media_player", ma = false).copy(vaca = true, device = "Bedroom Echo")
+        for (s in listOf("playing", "idle", "on", null)) assertFalse("vaca $s", RoomListing.listed(vaca, s))
+    }
+
+    @Test
     fun aPlainTwinOfAnMaPlayerIsHidden() {
         val ma = room("media_player.kitchen_2", "Kitchen", "Kitchen", ma = true)
         val twin = room("media_player.kitchen", "  kitchen ", "kitchen", ma = false)

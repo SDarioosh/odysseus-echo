@@ -25,6 +25,34 @@ class HaMusicJsonTest {
         assertTrue(t.contains("'state': s.state, 'ma': m"))
         assertTrue(t.contains("| map('list') | list) if m else []"))
         assertTrue(t.endsWith("{% endfor %}{{ ns.r | to_json }}"))
+        assertTrue(t.contains("{% set vaca = integration_entities('vaca') %}"))
+        assertTrue(t.contains("{% set v = e in vaca and not m %}"))
+        assertTrue(t.contains("device_attr(device_id(e), 'name_by_user') or device_attr(device_id(e), 'name')) if v else none"))
+    }
+
+    @Test
+    fun anEchosVacaPlayerIsHiddenAndNamesItsSendspinPlayer() {
+        val rows = HaMusicJson.parseRooms(MusicFixtures.text("rooms_template_echo.json"))
+        val vaca = rows.single { it.entityId == "media_player.bedroom_echo_media_player" }
+        assertTrue(vaca.vaca)
+        assertEquals("Bedroom Echo", vaca.device)
+        assertFalse(rows.single { it.entityId == "media_player.bedroom_echo" }.vaca)
+        // Only Music Assistant's players are listed: not the Echos' own VACA players.
+        assertEquals(
+            listOf("media_player.bedroom_echo", "media_player.bedroom_tv"),
+            HaMusicJson.buildRooms(rows, emptyMap(), null).map { it.entityId }.sorted(),
+        )
+        // The Sendspin player named like the Echo is an Echo player, in the Echo's area.
+        val candidates = HaMusicJson.candidates(rows, emptyMap())
+        assertEquals(listOf("media_player.bedroom_tv", "media_player.bedroom_echo"), candidates.map { it.entityId })
+        assertEquals(listOf(false, true), candidates.map { it.echo })
+        assertEquals("Bedroom", candidates[1].area)
+        assertEquals(listOf("Bedroom", "Kitchen"), HaMusicJson.echoAreas(rows))
+        // The id no longer matches (a new key): the area guess finds the Echo's player, not the TV.
+        assertEquals(
+            SelfMatch("media_player.bedroom_echo", How.AREA),
+            matchSelf("a-new-key-id", "fictional-uuid", "Bedroom", null, candidates, HaMusicJson.echoAreas(rows)),
+        )
     }
 
     @Test

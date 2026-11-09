@@ -5,8 +5,13 @@ package com.msp1974.vacompanion.odysseus.music
 // Home Assistant's MA device has the identifier ["music_assistant", <player id>], so "Play here"
 // needs no setup. The rules, in order, are in docs/odysseus/music.md.
 
+/**
+ * A Music Assistant player that could be this device's. [echo]: it is an Echo's own Sendspin player
+ * by its name (the same name as a device of the VACA integration, HaMusicJson.candidates); [area]
+ * is then that device's area when the player itself has none.
+ */
 data class Candidate(val entityId: String, val ids: List<List<String>>, val name: String,
-                     val area: String, val type: String?, val available: Boolean)
+                     val area: String, val type: String?, val available: Boolean, val echo: Boolean = false)
 enum class How { OVERRIDE, ID, LEGACY_ID, NAME, AREA }
 data class SelfMatch(val entityId: String, val how: How, val staleOverride: Boolean = false)
 
@@ -22,8 +27,12 @@ fun defaultPlayerName(uuid: String): String = "VACA $uuid Sendspin Player"
 fun isStaleOverride(override: String?, candidates: List<Candidate>): Boolean =
     !override.isNullOrBlank() && candidates.none { it.entityId == override }
 
+/**
+ * This device's player among [candidates]. [echoAreas]: the area of each Echo Home Assistant has
+ * (each device of the VACA integration; empty when not known), for the AREA guess.
+ */
 fun matchSelf(clientId: String?, uuid: String, area: String?, override: String?,
-              candidates: List<Candidate>): SelfMatch? {
+              candidates: List<Candidate>, echoAreas: List<String> = emptyList()): SelfMatch? {
     // 0. The on-device setting "This device's player", while it still exists.
     if (!override.isNullOrBlank() && candidates.any { it.entityId == override }) {
         return SelfMatch(override, How.OVERRIDE)
@@ -47,12 +56,18 @@ fun matchSelf(clientId: String?, uuid: String, area: String?, override: String?,
             return SelfMatch(it.entityId, How.NAME, stale)
         }
     }
-    // 4. A guess: the one single player in this device's area that isn't another VACA device's.
+    // 4. A guess: the one Echo player in this device's area. Never a TV or another speaker: an
+    // Echo plays music only through its own Sendspin player. While Home Assistant has more than
+    // one Echo in this area there is no guess; while it has just this one, any Echo player there
+    // is this one's (its id may no longer match, after a new key); while the Echos aren't known,
+    // another Echo's player (by its id or name) is left out.
     if (!area.isNullOrBlank()) {
+        val echoesHere = echoAreas.count { sameArea(it, area) }
+        if (echoesHere > 1) return null
         val mine = setOfNotNull(clientId?.takeIf { it.isNotBlank() }, uuid.takeIf { it.isNotBlank() }?.let(::legacyPlayerId))
         candidates.filter {
-            it.type == "player" && it.area.trim().equals(area.trim(), ignoreCase = true) &&
-                !isOtherVacaPlayer(it, mine)
+            it.type == "player" && sameArea(it.area, area) && (it.echo || looksLikeVacaPlayer(it)) &&
+                (echoesHere == 1 || !isOtherVacaPlayer(it, mine))
         }.singleOrNull()?.let { return SelfMatch(it.entityId, How.AREA, stale) }
     }
     return null
@@ -62,16 +77,25 @@ private val VACA_NAME = Regex("""VACA .+ Sendspin Player""", RegexOption.IGNORE_
 private val SENDSPIN_KEY_ID = Regex("""[A-Za-z0-9_-]{43}""")
 private val LEGACY_ID = Regex("""vaca-.+""")
 
+private fun sameArea(a: String, b: String) = a.trim().isNotEmpty() && a.trim().equals(b.trim(), ignoreCase = true)
+
 /**
- * True when [c] looks like another VACA device's Sendspin player, so the AREA guess doesn't claim
- * it (two Echos in one room): MA's default name for one (`VACA <uuid> Sendspin Player`), or a
- * `music_assistant` id shaped like a Sendspin client id (43 characters of base64url, derived from
- * the device key) or the legacy `vaca-<uuid>`, other than this device's own ids [mine]. Other MA
+ * True when [c] looks like a VACA device's Sendspin player: MA's default name for one
+ * (`VACA <uuid> Sendspin Player`), or a `music_assistant` id shaped like a Sendspin client id (43
+ * characters of base64url, derived from the device key) or the legacy `vaca-<uuid>`. Other MA
  * players have `music_assistant` ids too (e.g. MA's own player ids), which are not of that shape.
+ */
+fun looksLikeVacaPlayer(c: Candidate): Boolean {
+    val maIds = c.ids.filter { it.size >= 2 && it[0] == MA_DOMAIN }.map { it[1] }
+    return VACA_NAME.matches(c.name.trim()) || maIds.any { SENDSPIN_KEY_ID.matches(it) || LEGACY_ID.matches(it) }
+}
+
+/**
+ * True when [c] looks like another VACA device's Sendspin player ([looksLikeVacaPlayer], with
+ * none of this device's own ids [mine]), so the AREA guess doesn't claim it (two Echos in one room).
  */
 fun isOtherVacaPlayer(c: Candidate, mine: Set<String>): Boolean {
     val maIds = c.ids.filter { it.size >= 2 && it[0] == MA_DOMAIN }.map { it[1] }
     if (maIds.any { it in mine }) return false
-    return VACA_NAME.matches(c.name.trim()) ||
-        maIds.any { SENDSPIN_KEY_ID.matches(it) || LEGACY_ID.matches(it) }
+    return looksLikeVacaPlayer(c)
 }

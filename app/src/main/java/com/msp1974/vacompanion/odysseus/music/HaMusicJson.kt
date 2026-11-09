@@ -36,6 +36,10 @@ data class RoomRow(
     val entry: String?,
     val musicAssistant: Boolean = true,
     val state: String? = null,
+    /** A media player of the VACA integration (an Echo's own player for announcements and sounds). */
+    val vaca: Boolean = false,
+    /** For a [vaca] row: the name of its Home Assistant device (the Echo's name). */
+    val device: String? = null,
 )
 
 /**
@@ -56,16 +60,19 @@ object HaMusicJson {
      */
     val ROOMS_TEMPLATE = """
 {% set ma = integration_entities('music_assistant') %}
+{% set vaca = integration_entities('vaca') %}
 {% set ns = namespace(r=[]) %}
 {% for s in states.media_player %}
 {% set e = s.entity_id %}
 {% set m = e in ma and s.attributes.get('device_class') != 'tv' %}
+{% set v = e in vaca and not m %}
 {% set ns.r = ns.r + [{'entity_id': e, 'name': s.attributes.get('friendly_name'),
    'area': area_name(e) or '', 'state': s.state, 'ma': m,
    'type': s.attributes.get('mass_player_type') if m else none,
    'members': (s.attributes.get('group_members') or []) if m else [],
    'ids': ((device_attr(device_id(e), 'identifiers') or []) | map('list') | list) if m else [],
-   'entry': config_entry_id(e) if m else none}] %}
+   'entry': config_entry_id(e) if m else none, 'vaca': v,
+   'device': (device_attr(device_id(e), 'name_by_user') or device_attr(device_id(e), 'name')) if v else none}] %}
 {% endfor %}{{ ns.r | to_json }}
 """.trim()
 
@@ -126,6 +133,8 @@ object HaMusicJson {
                 entry = o["entry"].str()?.takeIf { ma && it.isNotBlank() },
                 musicAssistant = ma,
                 state = o["state"].str(),
+                vaca = !ma && o["vaca"].bool() == true,
+                device = o["device"].str()?.takeIf { !ma && it.isNotBlank() },
             )
         }
     }
@@ -166,6 +175,28 @@ object HaMusicJson {
         type = row.type,
         available = isAvailable(state),
     )
+
+    /**
+     * The Music Assistant players of [rows] as candidates for this device's player ([matchSelf]).
+     * One with the same name (any case, whitespace collapsed) as an Echo's device (a [RoomRow.vaca]
+     * row's [RoomRow.device]) is that Echo's Sendspin player ([Candidate.echo]), in that device's
+     * area when it has none of its own (MA's devices often have none).
+     */
+    fun candidates(rows: List<RoomRow>, states: Map<String, HaState>): List<Candidate> {
+        val echoes = rows.filter { it.vaca && !it.device.isNullOrBlank() }
+        return rows.filter { it.musicAssistant }.map { row ->
+            val c = candidate(row, states[row.entityId])
+            val echo = echoes.firstOrNull { RoomListing.key(it.device) == RoomListing.key(c.name) }
+                ?: return@map c
+            c.copy(echo = true, area = c.area.ifBlank { echo.area })
+        }
+    }
+
+    /** The area of each Echo (device of the VACA integration) in [rows]; blank for one without. */
+    fun echoAreas(rows: List<RoomRow>): List<String> = rows
+        .filter { it.vaca }
+        .distinctBy { it.device?.let(RoomListing::key) ?: it.entityId }
+        .map { it.area }
 
     /**
      * The rooms the page lists ([RoomListing]): every MA player, and the other media players that

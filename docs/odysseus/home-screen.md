@@ -162,7 +162,8 @@ other speakers never reached it: the clock and the now-playing card stayed empty
 Echo itself plays nothing, they show what another speaker plays, and the buttons control that
 speaker. The speakers are the Music page's list of media players ([music.md](music.md), "Which
 media players are rooms"): every Music Assistant player, and Home Assistant's other media players
-(Cast, Sonos, TVs…) while they are on, a native twin of an MA player left out.
+(Cast, Sonos, TVs…) while they are on, a native twin of an MA player and the Echos' own VACA media
+players left out.
 
 On the clock this applies while its style's **Now playing from** is *This device*; with
 *Selected room* the clock follows the Music page's room instead. The Music page itself always

@@ -91,7 +91,7 @@ Wake sounds, alarms, and custom wake word models can be supplied by the HA-side 
 
 ## Odysseus fork
 
-What the fork changes and why: [ODYSSEUS.md](ODYSSEUS.md). Each feature's doc in `docs/odysseus/` lists its files under `## Files`. Device: [echo-show-5.md](docs/odysseus/echo-show-5.md); a new Echo: [new-echo-runbook.md](docs/odysseus/new-echo-runbook.md); building and signing: [build.md](docs/odysseus/build.md); old tests: [history.md](docs/odysseus/history.md).
+What the fork changes and why: [ODYSSEUS.md](ODYSSEUS.md). Each feature's doc in `docs/odysseus/` lists its files under `## Files`. Device: [echo-show-5.md](docs/odysseus/echo-show-5.md); a new Echo: [new-echo-runbook.md](docs/odysseus/new-echo-runbook.md); a Fire HD 10 (2021) tablet, no root: [fire-hd-10-2021.md](docs/odysseus/fire-hd-10-2021.md); building and signing: [build.md](docs/odysseus/build.md); old tests: [history.md](docs/odysseus/history.md).
 
 ### Rules
 

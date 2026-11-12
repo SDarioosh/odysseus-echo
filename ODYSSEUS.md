@@ -61,7 +61,7 @@ section.
 | Updates from the owner's Odysseus hub | never from the internet; upstream's would install the Firebase build | [updates](docs/odysseus/updates.md) |
 | Announcement and reminder cards; hello to the hub | show what was said; the hub learns each Echo's name and area | [announcements](docs/odysseus/announcements.md) |
 | Recorder: conversations and voice notes, queued and uploaded to Athena | record for Athena from the Echo, offline-safe | [recording](docs/odysseus/recording.md) |
-| Privacy button records (press) and takes voice notes (hold), never sleeps | on cronos it sent KEY_POWER and didn't cut the mic | [recording](docs/odysseus/recording.md#the-privacy-button) |
+| Privacy button: mutes (default) or records, never sleeps | on cronos it sent KEY_POWER; it does cut the mic, so Record mode records silence there | [recording](docs/odysseus/recording.md#the-privacy-button) |
 | Settings managed by Odysseus | set each Echo from the hub's admin page | [managed-settings](docs/odysseus/managed-settings.md) |
 | Odysseus look: colours, Fira Code, sailboat icons, name "Odysseus Echo" | the device is part of Odysseus | [look](docs/odysseus/look.md) |
 | Sendspin over Tailscale: HA's address and trusted ids pass, art over the connection, goodbye `restart` | MA connects from a 100.x address and can't serve LAN image URLs | [tailscale](docs/odysseus/tailscale.md#music-assistant-sendspin-over-tailscale) |

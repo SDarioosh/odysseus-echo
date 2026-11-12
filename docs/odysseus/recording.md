@@ -48,7 +48,7 @@ These devices have no vibration, so the sounds and the pill are the only feedbac
 |---|---|---|
 | Recording | on | Off hides the record buttons and refuses presses. Turning it off stops a running recording. |
 | Record button on the clock | on | The small button on the clock page |
-| Privacy button | Record | Record: the Echo Show's privacy button records (below). Mute: it only mutes, as before. Greyed out on devices without the button |
+| Privacy button | Mute | Mute: the Echo Show's privacy button only mutes, as upstream. Record: it records (below), but on the Echo Show 5 the press also cuts the microphone, so the recording is silent. Greyed out on devices without the button |
 | *(status)* | | "3 chunks waiting (2.7 MB)", and why uploads wait (hub unreachable, relink needed) |
 | Upload now | | Tries at once, skipping the retry wait. Also use it after relinking. |
 
@@ -62,6 +62,7 @@ press/hold ──> RecorderController ──> RecorderStateMachine (pure)
                      │ effects: start/end session, sounds, refusal
                      v
            RecordingCapture ── SharedMicrophone.raw (before any processing)
+                     │ RecordingGain: quiet audio raised (up to +40 dB)
                      │ ChunkAssembler: 30 s chunks, WAV 16 kHz mono PCM16
                      v
            ChunkQueue (files/odysseus/recordings/) ──> RecordingUploader ──> hub relay ──> Athena
@@ -77,8 +78,9 @@ press/hold ──> RecorderController ──> RecorderStateMachine (pure)
 - **RecordingCapture** collects `SharedMicrophone.raw` undispatched into its own channel (as
   `audio/DetectionBuffer` does), so no frame is lost while the encoder works. See
   [shared-microphone.md](shared-microphone.md). The audio is raw: before the gate, WebRTC, the
-  wake-sound suppressor and the gain. If no frames arrive for 5 s (the microphone gave up), it
+  wake-sound suppressor and the gain. Recordings then get their own gain (below). If no frames arrive for 5 s (the microphone gave up), it
   listens again.
+- **RecordingGain** raises quiet audio before it is cut into chunks ([Level](#level)).
 - **ChunkAssembler** cuts 30 s chunks. A chunk's `timestamp` is the session start plus the
   audio before it (80 ms per frame), in ISO-8601 UTC with ms. If the microphone stops for a
   while, the timestamps after the gap come early by that much.
@@ -94,6 +96,24 @@ press/hold ──> RecorderController ──> RecorderStateMachine (pure)
 - **Queue cap**: 500 MB. Past that, the oldest *finished* sessions are deleted first, and a
   warning shows on screen and in the settings. A session that is still recording is never
   deleted.
+
+## Level
+
+The raw microphone is too quiet on some devices: on the Echo Show 5 speech peaked at about 170 of
+32767 (about -46 dBFS), and Athena's speech detection found no speech in a 4-minute recording, so
+no conversation was made ([history.md](history.md#2026-11-12-the-privacy-switch-does-cut-the-microphone)).
+`RecordingGain` (plain Kotlin, `RecordingGainTest`), one per recording, raises it:
+
+- It follows the loudest sample: up at once to a louder frame, down slowly (halving over 2 s).
+- Gain = 16000 (about -6 dBFS) / that level, between 1 and 100 (+40 dB). It never turns audio
+  down, so a microphone that is already loud is sent as it is.
+- It starts at the most. A gain that has to fall applies from the frame's first sample, so a
+  sudden loud sound doesn't clip; a rising gain ramps across the frame. Samples are clamped to
+  PCM16 as well.
+- Silence stays silence (0 × gain); room noise comes up with the gain (on the Echo Show 5 to
+  about -45 dBFS).
+
+Only recordings use it. The wake word and the voice pipeline keep their own processing.
 
 ## Upload: contract C4
 
@@ -129,8 +149,10 @@ the phone (Menu → Odysseus → Set up with phone).
 
 ## The privacy button
 
-On the Echo Show 5 (2nd gen) the microphone button on top is the record button (setting
-**Privacy button = Record**, the default). Hardware details, the key layout and the owner's
+On the Echo Show 5 (2nd gen) the microphone button on top can be the record button (setting
+**Privacy button = Record**; the default is Mute). **On that device the press also cuts the
+microphone** (2026-11-12), so a recording it starts is silent until the next press: use the
+on-screen Record button there. Hardware details, the key layout and the owner's
 checks: [echo-show-5.md](echo-show-5.md#privacy-button-records-or-mutes-never-sleeps).
 
 - **Press**: start a recording, press again to stop. **Hold 1 s**: voice note. The same
@@ -139,8 +161,9 @@ checks: [echo-show-5.md](echo-show-5.md#privacy-button-records-or-mutes-never-sl
   Assistant's mute): that still stops recordings and refuses new ones. The first time the
   button records, a message says so once.
 - While the button records, Android's microphone-mute flag (which the button flips on every
-  press) is ignored: no "Microphone off" pill, no refusal. On this device the flag doesn't cut
-  the microphone, so the wake word and the recording keep working whatever it says.
+  press) is ignored: no "Microphone off" pill, no refusal. But the switch behind it cuts the
+  microphone in hardware, which the app can't undo: the recording and the wake word hear
+  silence until the next press.
 
 How a press reaches the app (`odysseus/record/RecordButton.kt`, logic in
 `RecordButtonGestures.kt`, plain Kotlin, `RecordButtonGesturesTest`):
@@ -223,6 +246,7 @@ All in `odysseus/record/` unless named otherwise:
 | `RecorderController.kt` | the process-wide recorder: state, sounds, the mic-mute receiver; `press()`/`hold()` |
 | `RecorderStateMachine.kt` | gestures, limits, debounce (pure) |
 | `RecordingCapture.kt` | collects `SharedMicrophone.raw` |
+| `RecordingGain.kt` | the recordings' automatic gain (pure) |
 | `ChunkAssembler.kt` | 30 s WAV chunks and their timestamps |
 | `ChunkQueue.kt` | the durable queue in `files/odysseus/recordings/` |
 | `RecordingUploader.kt`, `UploadRules.kt`, `HubRelayTransport.kt` | uploads to the hub relay (contract C4), retry waits, the queue cap |
@@ -246,6 +270,8 @@ Record button).
 ```
 
 - `RecorderStateMachineTest`: every gesture in every state, debounce, refusals, the limits.
+- `RecordingGainTest`: quiet audio raised to the target, a loud microphone left alone, no clip
+  after a sudden loud frame, the slow rise, the maximum.
 - `ChunkAssemblerTest`: chunk timing, splitting at the joins, the timestamp format, and the WAV
   header the hub relay checks.
 - `UploadRulesTest`: contract C4's result table, the retry waits, the hub origin, session ids,

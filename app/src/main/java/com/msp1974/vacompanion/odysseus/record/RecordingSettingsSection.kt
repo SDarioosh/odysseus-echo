@@ -86,9 +86,9 @@ private fun PrivacyButtonChoice(recordingEnabled: Boolean) {
             mode == PrivacyButtonMode.MUTE -> "The button mutes the microphone (\"Microphone off\"). If that shows " +
                 "right after choosing Mute, press the button once."
             !recordingEnabled -> "Recording is off, so the button mutes the microphone."
-            else -> "Press: record, press again to stop. Hold 1 s: voice note. The button no longer " +
-                "mutes: use Mic Mute in the quick actions. With the screen off or another app in " +
-                "front, a hold counts as a press."
+            else -> "Press: record, press again to stop. Hold 1 s: voice note. Warning: on the Echo " +
+                "Show 5 the button also cuts the microphone, so these recordings are silent. Use the " +
+                "on-screen Record button instead."
         }
         Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         ManagedNote("record.privacy_button")

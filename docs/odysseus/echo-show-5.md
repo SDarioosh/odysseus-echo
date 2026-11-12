@@ -17,7 +17,7 @@ the fork got here: [history.md](history.md). A new Echo, start to finish:
 | Speaker | Works (`AUDIO_DEVICE_OUT_SPEAKER`, 48 kHz stereo). |
 | Screen / touch | 960×480 at 195 dpi, Goodix touch. Both work. |
 | Wi-Fi | Works: 5 GHz, RSSI −22 dBm, 433 Mbps at the test spot. |
-| Mic-mute button | Shows up as `gpio-privacy-state` (`SW_MUTE_DEVICE`, currently unmuted) and `gpio-privacy-button`. Muting doesn't cut the microphone (owner, 2026-11-06). The button is the record button: see [Privacy button](#privacy-button-records-or-mutes-never-sleeps). |
+| Mic-mute button | Shows up as `gpio-privacy-state` (`SW_MUTE_DEVICE`, currently unmuted) and `gpio-privacy-button`. **Muting cuts the microphone**: the app gets digital silence until the next press (2026-11-12; the 2026-11-06 finding that it didn't was wrong). So the button mutes by default: see [Privacy button](#privacy-button-records-or-mutes-never-sleeps). |
 | Camera shutter | `SW_CAMERA_LENS_COVER` is active (shutter closed). Camera is not used. |
 | Google services | None (no GMS / Play Store). |
 | Root | `adb root` works ("Rooted debugging" in developer options, enabled by the owner). The Magisk app is installed but not set up (no `su`). Nothing below needs root except reading `/proc/asound` while debugging. |
@@ -127,7 +127,7 @@ On this LineageOS build, the microphone privacy button is two input devices:
 
 | Device | Sends | Effect |
 |---|---|---|
-| `gpio-privacy-state` | `SW_MUTE_DEVICE` | Android sets its microphone-mute flag (the HAL logs `setMicMute 0 => 1`). **The microphone keeps working**: the wake word still answers while "muted" (owner, 2026-11-06). |
+| `gpio-privacy-state` | `SW_MUTE_DEVICE` | Android sets its microphone-mute flag (the HAL logs `setMicMute 0 => 1`) and **the microphone is cut**: every sample the app reads is 0 until the next press (`setMicMute 1 => 0`). Measured 2026-11-12 on a recording started with the button; see [history.md](history.md#2026-11-12-the-privacy-switch-does-cut-the-microphone). |
 | `gpio-privacy-button` | `KEY_POWER` (scancode 116) | upstream: `Going to sleep due to power_button`, the screen turns off |
 
 `scripts/odysseus/gpio-privacy-button.kl` maps scancode 116 to `MEDIA_RECORD` (flag `WAKE`), so
@@ -153,11 +153,13 @@ adb shell dumpsys input | grep -A12 gpio-privacy-button | grep KeyLayoutFile
 
 What the button does is the setting Menu → Odysseus → Recording → **Privacy button**:
 
-- **Record** (default): press = start or stop a recording, hold 1 s = voice note
-  ([recording.md](recording.md#the-privacy-button)). The app ignores Android's mic-mute flag:
+- **Record**: press = start or stop a recording, hold 1 s = voice note
+  ([recording.md](recording.md#the-privacy-button)). **Don't use it on this device**: the press
+  also cuts the microphone, so the recording is silent (Athena finds no speech and makes no
+  conversation). Kept for a device whose switch doesn't cut the microphone. The app ignores Android's mic-mute flag:
   no "Microphone off", recordings aren't refused or stopped by it. **To mute, use "Mic Mute" in
   the quick actions sheet** (or Home Assistant's mute); that still mutes and stops recordings.
-- **Mute** (upstream behaviour, without the sleep): the app swallows the key, and the switch
+- **Mute** (the default; upstream behaviour, without the sleep): the app swallows the key, and the switch
   mutes. When the microphone is muted, the app shows a red "Microphone off" pill at the bottom
   left, driven by `AudioManager.ACTION_MICROPHONE_MUTE_CHANGED`, and the listening overlay is
   hidden. The switch is a toggle: if "Microphone off" shows right after choosing Mute (an odd

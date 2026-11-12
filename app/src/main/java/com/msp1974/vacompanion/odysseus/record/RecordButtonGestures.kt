@@ -15,14 +15,18 @@ package com.msp1974.vacompanion.odysseus.record
 
 /** What the privacy button does (Menu → Odysseus → Recording). */
 enum class PrivacyButtonMode(val key: String) {
-    /** Press: record / stop. Hold 1 s: voice note. Muting is the quick actions' "Mic Mute". */
+    /**
+     * Press: record / stop. Hold 1 s: voice note. Muting is the quick actions' "Mic Mute".
+     * Not the default: on the Echo Show 5 (2nd gen) the press also cuts the microphone, so what
+     * it records is silent until the next press.
+     */
     RECORD("record"),
 
-    /** Upstream behaviour: the button only mutes the microphone. */
+    /** Upstream behaviour, the default: the button only mutes the microphone. */
     MUTE("mute");
 
     companion object {
-        fun fromKey(key: String?): PrivacyButtonMode = entries.firstOrNull { it.key == key } ?: RECORD
+        fun fromKey(key: String?): PrivacyButtonMode = entries.firstOrNull { it.key == key } ?: MUTE
     }
 }
 
@@ -55,8 +59,8 @@ object PrivacyButtonRules {
 
     /**
      * Whether Android's microphone-mute flag counts as muted for the app ("Microphone off", the
-     * recorder's refusal). Not while the button records: then every press flips the flag, and on
-     * this device it doesn't silence the microphone anyway.
+     * recorder's refusal). Not while the button records: then every press flips the flag (and the
+     * press also cuts the microphone in hardware, which the app can't undo).
      */
     fun systemMuteCounts(rawMuted: Boolean, recordButton: Boolean): Boolean = rawMuted && !recordButton
 }

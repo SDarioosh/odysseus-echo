@@ -3,9 +3,9 @@ package com.msp1974.vacompanion.odysseus.record
 // Odysseus fork: one recording or voice note being captured (docs/odysseus/recording.md). Listens
 // to the shared microphone's raw frames (odysseus/audio/SharedMicrophone, before any processing)
 // undispatched into its own channel, as audio/DetectionBuffer does, so no frame is lost to a slow
-// encoder. A background coroutine cuts them into 30 s chunks (ChunkAssembler), encodes each as
-// 16 kHz mono WAV and writes it to the queue. finish() stops listening; the rest is written, then
-// the session is marked finished. Created by RecorderController as an anonymous object.
+// encoder. A background coroutine raises quiet audio (RecordingGain), cuts it into 30 s chunks
+// (ChunkAssembler), encodes each as 16 kHz mono WAV and writes it to the queue. finish() stops
+// listening; the rest is written, then the session is marked finished. Created by RecorderController as an anonymous object.
 
 import com.msp1974.vacompanion.odysseus.Wav
 import kotlinx.coroutines.CoroutineDispatcher
@@ -37,6 +37,7 @@ abstract class RecordingCapture(
 
     private val channel = Channel<ShortArray>(BUFFER_FRAMES, BufferOverflow.DROP_OLDEST)
     private val assembler = ChunkAssembler(startedAtMs)
+    private val gain = RecordingGain()
     private val kindName = if (kind == RecordingKind.NOTE) RecordingUploader.KIND_NOTE else RecordingUploader.KIND_RECORDING
 
     @Volatile var lastFrameAtMs: Long = startedAtMs
@@ -47,7 +48,7 @@ abstract class RecordingCapture(
 
     private val writer: Job = scope.launch(encodeDispatcher) {
         for (frame in channel) {
-            for (chunk in assembler.add(frame)) write(chunk)
+            for (chunk in assembler.add(gain.process(frame))) write(chunk)
         }
         assembler.finish()?.let { write(it) }
         val chunks = assembler.chunks

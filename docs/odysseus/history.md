@@ -88,7 +88,24 @@ filter. On top of the Echo's own front-end it distorted speech: the owner was mi
 a quiet room, while unprocessed clips of the same microphone were word-perfect. The fork turned
 it off by default ([echo-show-5.md](echo-show-5.md#microphone-processing)).
 
-## 2026-11-06: the privacy switch doesn't cut the microphone
+## 2026-11-12: the privacy switch does cut the microphone
+
+A 4-minute recording from the Work Echo reached Athena in full (9 chunks, every upload answered
+200, the session ended) but made no conversation: Athena's speech detection found no speech in
+any chunk. Chunks copied off the Echo before upload showed why:
+
+- started with the privacy button: one second of audio, then every sample 0 until the next
+  press. The audio HAL logged `setMicMute(), mMicMute: 0 => 1` at the press and `1 => 0` at the
+  next. The switch cuts the microphone; the 2026-11-06 finding below was wrong.
+- started with the on-screen Record button: audio, but very quiet: speech peaked at about 170 of
+  32767 (about -46 dBFS), with RMS under 15. The raw microphone of this device is far too quiet
+  for Athena's speech detection.
+
+Fixes: the privacy button mutes by default again (Record stays as an option, with a warning), and
+recordings get their own automatic gain (`record/RecordingGain`, up to +40 dB, never down;
+[recording.md](recording.md#level)).
+
+## 2026-11-06: the privacy switch doesn't cut the microphone (wrong, see 2026-11-12)
 
 The owner found that the wake word still answers while the privacy switch is "muted". This made
 the button free to become the record button ([recording.md](recording.md#the-privacy-button)).

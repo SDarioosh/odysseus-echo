@@ -209,7 +209,7 @@ class RecordButtonGesturesTest {
     @Test
     fun modeKeysRoundTripAndDefaultToRecord() {
         for (m in PrivacyButtonMode.entries) assertEquals(m, PrivacyButtonMode.fromKey(m.key))
-        assertEquals(PrivacyButtonMode.RECORD, PrivacyButtonMode.fromKey(null))
-        assertEquals(PrivacyButtonMode.RECORD, PrivacyButtonMode.fromKey("bogus"))
+        assertEquals(PrivacyButtonMode.MUTE, PrivacyButtonMode.fromKey(null))
+        assertEquals(PrivacyButtonMode.MUTE, PrivacyButtonMode.fromKey("bogus"))
     }
 }

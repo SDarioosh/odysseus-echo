@@ -23,9 +23,13 @@ object RecorderSettings {
     /** A small record button on the clock page. */
     var clockButton by store.bool("record_button_on_clock", true, managed = "record.clock_button")
 
-    /** What the Echo Show's privacy button does (RecordButton.kt). Does nothing without the button. */
+    /**
+     * What the Echo Show's privacy button does (RecordButton.kt). Does nothing without the button.
+     * Mute by default: the button cuts the microphone in hardware, so a recording it starts is
+     * silent (docs/odysseus/echo-show-5.md, "Privacy button").
+     */
     var privacyButton: PrivacyButtonMode by store.codec<PrivacyButtonMode>(
-        "privacy_button", PrivacyButtonMode.RECORD, { PrivacyButtonMode.fromKey(it) }, { it.key },
+        "privacy_button", PrivacyButtonMode.MUTE, { PrivacyButtonMode.fromKey(it) }, { it.key },
         managed = "record.privacy_button", choices = PrivacyButtonMode.entries.map { it.key }.toSet(),
     ) { RecordButton.refreshMute() }
 

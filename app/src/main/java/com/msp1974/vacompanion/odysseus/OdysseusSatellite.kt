@@ -12,6 +12,7 @@ package com.msp1974.vacompanion.odysseus
 // - Lock mode (lock/SatelliteLock.kt): onStart(), onServerPacket(), onWakeWord(), [locked].
 // - The turn (OdysseusTurn.kt, ListeningIndicator.kt's VoiceActivity): beginTurn(), onStage().
 // - Follow-up (followup/FollowUp.kt): afterTurn().
+// - Settings the device keeps (settings/DeviceSettings.kt): haSettings(), in handleSettings.
 
 import com.msp1974.vacompanion.audio.DetectionBuffer
 import com.msp1974.vacompanion.broadcasts.VacaUdpBroadcast
@@ -54,6 +55,10 @@ class OdysseusSatellite(
 
     /** Satellite.start. */
     fun onStart() = lock.watch()
+
+    /** Satellite.handleSettings: Home Assistant's settings, with the device's own kept (settings/DeviceSettings.kt). */
+    fun haSettings(settings: String): String =
+        com.msp1974.vacompanion.odysseus.settings.DeviceSettings.fromHa(settings, satellite.config)
 
     /** Satellite.clientId was set: another connection took over, or it disconnected. */
     fun onClientId() = HaRunGate.reset()

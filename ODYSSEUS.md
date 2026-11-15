@@ -62,6 +62,7 @@ section.
 | Announcement and reminder cards; hello to the hub | show what was said; the hub learns each Echo's name and area | [announcements](docs/odysseus/announcements.md) |
 | Recorder: conversations and voice notes, queued and uploaded to Athena | record for Athena from the Echo, offline-safe | [recording](docs/odysseus/recording.md) |
 | Privacy button: mutes (default) or records, never sleeps | on cronos it sent KEY_POWER; it does cut the mic, so Record mode records silence there | [recording](docs/odysseus/recording.md#the-privacy-button) |
+| The device keeps its whole configuration across updates and restarts; its own changes win over stale ones from HA (`odysseus/settings/DeviceSettings.kt`; hooks in `DeviceManager.kt`, `VAViewModel.kt`, `Satellite.kt`, `MainActivity.kt`) | upstream kept most settings in memory until HA sent them again, so an update reset screen timeout and the rest | [device-settings](docs/odysseus/device-settings.md) |
 | Settings managed by Odysseus | set each Echo from the hub's admin page | [managed-settings](docs/odysseus/managed-settings.md) |
 | Odysseus look: colours, Fira Code, sailboat icons, name "Odysseus Echo" | the device is part of Odysseus | [look](docs/odysseus/look.md) |
 | Sendspin over Tailscale: HA's address and trusted ids pass, art over the connection, goodbye `restart` | MA connects from a 100.x address and can't serve LAN image URLs | [tailscale](docs/odysseus/tailscale.md#music-assistant-sendspin-over-tailscale) |

@@ -4,7 +4,7 @@ Why the app keeps a tablet busy, what has been made cheaper, and what was left a
 changing it would change how the device behaves. Found by reading the code (2026-11); nothing
 here has been measured on a device yet (see [Measuring](#measuring)).
 
-## What changed (no change in behaviour)
+## Less work per frame (no change in behaviour)
 
 Each change produces the same audio, detections and screen as before, only with less work.
 
@@ -21,19 +21,89 @@ Each change produces the same audio, detections and screen as before, only with 
 One bug fix rides along: after a diagnostic recording finished playing, the microphone was
 turned back on even when the user had muted it (`satellite/Satellite.kt`). It now stays muted.
 
-## Left as it is, and why
+## The "stop" model runs only while something can be stopped
 
-These cost the most, but each would change behaviour, so they need a decision and a test on a
-real device first.
+microWakeWord used to run the stop model beside the wake word on every frame. A "stop" acts only
+while a response is spoken (the pipeline streams TTS; announcements too, they start at that stage)
+or an alarm sounds (`Satellite.handleStopWord`); nothing else reacts to it. Now the stop model runs
+only then (`odysseus/wakeword/StopWordGate.kt`), read from that state on every 10 ms frame.
+
+- One detector is kept: the wake word model and the shared frontend never stop or reset.
+- While paused, the last 1.38 s of features is kept. When stop is needed again, that history is
+  replayed through the model first (outputs discarded), from the same stride boundary it would
+  have been on. The model's state depends only on its last 89 frames (input `[1, 3, 40]`,
+  checked with the TFLite interpreter), and the replay also refills its 5-score window, so it
+  scores exactly as if it had never paused (`StopWordGateTest`). A "stop" said as the reply or
+  alarm starts is still heard.
+- A "stop" that finished just *before* a reply or alarm started could, in a race, stop it before;
+  it can't now. The diagnostics overlay no longer shows stop scores while nothing can be stopped.
+
+## Wyoming: no own ping; dead connections close in 5 s
+
+Home Assistant's wyoming satellite pings the device 2 s after each pong and drops the connection
+after 5 s without an event (`_PING_SEND_DELAY`, `_PING_TIMEOUT` in
+`homeassistant/components/wyoming/assist_satellite.py`, since 2024.2); the device answers with
+`pong`. The device's own ping every 3 s only fed its watchdog with HA's pongs, so it is gone.
+
+The 1 s watchdog loop is replaced by a time limit on each read (`wyoming/WyomingClientHandler.kt`,
+rule in `odysseus/wyoming/WyomingSilencePolicy`): 5 s after the last message, as before, but it
+now really closes the socket. The old loop only set a flag while the read stayed blocked, so a
+dead connection lasted until TCP gave up (about 15 minutes). After `pause-satellite` (muted in
+HA) there is no limit; the server's 5-minute pause timeout still applies.
+
+## Wi-Fi power save, and quieter device broadcasts
+
+Upstream kept Wi-Fi out of power save for the app's whole life. Now `odysseus/power/WifiPerformance`
+holds the lock only while a need is on (`WifiLockPolicy`):
+
+| Need | While |
+|---|---|
+| VOICE | from the wake word (or an announcement, follow-up or continued conversation) while arbitrating or a pipeline runs, + 5 s; at most 10 min |
+| ARBITRATION_MASTER | this device is the master and another device was heard in the last 95 s |
+| SENDSPIN | a Sendspin stream plays, + 5 s (clock sync) |
+| CAMERA | the RTSP stream has a viewer |
+
+Android 10+ holds a high-performance and a low-latency lock (low latency applies with the screen on
+and the app visible, high performance otherwise; both keep power save off); Android 8-9 only the
+first. The dashboard, the music page and the Bluetooth proxy work in power save.
+
+In power save the access point holds frames until the device wakes, and sends broadcasts only
+after a DTIM beacon (up to about 300 ms). So arbitration reports now go by unicast to the master,
+which stays awake, and decisions by unicast to each reporter, awake since its wake word (each with
+a broadcast copy as a fallback). Keep-alive traffic is lower (`odysseus/power/MasterKeepAlivePolicy`):
+
+| | Before | After |
+|---|---|---|
+| Master heartbeat | broadcast every 2 s | broadcast every 10 s |
+| Presence | broadcast by every device every 10 s | unicast to the master every 30 s |
+| Election loop | every 1 s | a timer that sleeps until its next step |
+| Master silently gone | replaced in about 7.5 s | replaced in about 28 s (`master_query` after 25 s) |
+| Master's app stops | replaced in about 7.5 s | at once (`master_resign`) |
+
+Between a master vanishing without a word and its replacement, a wake word is answered 1.5 s late
+(possibly by two devices), as before, and starts the election at once. The wire format changed:
+all devices must run the same build. Details: [wake-word-arbitration](../wake-word-arbitration.md).
+
+## A real screen-off for the screensaver
+
+With device admin (`force-lock`) and no lock screen, the screensaver now turns the panel fully off
+(`odysseus/screen/ScreenOff`, rules in `ScreenOffRules`) instead of black at 1% backlight. A touch
+can't wake an off panel, so it does so only when neither a touch (Home Assistant's "screen saver
+disable on touch", on by default) nor camera motion is set to end the screensaver, or when
+Menu → Odysseus → Kiosk → **Screensaver turns the screen fully off** is on (default off).
+Otherwise, and without device admin, it stays as before. The wake word, Home Assistant,
+announcements, Sendspin pairing and the power or privacy button still wake it. Home Assistant
+still sees "screen on + screensaver". Log: `Screensaver: panel off (...)` or
+`Screensaver: black at 1% backlight (reason)`. Device setup: the runbooks
+([echo-show-5](echo-show-5.md), [fire-hd-10-2021](fire-hd-10-2021.md), step 4: device admin and
+the lock screen off, or Fire OS shows its lock screen after a wake).
+
+## Left as it is, and why
 
 | What | Cost | Why it wasn't changed |
 |---|---|---|
-| The dashboard WebView keeps running under the clock and home pages (`odysseus/home/HomeHost.kt`) | scripts, animations and camera cards keep drawing all day behind an opaque page | pausing it hides the page from Home Assistant's frontend, which then drops its websocket after a while; View Assist navigation and HA's own updates would stop |
-| Wi-Fi lock in high-performance mode (`utils/Network.kt`) | the radio never uses power save | power save adds latency to waking up for Home Assistant and to streaming speech, most with the screen off |
-| A Wyoming ping to Home Assistant every 3 s (`wyoming/WyomingClientHandler.kt`) and the master's UDP heartbeat every 2 s (`broadcasts/VacaUdpBroadcast.kt`) | the radio rarely idles | connection checks and master election depend on these timings; all devices must change together |
-| The "stop" word model runs beside the wake word (microWakeWord) | twice the inference | "stop" ends alarms and responses; loading it only when needed resets the models' state at that moment, and a "stop" said right then could be missed |
+| The dashboard WebView keeps running under the clock and home pages (`odysseus/home/HomeHost.kt`) | scripts, animations and camera cards keep drawing all day behind an opaque page | pausing it hides the page from Home Assistant's frontend, which then drops its websocket after a while; View Assist navigation and HA's own updates would stop. A proper fix moves that navigation to the app's own HA connection: a design change |
 | Partial wake lock in screen-off mode (`device/ScreenUtils.kt`) | the CPU never sleeps | the wake word must keep listening with the screen off |
-| Screensaver and "screen off" modes keep the backlight at 1% (`device/ScreenUtils.kt`) | the panel stays lit all night | a real screen-off needs device-admin rights and changes how the screen wakes |
 | TFLite interpreters with default thread settings | possibly more than one thread per inference | untested on the devices; a slower inference could delay detection |
 
 ## Measuring
@@ -54,9 +124,21 @@ Compare a build before and after a change on the same device, with the same wake
 | File | What |
 |---|---|
 | `app/src/main/java/com/msp1974/vacompanion/odysseus/audio/SampleHistory.kt` | `SampleHistory` (the sample ring) and `plusKeepingLast` (plain Kotlin, `SampleHistoryTest`) |
+| `app/src/main/java/com/msp1974/vacompanion/odysseus/wakeword/StopWordGate.kt` | `StopWordRules`, `FeatureHistory`, `StopWordGate` (plain Kotlin, `StopWordGateTest`) |
+| `app/src/main/java/com/msp1974/vacompanion/odysseus/wakeword/StopWordModels.kt` | the detector's gated stop models |
+| `app/src/main/java/com/msp1974/vacompanion/odysseus/wyoming/WyomingSilencePolicy.kt` | when a silent Wyoming connection is closed (plain Kotlin, `WyomingSilencePolicyTest`) |
+| `app/src/main/java/com/msp1974/vacompanion/odysseus/power/WifiPerformance.kt` | the one owner of the Wi-Fi lock |
+| `app/src/main/java/com/msp1974/vacompanion/odysseus/power/WifiLockPolicy.kt` | when the lock is held, which mode (plain Kotlin, `WifiLockPolicyTest`) |
+| `app/src/main/java/com/msp1974/vacompanion/odysseus/power/MasterKeepAlivePolicy.kt` | heartbeat, query and failover timing (plain Kotlin, `MasterKeepAlivePolicyTest`) |
+| `app/src/main/java/com/msp1974/vacompanion/odysseus/screen/ScreenOffRules.kt` | when the screensaver turns the panel off (`ScreenOffPolicy`, `ScreenOffState`; `ScreenOffRulesTest`) |
+| `app/src/main/java/com/msp1974/vacompanion/odysseus/screen/ScreenOff.kt` | locks the screen for the screensaver |
 
 Hooks, each marked `Odysseus fork`: `wakeword/openwakeword/audio/AudioProcessor.kt`,
 `audio/AudioDSP.kt`, `wakeword/microwakeword/MicroWakeWordEngine.kt`,
-`sendspin/SendspinPlayer.kt`, `sendspin/SendspinAudioOutput.kt`, `satellite/Satellite.kt`.
-Fork files changed: `odysseus/ListeningIndicator.kt`, `odysseus/record/RecordingUi.kt`.
-Tests: `app/src/test/.../odysseus/audio/SampleHistoryTest.kt`, `app/src/test/.../audio/AudioDSPTest.kt`.
+`wakeword/microwakeword/microwakeword/MicroWakeWord.kt`, `MicroWakeWordDetector.kt`,
+`wakeword/WakeWordEngine.kt`, `satellite/SatelliteWakeWorkHandler.kt`, `satellite/Satellite.kt`,
+`sendspin/SendspinPlayer.kt`, `sendspin/SendspinAudioOutput.kt`, `wyoming/WyomingClientHandler.kt`,
+`ui/VAViewModel.kt`, `service/BackgroundTask.kt`, `broadcasts/PeerPresence.kt`,
+`broadcasts/VacaUdpBroadcast.kt` (a large edit: a merge cost on upstream rebases), `MainActivity.kt`.
+Fork files changed: `odysseus/ListeningIndicator.kt`, `odysseus/record/RecordingUi.kt`,
+`odysseus/OdysseusSatellite.kt`, `odysseus/kiosk/KioskSettings.kt`, `odysseus/OdysseusSettingsLayout.kt`.

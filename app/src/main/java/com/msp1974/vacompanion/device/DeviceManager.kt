@@ -51,7 +51,7 @@ class DeviceManager @Inject constructor(
     private val job = SupervisorJob()
     val deviceManagerScope = CoroutineScope(Dispatchers.Default + job)
 
-    val config: APPConfig = APPConfig(context)
+    val config: APPConfig = APPConfig(context).also { com.msp1974.vacompanion.odysseus.settings.DeviceSettings.restore(context, it) } // Odysseus fork: the device keeps its settings (odysseus/settings/DeviceSettings.kt)
     val deviceInfo: DeviceInfo = DeviceInfo(context, config)
     val sensorsManager = SensorManager(context, this)
     val authenticationManager: AuthenticationManager = AuthenticationManager(this.config)
@@ -74,7 +74,7 @@ class DeviceManager @Inject constructor(
     val sensors: StateFlow<Map<String, Any>> = _sensors.asStateFlow()
 
     // Status class to hold all connection-related states - includes full sensor state
-    private val _status = MutableStateFlow(Status(darkMode = config.darkMode))
+    private val _status = MutableStateFlow(Status(darkMode = config.darkMode, isMuted = config.isMuted)) // Odysseus fork: mute may be restored before HA connects (odysseus/settings/DeviceSettings.kt)
     val status: StateFlow<Status> = _status.asStateFlow()
 
     init {

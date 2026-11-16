@@ -926,7 +926,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
     }
 
     private fun handleSettings(settings: String) {
-        config.processSettings(settings)
+        config.processSettings(odysseus.haSettings(settings)) // Odysseus fork: the device's own settings win over stale ones (odysseus/settings/DeviceSettings.kt)
         config.initSettings = true
     }
 

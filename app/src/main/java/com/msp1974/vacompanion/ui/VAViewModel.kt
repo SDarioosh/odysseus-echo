@@ -491,6 +491,7 @@ class VAViewModel @Inject constructor(
      */
     fun sendSettingToHA(key: String, value: Any) {
         config.pendingHaSettings[key] = value
+        com.msp1974.vacompanion.odysseus.settings.DeviceSettings.fromDevice(key, value) // Odysseus fork: the device keeps it (odysseus/settings/DeviceSettings.kt)
         config.eventBroadcaster.notifyEvent(Event("sendSettingToHA", key, value))
     }
 

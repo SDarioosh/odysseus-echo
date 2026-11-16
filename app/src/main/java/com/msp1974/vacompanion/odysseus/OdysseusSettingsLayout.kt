@@ -127,6 +127,7 @@ fun OdysseusSettingsLayout(onBack: () -> Unit) {
             com.msp1974.vacompanion.odysseus.home.today.TodaySettingsSection()
             com.msp1974.vacompanion.odysseus.home.music.MusicSettingsSection() // Menu → Odysseus → Music (home/music/)
             KioskSettingsSection()
+            com.msp1974.vacompanion.odysseus.alarms.AlarmsSettingsSection() // this device's alarms and timers (odysseus/alarms/)
             com.msp1974.vacompanion.odysseus.lock.LockSettingsSection() // locked outside work hours (odysseus/lock/)
             com.msp1974.vacompanion.odysseus.update.UpdateSettingsSection()
             com.msp1974.vacompanion.odysseus.record.RecordingSettingsSection() // Menu → Odysseus → Recording (odysseus/record/)

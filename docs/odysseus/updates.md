@@ -43,8 +43,9 @@ The contract between the two is C2 in
    the plan). Android stops the app to replace it; as the home app it comes straight back. On a
    tablet where it isn't the home app, open it again.
 
-An update keeps everything: settings, the Odysseus link and its token, the Home Assistant
-sign-in, the Sendspin pairing. That holds only while the new APK is signed with the same key
+An update keeps everything: settings (including those upstream kept only in memory until Home
+Assistant sent them again, see [device-settings](device-settings.md)), the Odysseus link and its
+token, the Home Assistant sign-in, the Sendspin pairing. That holds only while the new APK is signed with the same key
 as the installed one; see [build.md](build.md#release-builds).
 
 ## Install unknown apps

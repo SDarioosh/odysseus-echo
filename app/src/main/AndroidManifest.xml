@@ -26,6 +26,9 @@
 
     <!--Allow wake lock to keep screen on-->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Odysseus fork: alarms and timers ring on time (odysseus/alarms/AlarmClock.kt) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
 
     <!--Allow wifi toggling on Android 9 and below-->
@@ -115,6 +118,10 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
+        <!-- Odysseus fork: Android's alarm clock for the next alarm or timer (odysseus/alarms/AlarmClockReceiver.kt) -->
+        <receiver
+            android:name=".odysseus.alarms.AlarmClockReceiver"
+            android:exported="false" />
         <!-- Odysseus fork: answers to an update install session (odysseus/update/UpdateInstaller.kt) -->
         <receiver
             android:name=".odysseus.update.UpdateInstallReceiver"

@@ -432,6 +432,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 BroadcastSender.SATELLITE_STARTED -> {
                     setScreenSettings()
                     webView.setZoomLevel(config.zoomLevel)
+                    webView.setTextSize(config.textSize) // Odysseus fork: text size may be restored before HA connects (odysseus/settings/DeviceSettings.kt)
                     config.screenOn = screen.isScreenOn()
                     val url = deviceManager.authenticationManager.getHAUrl()
                     Timber.d("Satellite started -> loading URL: $url")
@@ -603,6 +604,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             firebaseManager?.logEvent(FirebaseManager.MAIN_ACTIVITY_BACKGROUND_TASK_ALREADY_RUNNING, mapOf())
             if (viewModel.vacaState.value.satelliteRunning) {
                 webView.setZoomLevel(config.zoomLevel)
+                webView.setTextSize(config.textSize) // Odysseus fork: text size may be restored before HA connects (odysseus/settings/DeviceSettings.kt)
                 val url = deviceManager.authenticationManager.getHAUrl()
                 Timber.d("Run background tasks -> loading URL: $url")
                 webView.loadUrl(url)

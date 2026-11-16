@@ -24,4 +24,11 @@ object KioskSettings {
 
     /** Reload the dashboard by itself when it fails to load. */
     var autoReload by store.bool("kiosk_auto_reload", true, managed = "kiosk.auto_reload")
+
+    /**
+     * The screensaver turns the panel fully off (device admin needed) even when a touch is set to
+     * end it; a touch can't wake an off panel. Off: fully off only when neither touch nor camera
+     * motion ends it (odysseus/screen/ScreenOff.kt).
+     */
+    var screenFullOff by store.bool("kiosk_screen_full_off", false)
 }

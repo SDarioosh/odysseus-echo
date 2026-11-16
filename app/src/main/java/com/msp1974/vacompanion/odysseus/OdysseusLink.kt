@@ -46,9 +46,9 @@ data class VoiceAction(
     val id: String = "",
     /** ISO-8601 time the action was done. */
     val at: String = "",
-    /** "created" or "completed". */
+    /** "created", "completed" or "cancelled" (an alarm). */
     val action: String = "created",
-    /** "todo", "reminder", "list_item", "note", "event" or "action_item". */
+    /** "todo", "reminder", "list_item", "note", "event", "action_item" or "alarm" (odysseus/alarms/). */
     val kind: String = "todo",
     val title: String = "",
     val detail: String? = null,
@@ -188,7 +188,7 @@ object OdysseusLink : HubHttp {
     internal const val ERROR_BODY_MAX = 2000
 
     /**
-     * The one hub request: [url] with the Bearer [token], a GET without [body]. Blocking, on the
+     * The one hub request: [url] with the Bearer [token], a GET without [body] (or [method], e.g. DELETE). Blocking, on the
      * caller's thread; throws on network errors. The reply's body is at most [maxBodyChars] of a
      * 2xx answer, else "" (with [errorBody] the first ERROR_BODY_MAX chars of the error answer).
      * Unit-tested against a local server (OdysseusLinkHttpTest).
@@ -196,11 +196,12 @@ object OdysseusLink : HubHttp {
     internal fun send(
         url: String, token: String, contentType: String? = null, body: ByteArray? = null,
         readTimeoutMs: Int = 6000, connectTimeoutMs: Int = 4000, maxBodyChars: Int = Int.MAX_VALUE,
-        errorBody: Boolean = false,
+        errorBody: Boolean = false, method: String? = null,
     ): HubReply {
         val conn = open(url, token, connectTimeoutMs, readTimeoutMs)
         try {
             conn.setRequestProperty("Accept", "application/json")
+            if (method != null) conn.requestMethod = method
             if (body != null) {
                 conn.requestMethod = "POST"
                 conn.doOutput = true
@@ -226,15 +227,15 @@ object OdysseusLink : HubHttp {
     internal fun sendToHub(
         path: String, contentType: String? = null, body: ByteArray? = null,
         readTimeoutMs: Int = 6000, connectTimeoutMs: Int = 4000, maxBodyChars: Int = Int.MAX_VALUE,
-        errorBody: Boolean = false,
+        errorBody: Boolean = false, method: String? = null,
     ): HubReply {
         val (base, token) = link()
-        return send("$base$path", token, contentType, body, readTimeoutMs, connectTimeoutMs, maxBodyChars, errorBody)
+        return send("$base$path", token, contentType, body, readTimeoutMs, connectTimeoutMs, maxBodyChars, errorBody, method)
     }
 
     /** The [HubHttp] of the device: [call] under the base URL, on the IO dispatcher. */
     override suspend fun request(call: HubCall): HubReply = withContext(Dispatchers.IO) {
-        sendToHub(call.path, call.contentType, call.body, call.readTimeoutMs, errorBody = call.errorBody)
+        sendToHub(call.path, call.contentType, call.body, call.readTimeoutMs, errorBody = call.errorBody, method = call.method)
     }
 
     /**

@@ -123,4 +123,14 @@ class AnnouncementFeedTest {
         val feed = AnnouncementFeed(MemoryStore())
         assertEquals(false, feed.acceptNews(listOf(a("an_1")), now).settingsChanged)
     }
+
+    @Test
+    fun anAlarmsItemIsNoCardButAsksForTheAlarms() {
+        val feed = AnnouncementFeed(MemoryStore())
+        val news = feed.acceptNews(listOf(a("an_1"), a("al_1", at = now - 3 * 3_600_000L, kind = "alarms")), now)
+        assertEquals(listOf("an_1"), news.cards.map { it.id })
+        assertTrue(news.alarmsChanged)
+        assertEquals(false, news.settingsChanged)
+        assertEquals(false, feed.acceptNews(listOf(a("al_1", kind = "alarms")), now + 30_000).alarmsChanged)
+    }
 }

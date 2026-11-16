@@ -15,8 +15,12 @@ package com.msp1974.vacompanion.odysseus
 // - Stop word model only while something can be stopped (wakeword/StopWordGate.kt): stopWordUseful().
 // - Wi-Fi (power/WifiPerformance.kt): full performance from the wake word, or a pipeline starting,
 //   while the satellite arbitrates or has a pipeline (holdVoice()).
+// - Timers (alarms/AlarmClock.kt): Home Assistant's timer-* events, in onServerPacket().
+// - Settings the device keeps (settings/DeviceSettings.kt): haSettings(), in handleSettings.
 
 import com.msp1974.vacompanion.audio.DetectionBuffer
+import com.msp1974.vacompanion.odysseus.alarms.AlarmClock
+import com.msp1974.vacompanion.odysseus.alarms.TimerRules
 import com.msp1974.vacompanion.broadcasts.VacaUdpBroadcast
 import com.msp1974.vacompanion.odysseus.followup.FollowUp
 import com.msp1974.vacompanion.odysseus.lock.LockMode
@@ -63,16 +67,25 @@ class OdysseusSatellite(
     /** Satellite.start. */
     fun onStart() = lock.watch()
 
+    /** Satellite.handleSettings: Home Assistant's settings, with the device's own kept (settings/DeviceSettings.kt). */
+    fun haSettings(settings: String): String =
+        com.msp1974.vacompanion.odysseus.settings.DeviceSettings.fromHa(settings, satellite.config)
+
     /** Satellite.clientId was set: another connection took over, or it disconnected. */
     fun onClientId() = HaRunGate.reset()
 
     /**
      * Every packet from Home Assistant, before Satellite.processMessage routes it. True when it
-     * was handled here and must go no further. In this order: the run gate drops what HA still
+     * was handled here and must go no further. Home Assistant's timer events go to the alarm clock
+     * (kept and rung even while locked: the ring itself checks Lock mode). Then, in this order: the run gate drops what HA still
      * sends for an interrupted run; Lock mode refuses what HA starts on its own while locked; for
      * custom actions, Lock mode's own navigate URLs and the actions ignored while locked.
      */
     fun onServerPacket(packet: WyomingPacket): Boolean {
+        if (packet.type in TimerRules.EVENTS) {
+            AlarmClock.onTimerEvent(packet.type, packet.data)
+            return true
+        }
         if (packet.type == WyomingEvent.CUSTOM_EVENT) {
             if (packet.getProp("event_type") != WyomingCustomEventType.ACTION) return false
             return lock.action(packet.getProp("action"), packet.getProp("payload"))

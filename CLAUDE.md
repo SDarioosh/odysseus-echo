@@ -122,10 +122,12 @@ What the fork changes and why: [ODYSSEUS.md](ODYSSEUS.md). Each feature's doc in
 | Recorder and privacy button | `odysseus/record/RecorderController`, `RecordButton` | [recording](docs/odysseus/recording.md) |
 | Announcements and reminder cards | `odysseus/announce/Announcements` | [announcements](docs/odysseus/announcements.md) |
 | Updates from Odysseus | `odysseus/update/UpdateManager` | [updates](docs/odysseus/updates.md) |
+| The device keeps its configuration over updates | `odysseus/settings/DeviceSettings`, `DeviceSettingsRules` | [device-settings](docs/odysseus/device-settings.md) |
 | Settings managed by Odysseus | `odysseus/managed/ManagedSettings`, `ManagedBindings` | [managed-settings](docs/odysseus/managed-settings.md) |
 | Kiosk: back from other apps, reload a failed dashboard | `odysseus/kiosk/ReturnToDashboard`, `DashboardAutoReload` | [kiosk](docs/odysseus/kiosk.md) |
 | Lock mode | `odysseus/lock/LockMode`, `SatelliteLock` | [lock-mode](docs/odysseus/lock-mode.md) |
 | Power: stop model gating, Wi-Fi lock owner, keep-alive timing, screensaver screen-off | `odysseus/wakeword/StopWordGate`, `odysseus/power/WifiPerformance`, `MasterKeepAlivePolicy`, `odysseus/screen/ScreenOff` | [power](docs/odysseus/power.md) |
+| Alarms and timers per device (HA's timers, alarms from Odysseus) | `odysseus/alarms/AlarmClock`, `Alarms` | [alarms-timers](docs/odysseus/alarms-timers.md) |
 | Phone setup (QR code) | `odysseus/EchoSetup` | [setup](docs/odysseus/setup.md) |
 | Sendspin pairing, Tailscale | `sendspin/SendspinSecurity`, `SendspinAllowedAddresses` | [sendspin/README.md](sendspin/README.md), [tailscale](docs/odysseus/tailscale.md) |
 | Look (theme, icons) | `odysseus/OdysseusTheme` | [look](docs/odysseus/look.md) |

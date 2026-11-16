@@ -464,6 +464,8 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
                     handleStopWord()
                 }
 
+                override fun stopWordUseful() = odysseus.stopWordUseful() // Odysseus fork: what handleStopWord can stop (odysseus/wakeword/StopWordGate.kt)
+
                 override fun onDiagnostics(level: Float, lastDetectionLevel: Float) {
                     sendDiagnostics(level, lastDetectionLevel)
                 }
@@ -783,6 +785,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
     }
 
     private suspend fun handleStopWord() {
+        // Odysseus fork: the stop model runs only while this has something to stop; keep StopWordRules (odysseus/wakeword/StopWordGate.kt) in step.
         if (audioPipeline != null && audioPipeline?.pipelineStage == PipelineStage.STREAMING_TTS) {
             audioPipeline?.stop()
             audioPipeline = null
@@ -1161,6 +1164,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
     // Odysseus fork: the fork's hooks above call into this (odysseus/OdysseusSatellite.kt).
     private val odysseus = com.msp1974.vacompanion.odysseus.OdysseusSatellite(this, this::arbitratingWakeWord,
         pipelineActive = { audioPipeline.let { it != null && it.pipelineStage != PipelineStage.ENDED } },
+        ttsStreaming = { audioPipeline?.pipelineStage == PipelineStage.STREAMING_TTS },
         keepAudio = { DetectionBuffer(microphone.audio, scope).also { detectionBuffer = it } }, dropAudio = ::cancelDetectionBuffer)
 
     companion object {

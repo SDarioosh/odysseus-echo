@@ -29,7 +29,8 @@ open class MicroWakeWordEngine (
     val availableWakeWords: List<WakeWordWithId>,
     val availableStopWords: List<WakeWordWithId>,
     private val audio: Flow<ShortArray>,
-    muted: Boolean = false
+    muted: Boolean = false,
+    private val stopWordsWanted: () -> Boolean = { true }, // Odysseus fork: a "stop" could stop something now (odysseus/wakeword/StopWordModels.kt)
 ): WakeWordEngineProvider() {
     private val config: APPConfig = deviceManager.config
     private val _availableWakeWords = availableWakeWords.associateBy { it.id }
@@ -137,10 +138,13 @@ open class MicroWakeWordEngine (
     private suspend fun createDetector(
         wakeWords: List<String>,
         stopWords: List<String>
-    ) = MicroWakeWordDetector(
+    ) = loadWakeWords(stopWords, _availableStopWords).let { stopModels -> // Odysseus fork: stop models gated (odysseus/wakeword/StopWordModels.kt)
+        MicroWakeWordDetector(
             loadWakeWords(wakeWords, _availableWakeWords, config.wakeWordThreshold) +
-            loadWakeWords(stopWords, _availableStopWords)
+            stopModels,
+            com.msp1974.vacompanion.odysseus.wakeword.StopWordModels(stopModels, stopWordsWanted) // Odysseus fork
         )
+    }
 
 
     private suspend fun loadWakeWords(

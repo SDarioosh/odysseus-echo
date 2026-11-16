@@ -125,6 +125,7 @@ abstract class SatelliteWakeWorkHandler(
                 )
                 engine?.setActiveWakeWords(listOf(config.wakeWord))
                 engine?.setActiveStopWords(listOf("stop"))
+                engine?.stopWordsWanted = ::stopWordUseful // Odysseus fork: stop model only while it can stop something (odysseus/wakeword/StopWordModels.kt)
                 runWakeWordDetection()
             }
             state = WakeWordHandlerState.RUNNING
@@ -272,6 +273,9 @@ abstract class SatelliteWakeWorkHandler(
             }
         }
     }
+
+    // Odysseus fork: whether a "stop" could stop something now; true (always listen) unless overridden (odysseus/wakeword/StopWordGate.kt).
+    open fun stopWordUseful(): Boolean = true
 
     fun terminateWakeWordDetection() {
 

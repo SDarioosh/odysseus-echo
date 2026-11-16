@@ -200,7 +200,7 @@ class VAViewModel @Inject constructor(
         _vacaState.value = State()
 
         //TODO: put under device manager
-        network.setWifiLock()
+        // Odysseus fork: no Wi-Fi lock for the app's whole life; odysseus/power/WifiPerformance.kt holds one only while needed.
 
         config.eventBroadcaster.addListener(this)
         initValues()

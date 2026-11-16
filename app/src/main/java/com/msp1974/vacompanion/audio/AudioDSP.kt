@@ -8,7 +8,11 @@ import kotlin.math.log10
 class AudioDSP {
 
     fun audioLevel(audioBuffer: FloatArray): Float {
-        return audioBuffer.map { i -> abs(i) }.average().toFloat()
+        // Odysseus fork: same sum (in Double) and result as map { abs }.average(), without boxing (docs/odysseus/power.md)
+        if (audioBuffer.isEmpty()) return Double.NaN.toFloat()
+        var sum = 0.0
+        for (v in audioBuffer) sum += abs(v)
+        return (sum / audioBuffer.size).toFloat()
     }
 
     /** Converts a linear 0..1 [audioLevel] reading to dBFS, floored at [AUDIO_LEVEL_FLOOR_DBFS]. */
@@ -36,7 +40,7 @@ class AudioDSP {
     }
 
     fun normaliseAudioBuffer(audioBuffer: ShortArray): FloatArray {
-        val floatBuffer = audioBuffer.map { (it.toFloat() / 32768.0f) }.toFloatArray()
+        val floatBuffer = FloatArray(audioBuffer.size) { audioBuffer[it].toFloat() / 32768.0f } // Odysseus fork: no boxing (docs/odysseus/power.md)
         return floatBuffer
     }
 
@@ -84,7 +88,7 @@ class AudioDSP {
     }
 
     fun shortArrayTo16BitPCMFloat(audioBuffer: ShortArray): FloatArray {
-        val floatBuffer = audioBuffer.map { it.toFloat() }.toFloatArray()
+        val floatBuffer = FloatArray(audioBuffer.size) { audioBuffer[it].toFloat() } // Odysseus fork: no boxing, runs on every frame (docs/odysseus/power.md)
         return floatBuffer
     }
 }

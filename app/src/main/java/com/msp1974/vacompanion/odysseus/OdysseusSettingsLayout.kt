@@ -256,4 +256,10 @@ private fun KioskSettingsSection() {
         "When another app has been in front this long, this app comes back. Not while the screen is off.",
         fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    ManagedSwitchRow(
+        KioskSettings.screenFullOff, "Screensaver turns the screen fully off",
+        "Instead of black at the lowest backlight. Needs device admin. A touch can't wake an off screen: " +
+            "the wake word, Home Assistant, announcements or the power button do. " +
+            "Without this, it goes fully off only when neither a touch nor camera motion is set to end the screensaver.",
+    ) { KioskSettings.screenFullOff = it }
 }

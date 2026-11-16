@@ -56,6 +56,7 @@ section.
 | Done buttons on Today rows and reminder cards, with Undo | tick things off without speaking | [home-screen](docs/odysseus/home-screen.md#done) |
 | Music page: rooms (every media player; Music Assistant's with library, queue, move and group), player, library and search through Home Assistant; two panes on tablets | control the music in every room from the screen | [music](docs/odysseus/music.md) |
 | One Home Assistant client (`odysseus/ha/`: REST and websocket) | live states for the Music page; one tested client instead of one per feature | [home-assistant-client](docs/odysseus/home-assistant-client.md) |
+| Power: less work per audio frame; the "stop" model only while something can be stopped; no own Wyoming ping; Wi-Fi out of power save only while needed, with unicast arbitration and slower keep-alive; a real screen-off for the screensaver with device admin | tablets drew a lot of power; same behaviour, less CPU, radio and backlight | [power](docs/odysseus/power.md) |
 | Kiosk: back from other apps, reload a failed dashboard | unattended screens should always end up on the dashboard | [kiosk](docs/odysseus/kiosk.md) |
 | Lock mode: locked outside work hours, PIN to unlock | an Echo in an office shouldn't listen or play after hours | [lock-mode](docs/odysseus/lock-mode.md) |
 | Alarms and timers per device: Home Assistant's voice timers shown and rung on the device, alarms set by voice through Odysseus | upstream dropped HA's timer events, so a timer was set but never rang; HA has no alarms | [alarms-timers](docs/odysseus/alarms-timers.md) |

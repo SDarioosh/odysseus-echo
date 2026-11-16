@@ -141,13 +141,6 @@ fun ListeningIndicator(modifier: Modifier = Modifier) {
         VoiceActivity.Phase.IDLE -> Triple("", ListeningColor, 1000)
     }
 
-    val pulse by rememberInfiniteTransition(label = "voice-pulse").animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(periodMs, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "voice-pulse-alpha",
-    )
-
     Box(modifier = modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = micMuted,
@@ -172,6 +165,15 @@ fun ListeningIndicator(modifier: Modifier = Modifier) {
             exit = fadeOut(tween(300)),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
+            // Inside the visible content, so the pulse runs only while the bar shows (and fades
+            // out): an idle indicator no longer asks for a frame on every screen refresh.
+            val pulse by rememberInfiniteTransition(label = "voice-pulse").animateFloat(
+                initialValue = 0.35f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(periodMs, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                label = "voice-pulse-alpha",
+            )
+
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = label,

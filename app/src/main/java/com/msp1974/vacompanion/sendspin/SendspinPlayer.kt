@@ -217,6 +217,11 @@ class SendspinPlayer(
         val thread = Thread {
             Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
             while (!destroyed.get()) {
+                // Odysseus fork: sleep while no stream plays; start() wakes this at once (docs/odysseus/power.md).
+                if (!output.isStarted) {
+                    try { output.awaitStarted(IDLE_WAIT_MS) } catch (_: InterruptedException) { break }
+                    continue
+                }
                 val h = handle
                 if (h != 0L) {
                     output.pollPlayed()?.let { played ->
@@ -615,6 +620,7 @@ class SendspinPlayer(
         private const val SAMPLE_RATE = 48_000
         private const val AUDIO_BUFFER_BYTES = 1_000_000
         private const val FEEDBACK_INTERVAL_MS = 10L
+        private const val IDLE_WAIT_MS = 1_000L // Odysseus fork: fallback only; start() notifies
 
         private const val UNDUCK_STEP = 0.1f
         private const val UNDUCK_INTERVAL_MS = 100L

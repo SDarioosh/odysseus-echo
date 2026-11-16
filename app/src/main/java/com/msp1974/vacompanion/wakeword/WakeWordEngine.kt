@@ -21,6 +21,8 @@ open class WakeWordEngine(
 
     private var activeWakeWords: List<String> = listOf()
     private var activeStopWords: List<String> = listOf()
+    // Odysseus fork: true while a "stop" could stop something; microWakeWord runs its stop model only then (odysseus/wakeword/StopWordModels.kt).
+    var stopWordsWanted: () -> Boolean = { true }
     private var engineInstance: WakeWordEngineProvider? = null
 
     private val config: APPConfig = deviceManager.config
@@ -62,7 +64,8 @@ open class WakeWordEngine(
                     availableWakeWords=availableWakeWords,
                     availableStopWords=availableStopWords,
                     audio = audio,
-                    muted = requestedMuted)
+                    muted = requestedMuted,
+                    stopWordsWanted = { stopWordsWanted() }) // Odysseus fork
             }
             WakeWordEngineModel.OPENWAKEWORD -> {
                 return OpenWakeWordEngine(

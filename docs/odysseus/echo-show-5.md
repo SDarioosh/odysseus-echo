@@ -95,7 +95,7 @@ scripted in `scripts/odysseus/setup_device.sh`. `P=com.msp1974.vacompanion.odyss
 | 15 | `adb shell cmd notification allow_dnd $P` | VACA's DND control | `cmd notification disallow_dnd $P` |
 | 16 | `adb shell dumpsys deviceidle whitelist +$P`; `appops set $P RUN_IN_BACKGROUND allow`; `appops set $P RUN_ANY_IN_BACKGROUND allow` | exempt from battery optimisation and Doze so the wake word keeps running | `dumpsys deviceidle whitelist -$P` |
 | 17 | `adb shell cmd package set-home-activity $P/com.msp1974.vacompanion.MainActivity` | the satellite is the launcher, so it **starts at boot** and is the kiosk screen (VACA has no boot receiver; starting as home is how it autostarts) | `cmd package set-home-activity com.android.launcher3/.uioverrides.QuickstepLauncher` |
-| 18 | `adb shell dpm set-active-admin $P/com.msp1974.vacompanion.VACADeviceAdminReceiver` | device admin, so VACA can turn the screen off (its onboarding asks for it; don't tap through that screen blind, it has an "Uninstall app" button) | `dpm remove-active-admin …` |
+| 18 | `adb shell dpm set-active-admin $P/com.msp1974.vacompanion.VACADeviceAdminReceiver` | device admin, so VACA can turn the screen off, for "screen off" and the panel-off screensaver ([power.md](power.md)) (its onboarding asks for it; don't tap through that screen blind, it has an "Uninstall app" button) | `dpm remove-active-admin …` |
 | 19 | Onboarding on the device: keep the default UUID, **Continue**; deny camera | — | — |
 | 20 | In HA: Settings → Devices → Add integration → View Assist Companion App, host = device IP (or `127.0.0.1` with the USB tunnel, #23), port `10800`; then on the device's HA entities: Assistant = the Odysseus pipeline, Wake word engine = `microwakeword`, Wake word, Wake word sound = None | pair the satellite | delete the config entry |
 | 21 | Clock (only when there's no network for NTP): `adb root`; ``adb shell "date -u $(date -u +%m%d%H%M%Y.%S)"``; `adb unroot` | the clock had drifted 1.7 days with no network; HA auth and TLS need a correct clock | automatic time takes over on network |
@@ -208,6 +208,26 @@ itself; check below.
 9. Setting → Mute: a press shows "Microphone off" (and no recording starts); press again: gone.
 10. Another app in front (e.g. Settings): a press starts a recording (switch path; the pill shows
     once the app is back in front); a hold is only a press.
+
+## Screensaver with the panel off (untested)
+
+With device admin (step 18) the screensaver can turn the panel off instead of black at 1%
+backlight ([power.md](power.md)): when Home Assistant's "screen saver disable on touch" is off
+(and camera motion detection is off, as with the camera denied), or
+Menu → Odysseus → Kiosk → "Screensaver turns the screen fully off" is on. A touch can't wake an
+off panel; the Echo has no power button.
+
+1. Turn the screen saver on in HA. `adb logcat | grep "Screensaver:"`
+   shows `Screensaver: panel off (device admin)`; `adb shell dumpsys power | grep mWakefulness`
+   says `Asleep`; HA's screen-on switch stays on.
+2. Wait 10 min, then say "Hey Athena" (HA "screen on wake word" on): the dashboard shows with
+   no lock screen, the answer plays, and the screen saver switch in HA is off.
+3. Panel off again: an announcement, HA's screen on, and a privacy-button press (Record mode)
+   each turn it on.
+4. Panel off: Sendspin music keeps playing for 10 min; Wyoming stays connected (HA shows the
+   satellite available).
+5. With the setting off and "disable on touch" on: logcat says `black at 1% backlight (a touch
+   ends the screensaver…)` and a touch ends it, as before.
 
 ## Checking a device
 

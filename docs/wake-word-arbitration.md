@@ -70,8 +70,8 @@ Wi-Fi power save gets a unicast frame when it next wakes but may sleep through a
 |---|---|---|---|
 | `device_hello` | a device whose listener has just come up | everyone | "I'm here"; the master answers with a heartbeat and every device answers with `presence`, both to it alone |
 | `master_claim` | a device taking over as master | everyone | election; `wake_word`. Every device answers with `presence` to the new master; a master with a lower id answers with a heartbeat to the claimer |
-| `master_heartbeat` | the master | everyone, every 10 s; the asker alone in reply to a hello, query or claim | keep-alive; `wake_word` (the master's presence) |
-| `master_query` | a device that has heard nothing from the master for 25 s | everyone | "is there a master?"; only the master answers, with a heartbeat to it alone |
+| `master_heartbeat` | the master | everyone, every 5 s; the asker alone in reply to a hello, query or claim | keep-alive; `wake_word` (the master's presence) |
+| `master_query` | a device that has heard nothing from the master for 12.5 s | everyone | "is there a master?"; only the master answers, with a heartbeat to it alone |
 | `master_resign` | the master, when the app stops | everyone | the others elect at once |
 | `presence` | every device that isn't master: every 30 s and when its wake word changes; in reply to a hello or claim | the master (everyone if none is known); the asker | `wake_word`: the wake word it listens for |
 | `wake_detection` | a device that heard the wake word and needs a decision | the master, and a broadcast copy | `id`, `score`, `level` (calibrated dB, optional), `wake_word`, `responding` (true if the device was responding when it heard it). The master counts each `id` once |
@@ -92,8 +92,8 @@ There is **one master for the whole network**; it makes a separate decision per 
    with a heartbeat to it alone.
 2. If it hears no master it waits a random 0–0.5 s, checks again, and if there is still none it sends
    `master_claim` and becomes master.
-3. The master heartbeats every 10 s. Anything heard from the master counts as a heartbeat. A device
-   that has heard nothing from it for 25 s (two heartbeats missed) **asks** (`master_query`); a live
+3. The master heartbeats every 5 s. Anything heard from the master counts as a heartbeat. A device
+   that has heard nothing from it for 12.5 s (two heartbeats missed) **asks** (`master_query`); a live
    master answers it directly. Only if no answer comes within 2.5 s does it go to step 2. Asking
    first matters because devices other than the master may be in Wi-Fi power save and can miss a
    broadcast now and then; a unicast answer isn't lost.
@@ -236,20 +236,20 @@ otherwise. Both turn power save off.
 
 ## Keep-alive and failover
 
-Only the master's heartbeat is broadcast regularly (every 10 s, was 2 s); presence goes to the master
+Only the master's heartbeat is broadcast regularly (every 5 s, was 2 s); presence goes to the master
 by unicast every 30 s (was a broadcast from every device every 10 s), and the 1 s election loop became a
-timer that sleeps until the next step is due. With four devices that is 0.1 broadcast a second plus
+timer that sleeps until the next step is due. With four devices that is 0.2 broadcast a second plus
 0.1 unicast, against 0.9 broadcasts before; the devices other than the master no longer receive each
 other's presence at all.
 
 | | Before | Now |
 |---|---|---|
-| Master gone without a word (unplugged, Wi-Fi lost) noticed and replaced | ≤ 7.5 s (6 s + 1 s loop + 0.5 s jitter) | ≤ 28 s (25 s + 2.5 s query + 0.5 s jitter) |
+| Master gone without a word (unplugged, Wi-Fi lost) noticed and replaced | ≤ 7.5 s (6 s + 1 s loop + 0.5 s jitter) | ≤ 15.5 s (12.5 s + 2.5 s query + 0.5 s jitter) |
 | Master's app stopping | same as above | at once (`master_resign`) + 0.5 s jitter |
 | A wake word while the master is dead and not yet replaced | report, no decision after 1.5 s, answer anyway, new election | the same; the election starts at once |
-| A device missing a heartbeat or two (power save) | n/a (no power save) | tolerated; after 25 s it asks, and the master answers by unicast, so no needless election |
+| A device missing a heartbeat or two (power save) | n/a (no power save) | tolerated; after 12.5 s it asks, and the master answers by unicast, so no needless election |
 
-The longer failover only matters for a wake word in the ~28 s after a master vanishes: that one is
+The longer failover only matters for a wake word in the ~15.5 s after a master vanishes: that one is
 answered 1.5 s late, possibly by two devices, exactly as within the 7.5 s before, and it starts the
 election at once.
 
@@ -304,7 +304,7 @@ own. Ignored frames are logged.
 | Level margin that lets level decide | 3 dB |
 | "Last answered" remembered | 5 minutes |
 | Late report treated as having lost | 2 s after a decision |
-| Heartbeat / master asked about / no answer, claim | every 10 s / after 25 s silence / 2.5 s |
+| Heartbeat / master asked about / no answer, claim | every 5 s / after 12.5 s silence / 2.5 s |
 | Election wait at startup / random delay before claiming | 2.5 s / 0–0.5 s |
 | Presence to the master / peer forgotten by the master | every 30 s / after 95 s |
 | Wi-Fi kept awake after a voice interaction / at most | 5 s / 10 min |

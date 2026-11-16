@@ -40,7 +40,7 @@ class MasterKeepAlivePolicyTest {
 
     @Test
     fun twoMissedKeepAlivesAreTolerated() {
-        // Heard at 0; keep-alives at 10 s and 20 s missed (power save); still no query.
+        // Heard at 0; keep-alives at 5 s and 10 s missed (power save); still no query.
         assertTrue(follower(now = 2 * heartbeat + 1, lastSeen = 0) is Step.Wait)
         assertEquals(Step.QueryMaster, follower(now = timeout, lastSeen = 0))
     }
@@ -83,7 +83,7 @@ class MasterKeepAlivePolicyTest {
     @Test
     fun aDeadMasterIsReplacedWithinTheDocumentedTime() {
         assertEquals(timeout + queryWait + MasterKeepAlivePolicy.ELECTION_JITTER_MS, policy.worstCaseFailoverMs)
-        assertTrue(policy.worstCaseFailoverMs <= 30_000)
+        assertTrue(policy.worstCaseFailoverMs <= 16_000)
     }
 
     @Test

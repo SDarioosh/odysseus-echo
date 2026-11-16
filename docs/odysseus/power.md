@@ -74,10 +74,10 @@ a broadcast copy as a fallback). Keep-alive traffic is lower (`odysseus/power/Ma
 
 | | Before | After |
 |---|---|---|
-| Master heartbeat | broadcast every 2 s | broadcast every 10 s |
+| Master heartbeat | broadcast every 2 s | broadcast every 5 s |
 | Presence | broadcast by every device every 10 s | unicast to the master every 30 s |
 | Election loop | every 1 s | a timer that sleeps until its next step |
-| Master silently gone | replaced in about 7.5 s | replaced in about 28 s (`master_query` after 25 s) |
+| Master silently gone | replaced in about 7.5 s | replaced in about 15.5 s (`master_query` after 12.5 s) |
 | Master's app stops | replaced in about 7.5 s | at once (`master_resign`) |
 
 Between a master vanishing without a word and its replacement, a wake word is answered 1.5 s late

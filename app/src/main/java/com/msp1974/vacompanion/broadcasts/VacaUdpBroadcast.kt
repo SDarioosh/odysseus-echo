@@ -171,7 +171,7 @@ class VacaUdpBroadcast(
         private const val DECISION_TIMEOUT_MS = 1_500L
 
         // Odysseus fork: keep-alive, failover and election timing are in MasterKeepAlivePolicy
-        // (odysseus/power/): heartbeat every 10 s (was 2 s), master presumed gone after 25 s and a
+        // (odysseus/power/): heartbeat every 5 s (was 2 s), master presumed gone after 12.5 s and a
         // query (was 6 s), 2.5 s for a master to answer a query or the start-up hello.
         private const val ELECTION_JITTER_MS = MasterKeepAlivePolicy.ELECTION_JITTER_MS
 

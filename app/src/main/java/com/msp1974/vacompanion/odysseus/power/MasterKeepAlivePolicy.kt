@@ -53,10 +53,10 @@ class MasterKeepAlivePolicy(
 
     companion object {
         /** The master's keep-alive (it also carries the master's wake word). Was 2 s. */
-        const val HEARTBEAT_INTERVAL_MS = 10_000L
+        const val HEARTBEAT_INTERVAL_MS = 5_000L
 
         /** Two keep-alives missed, plus margin, before asking whether the master is still there. Was 6 s. */
-        const val MASTER_TIMEOUT_MS = 25_000L
+        const val MASTER_TIMEOUT_MS = 12_500L
 
         /** How long to wait for a master to answer a query (or the hello at start-up) before claiming. */
         const val MASTER_QUERY_WAIT_MS = 2_500L

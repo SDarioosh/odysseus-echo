@@ -12,8 +12,11 @@ package com.msp1974.vacompanion.odysseus
 // - Lock mode (lock/SatelliteLock.kt): onStart(), onServerPacket(), onWakeWord(), [locked].
 // - The turn (OdysseusTurn.kt, ListeningIndicator.kt's VoiceActivity): beginTurn(), onStage().
 // - Follow-up (followup/FollowUp.kt): afterTurn().
+// - Timers (alarms/AlarmClock.kt): Home Assistant's timer-* events, in onServerPacket().
 
 import com.msp1974.vacompanion.audio.DetectionBuffer
+import com.msp1974.vacompanion.odysseus.alarms.AlarmClock
+import com.msp1974.vacompanion.odysseus.alarms.TimerRules
 import com.msp1974.vacompanion.broadcasts.VacaUdpBroadcast
 import com.msp1974.vacompanion.odysseus.followup.FollowUp
 import com.msp1974.vacompanion.odysseus.lock.LockMode
@@ -60,11 +63,16 @@ class OdysseusSatellite(
 
     /**
      * Every packet from Home Assistant, before Satellite.processMessage routes it. True when it
-     * was handled here and must go no further. In this order: the run gate drops what HA still
+     * was handled here and must go no further. Home Assistant's timer events go to the alarm clock
+     * (kept and rung even while locked: the ring itself checks Lock mode). Then, in this order: the run gate drops what HA still
      * sends for an interrupted run; Lock mode refuses what HA starts on its own while locked; for
      * custom actions, Lock mode's own navigate URLs and the actions ignored while locked.
      */
     fun onServerPacket(packet: WyomingPacket): Boolean {
+        if (packet.type in TimerRules.EVENTS) {
+            AlarmClock.onTimerEvent(packet.type, packet.data)
+            return true
+        }
         if (packet.type == WyomingEvent.CUSTOM_EVENT) {
             if (packet.getProp("event_type") != WyomingCustomEventType.ACTION) return false
             return lock.action(packet.getProp("action"), packet.getProp("payload"))

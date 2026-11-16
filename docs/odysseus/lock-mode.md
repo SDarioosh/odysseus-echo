@@ -16,6 +16,8 @@ PIN unlocks it on the device. Code: `app/src/main/java/com/msp1974/vacompanion/o
   path as Home Assistant's mute switch, which keeps its own value). A wake word, Home Assistant's
   `wake` action and a follow-up are ignored. A turn running at the lock time is stopped.
 - **Recording:** stopped on lock and refused while locked ("Locked: not recording").
+- **Alarms and timers:** kept, but nothing rings while locked, and locking stops a ring
+  ([alarms-timers](alarms-timers.md)).
 - **Wake word training clips:** the guide stops and the audio held in memory is forgotten; no
   clip is caught, kept or sent until unlocked ([wake-word-training](wake-word-training.md)).
 - **Music:** the Sendspin player is stopped (Music Assistant sees it leave) and started again on

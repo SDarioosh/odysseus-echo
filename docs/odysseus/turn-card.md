@@ -112,8 +112,8 @@ GET <base>/turns/latest?since=<epoch ms>     a turn without a context id: the ne
 
 <action>:
   {"id": "…", "at": "2026-11-03T19:52:10+00:00",
-   "action": "created" | "completed",
-   "kind": "todo" | "reminder" | "list_item" | "note" | "event" | "action_item",
+   "action": "created" | "completed" | "cancelled",
+   "kind": "todo" | "reminder" | "list_item" | "note" | "event" | "action_item" | "alarm",
    "title": "Call the dentist", "detail": "full text or null",
    "due": "2026-11-04T09:00:00-05:00" | "2026-11-07" | null, "all_day": false,
    "where": "To-dos" | "Shopping list" | "Calendar" | "Notes" | "Athena" | …,
@@ -121,6 +121,8 @@ GET <base>/turns/latest?since=<epoch ms>     a turn without a context id: the ne
 ```
 
 - **When:** when the answer starts playing and again when the turn ends. If there's no turn yet, it asks once more 1.5 s later.
+- **Alarms:** an `alarm` action (set or `cancelled` by the `alarm` tool) also makes the device ask
+  for its alarm list at once ([alarms-timers](alarms-timers.md)); a cancelled one is struck through.
 - **Which turn:** by the turn's `context_id` once the satellite post has answered; that turn is this device's. Without one, from 2 s before that turn's wake word, and a turn the hub names for another satellite is not shown.
 - **Errors:** any answer but a 200 (a 404 too) is a failure: logged, no card. The device and the hub are deployed together, so the feed is always there.
 - **Unknown fields:** the device ignores them.

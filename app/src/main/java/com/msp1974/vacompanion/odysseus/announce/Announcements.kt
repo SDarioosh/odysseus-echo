@@ -13,6 +13,8 @@ package com.msp1974.vacompanion.odysseus.announce
 //     pairing prompt).
 //   - Settings managed by Odysseus (odysseus/managed/ManagedSettings.kt): started with this, asked
 //     for again after each hello and when the feed has a "settings" item (never a card).
+//   - Alarms and timers (odysseus/alarms/AlarmClock.kt, Alarms.kt): started with this; the alarm
+//     list is asked for again when the feed has an "alarms" item (never a card).
 // Nothing is requested while the device isn't linked to Odysseus.
 
 import android.content.Context
@@ -83,6 +85,9 @@ object Announcements : EventListener {
         scope = s
         s.launch { run() }
         ManagedSettings.start(context) { config.uuid }
+        // This device's alarms and timers (odysseus/alarms/): the clock rings them, the list comes from the hub.
+        com.msp1974.vacompanion.odysseus.alarms.AlarmClock.start(context, config)
+        com.msp1974.vacompanion.odysseus.alarms.Alarms.start { config.uuid }
         Timber.i("Announcements: started")
     }
 
@@ -93,6 +98,7 @@ object Announcements : EventListener {
         s.cancel()
         scope = null
         ManagedSettings.stop()
+        com.msp1974.vacompanion.odysseus.alarms.Alarms.stop() // the alarm clock itself keeps running
         lastHelloMs = null
         lastHelloSaid = null
         Timber.i("Announcements: stopped")
@@ -174,6 +180,7 @@ object Announcements : EventListener {
             200 -> {
                 val news = feed.acceptNews(AnnouncementApi.parseFeed(reply.body), hubNow())
                 if (news.settingsChanged) ManagedSettings.fetchNow("feed")
+                if (news.alarmsChanged) com.msp1974.vacompanion.odysseus.alarms.Alarms.fetchNow("feed")
                 if (news.cards.isNotEmpty()) show(news.cards)
                 AnnouncementPolling.Outcome.OK
             }

@@ -58,6 +58,7 @@ section.
 | One Home Assistant client (`odysseus/ha/`: REST and websocket) | live states for the Music page; one tested client instead of one per feature | [home-assistant-client](docs/odysseus/home-assistant-client.md) |
 | Kiosk: back from other apps, reload a failed dashboard | unattended screens should always end up on the dashboard | [kiosk](docs/odysseus/kiosk.md) |
 | Lock mode: locked outside work hours, PIN to unlock | an Echo in an office shouldn't listen or play after hours | [lock-mode](docs/odysseus/lock-mode.md) |
+| Alarms and timers per device: Home Assistant's voice timers shown and rung on the device, alarms set by voice through Odysseus | upstream dropped HA's timer events, so a timer was set but never rang; HA has no alarms | [alarms-timers](docs/odysseus/alarms-timers.md) |
 | Updates from the owner's Odysseus hub | never from the internet; upstream's would install the Firebase build | [updates](docs/odysseus/updates.md) |
 | Announcement and reminder cards; hello to the hub | show what was said; the hub learns each Echo's name and area | [announcements](docs/odysseus/announcements.md) |
 | Recorder: conversations and voice notes, queued and uploaded to Athena | record for Athena from the Echo, offline-safe | [recording](docs/odysseus/recording.md) |

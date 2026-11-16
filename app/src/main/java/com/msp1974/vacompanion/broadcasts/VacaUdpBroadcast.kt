@@ -40,6 +40,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration.Companion.milliseconds
+import com.msp1974.vacompanion.odysseus.arbitration.WakeDecisionLog
+import com.msp1974.vacompanion.odysseus.arbitration.WakeWordPickRules
 import com.msp1974.vacompanion.odysseus.power.MasterKeepAlivePolicy
 import com.msp1974.vacompanion.odysseus.power.WifiNeed
 import com.msp1974.vacompanion.odysseus.power.WifiPerformance
@@ -151,6 +153,7 @@ class VacaUdpBroadcast(
         const val DATA_LEVEL = "level"
         const val DATA_WAKE_WORD = "wake_word"
         const val DATA_RESPONDING = "responding"
+        const val DATA_FLOOR = "floor" // Odysseus fork: calibrated noise floor, logged by the master only
 
         // How often a device that isn't master tells the master it is here. Peers are dropped after
         // PeerPresence.PEER_TIMEOUT_MS. Odysseus fork: 30 s, unicast to the master (was 10 s, broadcast).
@@ -230,8 +233,9 @@ class VacaUdpBroadcast(
             val level = msg.data[DATA_LEVEL]?.jsonPrimitive?.floatOrNull
             val wakeWord = msg.data[DATA_WAKE_WORD]?.jsonPrimitive?.contentOrNull
             val responding = msg.data[DATA_RESPONDING]?.jsonPrimitive?.booleanOrNull ?: false
+            val floor = msg.data[DATA_FLOOR]?.jsonPrimitive?.floatOrNull // Odysseus fork: for the decision log
             if (isMaster) {
-                collectDetection(key(wakeWord), WakeWordArbiter.Contender(id, msg.senderId, score, level, wakeWord, responding))
+                collectDetection(key(wakeWord), WakeWordArbiter.Contender(id, msg.senderId, score, level, wakeWord, responding, floor, SystemClock.elapsedRealtime()))
             }
         }
         addHandler(VacaBroadcastType.WAKE_DECISION) { msg ->
@@ -310,7 +314,7 @@ class VacaUdpBroadcast(
      * if no other device listens for this wake word, if no master is known yet, or it doesn't
      * answer, so a dead master never silences a device.
      */
-    suspend fun arbitrateWakeWord(score: Float, levelDb: Float? = null, contest: Boolean = true): Boolean {
+    suspend fun arbitrateWakeWord(score: Float, levelDb: Float? = null, contest: Boolean = true, floorDb: Float? = null): Boolean {
         val wakeWordKey = key(config.wakeWord)
         if (!contest || !config.wakeWordArbitrationEnabled || wakeWordKey.isEmpty() || masterId == null) {
             sendDuck()
@@ -332,7 +336,7 @@ class VacaUdpBroadcast(
         val id = "$me-${detectionCounter.incrementAndGet()}"
         val decision = CompletableDeferred<String>()
         awaiting[id] = decision
-        report(id, score, levelDb, responding = false)
+        report(id, score, levelDb, responding = false, floorDb = floorDb)
         val winner = withTimeoutOrNull(DECISION_TIMEOUT_MS.milliseconds) { decision.await() }
         awaiting.remove(id)
 
@@ -345,8 +349,9 @@ class VacaUdpBroadcast(
             sendDuck()
             return true
         }
-        val won = winner == id
-        Timber.i("VacaUdpBroadcast: wake word arbitration ${if (won) "won" else "lost"} (score=$score, level=$levelDb)")
+        // Odysseus fork: or another report of this device's won, its barge-in's interruption (odysseus/arbitration/WakeWordPickRules.kt)
+        val won = winner == id || WakeWordPickRules.isOwnReport(winner, me)
+        Timber.i("VacaUdpBroadcast: wake word arbitration ${if (won) "won" else "lost"} (score=$score, level=$levelDb, floor=$floorDb)")
         if (won) sendDuck()
         return won
     }
@@ -356,11 +361,11 @@ class VacaUdpBroadcast(
     }
 
     /** Sends this device's report of the wake word to the master, or hands it over if this is the master. */
-    private fun report(id: String, score: Float, levelDb: Float?, responding: Boolean) {
+    private fun report(id: String, score: Float, levelDb: Float?, responding: Boolean, floorDb: Float? = null) {
         if (isMaster) {
             collectDetection(
                 key(config.wakeWord),
-                WakeWordArbiter.Contender(id, config.uuid, score, levelDb, config.wakeWord, responding)
+                WakeWordArbiter.Contender(id, config.uuid, score, levelDb, config.wakeWord, responding, floorDb, SystemClock.elapsedRealtime())
             )
         } else {
             val data = buildJsonObject {
@@ -369,6 +374,7 @@ class VacaUdpBroadcast(
                 put(DATA_WAKE_WORD, JsonPrimitive(config.wakeWord))
                 if (levelDb != null) put(DATA_LEVEL, JsonPrimitive(levelDb))
                 if (responding) put(DATA_RESPONDING, JsonPrimitive(true))
+                if (floorDb != null) put(DATA_FLOOR, JsonPrimitive(floorDb)) // Odysseus fork
             }
             // Odysseus fork: straight to the master, which is awake, so the access point doesn't
             // hold it until a beacon; and as a broadcast too, in case this device's idea of the
@@ -385,11 +391,11 @@ class VacaUdpBroadcast(
      * an answer. Only devices that heard the wake word are told; a responding device that didn't hear
      * it isn't asked to stop.
      */
-    fun reportInterruption(score: Float, levelDb: Float?) {
+    fun reportInterruption(score: Float, levelDb: Float?, floorDb: Float? = null) {
         if (!config.wakeWordArbitrationEnabled || key(config.wakeWord).isEmpty() || masterId == null) return
         // Nobody else listens for this wake word, so there is nobody to tell.
         if (isMaster && presence.competitors(config.wakeWord, config.uuid).isEmpty()) return // Odysseus fork: see arbitrateWakeWord
-        report("${config.uuid}-${detectionCounter.incrementAndGet()}", score, levelDb, responding = true)
+        report("${config.uuid}-${detectionCounter.incrementAndGet()}", score, levelDb, responding = true, floorDb = floorDb)
     }
 
     private fun completeAwaiting(winner: String, ids: List<String>) {
@@ -420,7 +426,9 @@ class VacaUdpBroadcast(
             pending[group]?.let { everyoneReported = hasEveryoneReported(it) }
         }
         lateWinner?.let { winner ->
-            Timber.i("VacaUdpBroadcast: ${detection.sender} reported after the decision, telling it it lost")
+            // Odysseus fork: with its inputs; a device whose own report won (a barge-in) answers (WakeWordPickRules.isOwnReport)
+            val own = WakeWordPickRules.isOwnReport(winner, detection.sender)
+            Timber.i("VacaUdpBroadcast: ${detection.sender} reported after the decision, telling it it ${if (own) "won (its own earlier report did)" else "lost"}: ${WakeDecisionLog.report(detection)}")
             sendDecision(winner, listOf(detection))
             completeAwaiting(winner, listOf(detection.id)) // our own broadcasts don't loop back to us
             return
@@ -447,13 +455,9 @@ class VacaUdpBroadcast(
     private fun decide(groupKey: String) {
         val detections = synchronized(pending) { pending.remove(groupKey) } ?: return
         val decision = arbiter.decide(groupKey, detections) ?: return
-        val best = decision.winner
         val winner = decision.winnerId
-        val reports = detections.joinToString { d ->
-            "${d.sender.take(8)} ${d.levelDb?.let { "%.1f".format(it) } ?: "?"} dB, score ${"%.2f".format(d.score)}" +
-                if (d.responding) ", responding" else ""
-        }
-        Timber.i("VacaUdpBroadcast: decided winner ${best.sender.take(8)}${if (best.responding) " (interrupting its response)" else ""} from ${detections.size} detection(s): $reports")
+        // Odysseus fork: every reporter's inputs and the rule that decided (odysseus/arbitration/WakeDecisionLog.kt)
+        Timber.i("VacaUdpBroadcast: decided ${decision.pick?.let { WakeDecisionLog.decision(it, detections) } ?: "winner ${decision.winner.sender.take(8)}"}")
 
         val ids = detections.map { it.id }
         sendDecision(winner, detections)

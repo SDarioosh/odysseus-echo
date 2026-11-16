@@ -12,15 +12,18 @@ import android.os.SystemClock
  * The rules, in order, among the devices that reported:
  *  0. A device that is responding to someone wins. The wake word interrupts its response, so it is
  *     for that device; the others do nothing. (If several are, the rules below choose among them.)
- *  1. The loudest, by calibrated mic level - the assumption being that the speaker is nearest to
- *     it - but only if it beats the next by [LEVEL_MARGIN_DB]. Devices within that margin of the
- *     loudest are too close to call and go on to the next rules.
- *  2. The device that last handled this wake word, if that was within [LAST_HANDLER_MEMORY_MS].
- *  3. The highest wake word score.
- *  4. The lowest device id, so every master reaches the same answer.
+ *  1. The loudest, by calibrated wake word level - the assumption being that the speaker is nearest
+ *     to it, or speaking towards it - unless
+ *  2. the device that last handled this wake word (within [LAST_HANDLER_MEMORY_MS]) is within 1.5 dB
+ *     of the loudest: too close to call, so it keeps answering.
+ *  3. Equal levels: the highest wake word score, then the lowest device id, so every master reaches
+ *     the same answer.
  *
- * If any contender didn't report a level (an older version, say), levels are not used at all and
- * the decision starts at rule 2, since a level can't be compared with a missing one.
+ * If any contender didn't report a level (an older version, say), levels are not used at all:
+ * the last to answer, then score, then device id.
+ *
+ * Odysseus fork: upstream let level decide only beyond a 3 dB lead; the rules are now
+ * odysseus/arbitration/WakeWordPickRules.kt, which says why.
  */
 class WakeWordArbiter(private val clock: () -> Long = SystemClock::elapsedRealtime) {
 
@@ -36,9 +39,18 @@ class WakeWordArbiter(private val clock: () -> Long = SystemClock::elapsedRealti
         /** The wake word it heard; null from a version that doesn't say. */
         val wakeWord: String? = null,
         val responding: Boolean = false,
+        /** Odysseus fork: the calibrated noise floor it reported, for the decision log only. */
+        val noiseFloorDb: Float? = null,
+        /** Odysseus fork: when the master got it (elapsed ms), for the decision log only. */
+        val receivedAtMs: Long = 0L,
     )
 
-    class Decision(val winnerId: String, val winner: Contender)
+    class Decision(
+        val winnerId: String,
+        val winner: Contender,
+        /** Odysseus fork: the rule that decided, for the log (odysseus/arbitration/WakeWordPickRules.kt). */
+        val pick: com.msp1974.vacompanion.odysseus.arbitration.WakeWordPickRules.Pick? = null,
+    )
 
     private class Handled(val sender: String, val at: Long)
     private class Decided(val winnerId: String, val at: Long)
@@ -52,11 +64,12 @@ class WakeWordArbiter(private val clock: () -> Long = SystemClock::elapsedRealti
         if (contenders.isEmpty()) return null
         val now = clock()
         val handler = lastHandler[group]?.takeIf { now - it.at <= LAST_HANDLER_MEMORY_MS }?.sender
-        val best = pick(contenders, handler)
+        val picked = com.msp1974.vacompanion.odysseus.arbitration.WakeWordPickRules.pick(contenders, handler) // Odysseus fork: the rules (odysseus/arbitration/WakeWordPickRules.kt)
+        val best = picked.winner
         // A device that interrupted its response didn't answer anything new.
         if (!best.responding) lastHandler[group] = Handled(best.sender, now)
         lastDecision[group] = Decided(best.id, now)
-        return Decision(best.id, best)
+        return Decision(best.id, best, picked)
     }
 
     /**
@@ -71,28 +84,18 @@ class WakeWordArbiter(private val clock: () -> Long = SystemClock::elapsedRealti
     }
 
     companion object {
-        /** How much louder a device must be than the next to win on level alone. */
-        const val LEVEL_MARGIN_DB = 3f
-
         /** How long the device that last answered is preferred when levels are too close to call. */
         const val LAST_HANDLER_MEMORY_MS = 5 * 60 * 1000L
 
         /** After a decision, reports for the same wake word arriving within this are late, not new. */
         const val LATE_ARRIVAL_MS = 2_000L
 
-        /** Applies the rules above. [contenders] must not be empty. */
-        fun pick(contenders: List<Contender>, lastHandler: String?): Contender {
-            // Rule 0: a device that is responding gets the wake word, whatever else is true.
-            val candidates = contenders.filter { it.responding }.ifEmpty { contenders }
-            val usable = if (candidates.all { it.levelDb != null }) {
-                val loudest = candidates.maxOf { it.levelDb!! }
-                candidates.filter { it.levelDb!! >= loudest - LEVEL_MARGIN_DB }
-            } else {
-                candidates
-            }
-            if (usable.size == 1) return usable.first()
-            usable.firstOrNull { it.sender == lastHandler }?.let { return it }
-            return usable.maxWith(compareBy<Contender> { it.score }.thenByDescending { it.sender })
-        }
+        /**
+         * Applies the rules. [contenders] must not be empty. Odysseus fork: the rules are
+         * odysseus/arbitration/WakeWordPickRules.kt (rule 0 as above; then the loudest, unless the
+         * last to answer is within 1.5 dB of it; then score, then device id).
+         */
+        fun pick(contenders: List<Contender>, lastHandler: String?): Contender =
+            com.msp1974.vacompanion.odysseus.arbitration.WakeWordPickRules.pick(contenders, lastHandler).winner
     }
 }

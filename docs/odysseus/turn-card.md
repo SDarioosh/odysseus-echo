@@ -8,6 +8,9 @@ The app draws its own overlay on top of the dashboard, the clock or the blank sc
 
 - A blue bar along the bottom pulses with "Listening…", and pulses faster once you start speaking.
 - It turns violet with "Thinking…" while HA and Odysseus work, then green with "Answering…".
+- "Listening…" shows the moment a wake word is heard, on every device that heard it, before they know which one answers. On a device that doesn't go on to answer it goes away at once: lost arbitration, a report that arrived after the decision, locked meanwhile, HA's previous run never ending, the kept audio dropped, an error. One owner decides this (`odysseus/WakeIndicatorPolicy.kt`): the wake word handler's `finally` calls `OdysseusSatellite.wakeEnded()`, which clears it unless a turn started (`beginTurn`). Before, a device that lost arbitration showed "Listening…" for 90 s (`VoiceActivity.MAX_VISIBLE_MS`), which also held back announcement cards.
+- While a wake word is pending, an older turn's late stages don't touch the indicator: after a barge-in, the stopped turn's `ENDED` arrives after the new "Listening…" and used to hide it. That turn also no longer cancels the new wake word's kept audio (a pipeline cancels only its own `DetectionBuffer`).
+- Wake words that never reach the handler never show it: the calibration wizard's readings, a training take (`WakeClips`), while locked, and with the microphone muted (the engine is muted; a hardware mute also hides the bar, showing "Microphone off").
 - The wake sound is VACA's own, set from HA ([echo-show-5.md](echo-show-5.md#wake-word-wake-sound-feedback)).
 
 ## The turn card
@@ -154,19 +157,23 @@ The URL must be reachable from the device: Odysseus's LAN or Tailscale address, 
 - `odysseus/TurnAudioRecorder.kt`: the copy of the turn's streamed audio, and the WAV writer (unit-tested).
 - `odysseus/ThinkingChime.kt`: when the thinking sound plays (unit-tested); `assets/odysseus/thinking.wav`.
 - `odysseus/ListeningIndicator.kt`: the listening indicator (also the "Microphone off" pill, [recording.md](recording.md#the-privacy-button)).
+- `odysseus/WakeIndicatorPolicy.kt`: the one owner of "this wake word ended without a turn" (`WakeIndicatorPolicyTest`).
 - `odysseus/BargeIn.kt`: the interrupt call to Odysseus; `odysseus/HaRunGate.kt`: waiting for HA to end the interrupted run (`HaRunGateTest`).
-- `odysseus/OdysseusSatellite.kt`: the one fork object `Satellite` holds: `onWakeWord` (barge-in), `onServerPacket`, `awaitHaIdle`, `beginTurn`, `onStage`; reset on a new satellite and on every `clientId` change.
+- `odysseus/OdysseusSatellite.kt`: the one fork object `Satellite` holds: `onWakeWord` (barge-in), `onServerPacket`, `showListening`, `readyForTurn` (HA's previous run ended, not locked meanwhile, kept audio intact), `wakeEnded`, `beginTurn`, `onStage`, `wakeLevel`; reset on a new satellite and on every `clientId` change.
 - `odysseus/OdysseusOverlays.kt`: what `MainActivity` composes over the screen (the indicator, the card, …).
 - `odysseus/followup/`: listening for the "yes" without the wake word ([follow-up.md](follow-up.md)); `VoiceTurns.awaitingConfirmation()` in `TurnCard.kt`.
 - `odysseus/OdysseusSettingsLayout.kt`: Menu → Odysseus. `odysseus/EchoSetup.kt` and the files next to it: the phone setup ([setup.md](setup.md)).
-- Hooks: `MainActivity.kt` (the overlays, through `OdysseusOverlays`), `ui/layouts/SettingsLayout.kt` (the tile and screen), `satellite/Satellite.kt`, one line each through `OdysseusSatellite`: `clientId` (resets the run gate), `processMessage` (`onServerPacket`), `handleWakeWordDetection` (`onWakeWord`), the gate wait (`awaitHaIdle`), `startAudioPipeline` (`beginTurn`, `onStage`; `tee` on the pipeline's microphone flow).
-- Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/` (`VoiceTurnApiTest`, `TurnTimingsTest`, `TurnAudioRecorderTest`, `ThinkingChimeTest`, `HaRunGateTest`, `OdysseusLinkHttpTest`, `OdysseusLinkFailureTextTest`; `./gradlew :app:testDebugUnitTest`).
+- Hooks: `MainActivity.kt` (the overlays, through `OdysseusOverlays`), `ui/layouts/SettingsLayout.kt` (the tile and screen), `satellite/Satellite.kt`, one line each through `OdysseusSatellite`: `clientId` (resets the run gate), `processMessage` (`onServerPacket`), `handleWakeWordDetection` (`onWakeWord`, `showListening`, `wakeLevel`, `readyForTurn`, `wakeEnded` in its `finally`), `interruptResponse` (`wakeLevel`), `startAudioPipeline` (`beginTurn`, `onStage`; `tee` on the pipeline's microphone flow).
+- Tests: `app/src/test/java/com/msp1974/vacompanion/odysseus/` (`VoiceTurnApiTest`, `TurnTimingsTest`, `TurnAudioRecorderTest`, `ThinkingChimeTest`, `HaRunGateTest`, `WakeIndicatorPolicyTest`, `OdysseusLinkHttpTest`, `OdysseusLinkFailureTextTest`; `./gradlew :app:testDebugUnitTest`).
 
 ## Testing without the hub feed
 
 The card was first tested against a stand-in for the feed with fictional actions ([history.md](history.md#0140odysseus6-voice-actions-card)). The same stand-in can serve `/turns/latest` and `/satellite/turn` (fictional data only).
 
 ## Still to check on the real device
+
+- Two or three devices that hear one "Hey Athena": on each that loses, "Listening…" clears right after the decision (within about 150 ms of the wake sound), and an announcement card can show at once afterwards.
+- A barge-in with another device in earshot: the interrupting device starts its new turn ("Listening…" stays up through HA's wait, the question is heard); the other device stays quiet and its indicator clears.
 
 - The card while the answer plays: it should appear when TTS starts and not flicker when the turn ends and it's fetched again.
 - A source chip opens the overlay; the page loads (Athena `/view` link over LAN or Tailscale); ✕ closes it; the next wake word closes it too.

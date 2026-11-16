@@ -42,22 +42,28 @@ class WakeWordArbiterTest {
         assertEquals("c", pick(device("a", -40f), device("b", -38f), device("c", -29f)))
     }
 
-    // ---- the margin
+    // ---- the margin (Odysseus fork: 1.5 dB, only for the last to answer; was 3 dB for everything)
 
     @Test
     fun aGapOfLessThanTheMarginIsTooCloseToCall() {
-        // 2 dB apart: level can't decide, so the last to answer does.
-        assertEquals("b", pick(device("a", -30f), device("b", -32f), lastHandler = "b"))
+        // 1 dB apart: too close to call, so the last to answer keeps it.
+        assertEquals("b", pick(device("a", -30f), device("b", -31f), lastHandler = "b"))
     }
 
     @Test
     fun aGapOfExactlyTheMarginIsStillTooCloseToCall() {
-        assertEquals("b", pick(device("a", -30f), device("b", -33f), lastHandler = "b"))
+        assertEquals("b", pick(device("a", -30f), device("b", -31.5f), lastHandler = "b"))
     }
 
     @Test
     fun aGapJustOverTheMarginIsDecidedOnLevel() {
-        assertEquals("a", pick(device("a", -30f), device("b", -33.1f), lastHandler = "b"))
+        assertEquals("a", pick(device("a", -30f), device("b", -31.6f), lastHandler = "b"))
+    }
+
+    @Test
+    fun aTwoDecibelLeadNowDecidesEvenAgainstTheLastToAnswer() {
+        // Upstream called 2 dB too close and gave it to b; it is real evidence a is nearer.
+        assertEquals("a", pick(device("a", -30f), device("b", -32f), lastHandler = "b"))
     }
 
     // ---- the fallbacks, in order
@@ -74,13 +80,18 @@ class WakeWordArbiterTest {
     }
 
     @Test
-    fun withNoLastHandlerTheHighestScoreWins() {
-        assertEquals("b", pick(device("a", -30f, score = 0.80f), device("b", -31f, score = 0.95f)))
+    fun withNoLastHandlerTheLouderWinsOverAHigherScore() {
+        assertEquals("a", pick(device("a", -30f, score = 0.80f), device("b", -31f, score = 0.95f)))
     }
 
     @Test
-    fun withEqualScoresTheLowestDeviceIdWins() {
-        assertEquals("a", pick(device("b", -30f, score = 0.9f), device("a", -31f, score = 0.9f)))
+    fun withEqualLevelsTheHighestScoreWins() {
+        assertEquals("b", pick(device("a", -30f, score = 0.80f), device("b", -30f, score = 0.95f)))
+    }
+
+    @Test
+    fun withEqualLevelsAndScoresTheLowestDeviceIdWins() {
+        assertEquals("a", pick(device("b", -30f, score = 0.9f), device("a", -30f, score = 0.9f)))
     }
 
     @Test
@@ -157,14 +168,14 @@ class WakeWordArbiterTest {
     fun afterFiveMinutesThePreviousAnswererNoLongerCounts() {
         decide(device("a", -30f), device("b", -45f))
         now = WakeWordArbiter.LAST_HANDLER_MEMORY_MS + 1
-        val second = decide(device("a", -40f, score = 0.7f), device("b", -41f, score = 0.99f))!!
+        val second = decide(device("a", -40f, score = 0.7f), device("b", -40f, score = 0.99f))!!
         assertEquals("b", second.winner.sender)
     }
 
     @Test
     fun theMemoryIsKeptPerWakeWord() {
         decide(device("a", -30f), device("b", -45f), group = "hey_jarvis")
-        val other = decide(device("a", -40f, score = 0.7f), device("b", -41f, score = 0.99f), group = "computer")!!
+        val other = decide(device("a", -40f, score = 0.7f), device("b", -40f, score = 0.99f), group = "computer")!!
         assertEquals("b", other.winner.sender)
     }
 
@@ -173,7 +184,7 @@ class WakeWordArbiterTest {
         decide(device("a", -30f, responding = true), device("b", -31f))
         now = 10_000L
         // a would be preferred if it counted as the last to answer; it doesn't, so the score decides.
-        val next = decide(device("a", -40f, score = 0.7f), device("b", -41f, score = 0.99f))!!
+        val next = decide(device("a", -40f, score = 0.7f), device("b", -40f, score = 0.99f))!!
         assertEquals("b", next.winner.sender)
     }
 

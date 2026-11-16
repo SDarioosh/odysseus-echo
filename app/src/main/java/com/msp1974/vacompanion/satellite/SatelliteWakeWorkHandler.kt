@@ -201,7 +201,7 @@ abstract class SatelliteWakeWorkHandler(
 
                                 if (lastDetection == null || detectionCooldownMs == 0L || now - lastDetection >= detectionCooldownMs) {
                                     // Measured on the raw microphone, before gain control.
-                                    val rawLevel = microphone.level.peakDbfs(MicLevelMonitor.WAKE_WORD_WINDOW_MS)
+                                    val rawLevel = microphone.level.wake.wakeWordDbfs() // Odysseus fork: the wake word's speech-band level, as arbitration uses (odysseus/arbitration/WakeLevelMeter.kt)
                                     val micLevel = MicLevelMonitor.calibrated(rawLevel, config.wakeLevelOffsetDb)
                                     val levelText = micLevel?.let { l -> "%.1f dB".format(l) } ?: "unknown"
                                     if (config.wakeLevelCalibration.isActive) {

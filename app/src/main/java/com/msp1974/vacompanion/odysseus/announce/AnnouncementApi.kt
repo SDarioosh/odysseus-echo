@@ -20,7 +20,10 @@ data class Announcement(
     val id: String = "",
     /** Epoch ms the hub made it (the hub's clock). */
     val at: Long = 0L,
-    /** "reminder", "announcement" or "settings" (this device's settings changed: no card, see isSettings). */
+    /**
+     * "reminder", "announcement", "settings" (this device's settings changed: no card, see isSettings)
+     * or "alarms" (this device's alarms changed: no card, see isAlarms).
+     */
     val kind: String = KIND_ANNOUNCEMENT,
     val title: String = "",
     val text: String = "",
@@ -36,6 +39,12 @@ data class Announcement(
     /** Odysseus changed this device's settings (C6): fetch them, show nothing (odysseus/managed/). */
     val isSettings: Boolean get() = kind == KIND_SETTINGS
 
+    /** Odysseus changed this device's alarms: fetch them, show nothing (odysseus/alarms/Alarms.kt). */
+    val isAlarms: Boolean get() = kind == KIND_ALARMS
+
+    /** Never a card: it only tells the device to fetch something. */
+    val isSignal: Boolean get() = isSettings || isAlarms
+
     /** What the card shows as its heading: the title, else the text. */
     val heading: String get() = title.ifBlank { text }
 
@@ -49,6 +58,7 @@ data class Announcement(
         const val KIND_REMINDER = "reminder"
         const val KIND_ANNOUNCEMENT = "announcement"
         const val KIND_SETTINGS = "settings"
+        const val KIND_ALARMS = "alarms"
     }
 }
 

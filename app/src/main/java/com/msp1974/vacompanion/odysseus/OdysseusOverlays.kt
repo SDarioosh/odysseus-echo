@@ -7,6 +7,9 @@ package com.msp1974.vacompanion.odysseus
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
+import com.msp1974.vacompanion.odysseus.alarms.AlarmClock
+import com.msp1974.vacompanion.odysseus.alarms.RingingCard
+import com.msp1974.vacompanion.odysseus.alarms.TimersPill
 import com.msp1974.vacompanion.odysseus.announce.AnnouncementCard
 import com.msp1974.vacompanion.odysseus.announce.Announcements
 import com.msp1974.vacompanion.odysseus.lock.LockMode
@@ -31,6 +34,9 @@ fun OdysseusOverlays(satelliteRunning: Boolean, onLocked: () -> Unit) {
     SendspinPairingOverlay()
     // Red REC / NOTE pill over every screen while recording (record/RecordingUi.kt).
     RecordingPill()
+    // This device's timers, and the card while an alarm or timer rings (alarms/AlarmOverlays.kt).
+    TimersPill()
+    RingingCard()
     // Lock mode covers everything above while locked (lock/LockOverlay.kt).
     LockOverlay()
 
@@ -47,5 +53,6 @@ object OdysseusUi {
         "sendspinPairingPrompt", // show the pairing code
         Announcements.EVENT_NEW, // show the announcement card
         RecorderController.EVENT_STARTED, // show the REC pill
+        AlarmClock.EVENT_RINGING, // an alarm or timer rings
     )
 }

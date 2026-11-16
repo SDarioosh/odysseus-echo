@@ -181,7 +181,10 @@ object VoiceTurns {
                 val turn = r.turn
                 // A turn carrying our context id is ours; by time it may be another satellite's.
                 if (turn == null || !VoiceTurnApi.isOurTurn(turn, contextId, deviceId)) Fetched.NoTurn
-                else Fetched.Card(VoiceTurnApi.cardState(turn))
+                else {
+                    com.msp1974.vacompanion.odysseus.alarms.Alarms.onTurnActions(turn.actions) // it set an alarm here
+                    Fetched.Card(VoiceTurnApi.cardState(turn))
+                }
             }
             is OdysseusLink.TurnResult.Failed -> { Timber.w("Odysseus turn: ${r.message}"); Fetched.Stop }
         }
@@ -331,12 +334,17 @@ private fun LinkOverlay(link: TurnLink) {
 
 @Composable
 private fun ActionRow(a: VoiceAction) {
-    val completed = a.action == "completed"
+    // Done, or an alarm cancelled: struck through.
+    val completed = a.action == "completed" || a.action == "cancelled"
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            imageVector = if (completed) Icons.Filled.TaskAlt else iconFor(a.kind),
+            imageVector = if (a.action == "completed") Icons.Filled.TaskAlt else iconFor(a.kind),
             contentDescription = null,
-            tint = if (completed) DoneGreen else AddBlue,
+            tint = when (a.action) {
+                "completed" -> DoneGreen
+                "cancelled" -> Muted
+                else -> AddBlue
+            },
             modifier = Modifier.size(30.dp),
         )
         Box(Modifier.width(16.dp))
@@ -358,7 +366,7 @@ private fun ActionRow(a: VoiceAction) {
 
 private fun iconFor(kind: String): ImageVector = when (kind) {
     "event" -> Icons.Filled.Event
-    "reminder" -> Icons.Filled.Alarm
+    "reminder", "alarm" -> Icons.Filled.Alarm
     "note" -> Icons.Filled.NoteAlt
     else -> Icons.Filled.Checklist
 }
@@ -370,7 +378,11 @@ internal fun subtitle(a: VoiceAction, today: LocalDate = LocalDate.now()): Strin
         a.kind == "note" -> "Notes"
         else -> "To-dos"
     }
-    val prefix = if (a.action == "completed") "Done" else null
+    val prefix = when (a.action) {
+        "completed" -> "Done"
+        "cancelled" -> "Cancelled"
+        else -> null
+    }
     return listOfNotNull(prefix, where, a.due?.let { formatDue(it, a.allDay, today) }).joinToString(" · ")
 }
 

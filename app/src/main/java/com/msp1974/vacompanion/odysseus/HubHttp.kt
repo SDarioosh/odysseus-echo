@@ -13,7 +13,7 @@ import kotlinx.serialization.json.Json
  */
 data class HubReply(val code: Int, val body: String, val dateMs: Long? = null)
 
-/** One request to `<voice base><path>`: a GET without [body]. */
+/** One request to `<voice base><path>`: a GET without [body], a POST with one, or [method] (DELETE). */
 class HubCall(
     val path: String,
     val contentType: String? = null,
@@ -21,6 +21,8 @@ class HubCall(
     val readTimeoutMs: Int = 6000,
     /** Also read the start of an error answer (OdysseusLink.ERROR_BODY_MAX chars). */
     val errorBody: Boolean = false,
+    /** The HTTP method when not GET/POST (e.g. "DELETE"); null: GET, or POST with a body. */
+    val method: String? = null,
 )
 
 /** How features ask the hub. Throws when not linked or unreachable. */

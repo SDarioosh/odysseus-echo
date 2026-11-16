@@ -125,6 +125,7 @@ What the fork changes and why: [ODYSSEUS.md](ODYSSEUS.md). Each feature's doc in
 | Settings managed by Odysseus | `odysseus/managed/ManagedSettings`, `ManagedBindings` | [managed-settings](docs/odysseus/managed-settings.md) |
 | Kiosk: back from other apps, reload a failed dashboard | `odysseus/kiosk/ReturnToDashboard`, `DashboardAutoReload` | [kiosk](docs/odysseus/kiosk.md) |
 | Lock mode | `odysseus/lock/LockMode`, `SatelliteLock` | [lock-mode](docs/odysseus/lock-mode.md) |
+| Alarms and timers per device (HA's timers, alarms from Odysseus) | `odysseus/alarms/AlarmClock`, `Alarms` | [alarms-timers](docs/odysseus/alarms-timers.md) |
 | Phone setup (QR code) | `odysseus/EchoSetup` | [setup](docs/odysseus/setup.md) |
 | Sendspin pairing, Tailscale | `sendspin/SendspinSecurity`, `SendspinAllowedAddresses` | [sendspin/README.md](sendspin/README.md), [tailscale](docs/odysseus/tailscale.md) |
 | Look (theme, icons) | `odysseus/OdysseusTheme` | [look](docs/odysseus/look.md) |

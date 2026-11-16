@@ -12,12 +12,16 @@ package com.msp1974.vacompanion.odysseus
 // - Lock mode (lock/SatelliteLock.kt): onStart(), onServerPacket(), onWakeWord(), [locked].
 // - The turn (OdysseusTurn.kt, ListeningIndicator.kt's VoiceActivity): beginTurn(), onStage().
 // - Follow-up (followup/FollowUp.kt): afterTurn().
+// - Wi-Fi (power/WifiPerformance.kt): full performance from the wake word, or a pipeline starting,
+//   while the satellite arbitrates or has a pipeline (holdVoice()).
 
 import com.msp1974.vacompanion.audio.DetectionBuffer
 import com.msp1974.vacompanion.broadcasts.VacaUdpBroadcast
 import com.msp1974.vacompanion.odysseus.followup.FollowUp
 import com.msp1974.vacompanion.odysseus.lock.LockMode
 import com.msp1974.vacompanion.odysseus.lock.SatelliteLock
+import com.msp1974.vacompanion.odysseus.power.WifiNeed
+import com.msp1974.vacompanion.odysseus.power.WifiPerformance
 import com.msp1974.vacompanion.satellite.PipelineEndReason
 import com.msp1974.vacompanion.satellite.PipelineStage
 import com.msp1974.vacompanion.satellite.PipelineStartMode
@@ -34,7 +38,7 @@ class OdysseusSatellite(
     /** Satellite.arbitratingWakeWord. */
     private val arbitrating: KMutableProperty0<Boolean>,
     /** Satellite has a pipeline that hasn't ended. */
-    pipelineActive: () -> Boolean,
+    private val pipelineActive: () -> Boolean,
     /** Starts Satellite's detection buffer: the microphone's audio from now on. */
     private val keepAudio: () -> DetectionBuffer,
     /** Satellite.cancelDetectionBuffer. */
@@ -83,9 +87,17 @@ class OdysseusSatellite(
      */
     fun onWakeWord(detection: WakeWordEngineProvider.WakeWordDetection): Boolean {
         if (lock.refusesWake(detection)) return true
+        holdVoice()
         if (!satellite.isResponding()) BargeIn.interruptHaRun(satellite.config.uuid)
         return false
     }
+
+    /**
+     * Wi-Fi out of power save for this voice interaction: taken before this returns, so before the
+     * wake word is reported to the master, and its decision isn't held at the access point; kept
+     * while arbitrating or a pipeline runs, then a short grace (docs/wake-word-arbitration.md).
+     */
+    private fun holdVoice() = WifiPerformance.holdWhile(WifiNeed.VOICE) { arbitrating.get() || pipelineActive() }
 
     /** Show "Listening…" at once. */
     fun showListening() = VoiceActivity.onWakeWord()
@@ -99,6 +111,7 @@ class OdysseusSatellite(
     fun beginTurn(startStage: PipelineStartMode): OdysseusTurn {
         // Not for an announcement (HA's audio-start): that is no Assist run.
         if (startStage != PipelineStartMode.START_STREAM_TTS) HaRunGate.runStarted()
+        holdVoice() // also announcements, follow-ups and continued conversations
         return OdysseusTurn.begin(satellite.context, startStage, satellite.config)
     }
 

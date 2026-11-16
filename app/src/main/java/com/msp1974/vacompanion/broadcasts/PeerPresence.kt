@@ -51,7 +51,7 @@ class PeerPresence(
 
     companion object {
         /** About three missed announcements. */
-        const val PEER_TIMEOUT_MS = 35_000L
+        const val PEER_TIMEOUT_MS = com.msp1974.vacompanion.odysseus.power.MasterKeepAlivePolicy.PEER_TIMEOUT_MS // Odysseus fork: 95 s (was 35 s)
 
         /**
          * Whether a device listening for [peerWakeWord] could hear [wakeWord]. Unknown on either

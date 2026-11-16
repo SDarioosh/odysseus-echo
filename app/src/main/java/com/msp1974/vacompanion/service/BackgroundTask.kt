@@ -32,6 +32,8 @@ internal class BackgroundTaskController (private val context: Context, val devic
     fun start() {
         // Runs for the lifetime of the background task, independent of whether a Wyoming/HA
         // satellite session is connected - the camera stream is useful on its own.
+        // Odysseus fork: Wi-Fi out of power save only while needed (odysseus/power/WifiPerformance.kt)
+        com.msp1974.vacompanion.odysseus.power.WifiPerformance.start(context, config)
         rtspServerManager.start()
         sendspinManager.start()
         bluetoothProxyManager.start()
@@ -100,5 +102,6 @@ internal class BackgroundTaskController (private val context: Context, val devic
         bluetoothProxyManager.shutdown()
         vacaUdpBroadcast.shutdown()
         com.msp1974.vacompanion.odysseus.announce.Announcements.stop() // Odysseus fork
+        com.msp1974.vacompanion.odysseus.power.WifiPerformance.stop() // Odysseus fork
     }
 }

@@ -316,6 +316,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         screenModeJob = lifecycleScope.launch {
             if (mode == ScreenOnMode.OFF) screenOffInProgress = true
             try {
+                // Odysseus fork: the screensaver turns the panel off for real with device admin (odysseus/screen/ScreenOff.kt)
+                if (com.msp1974.vacompanion.odysseus.screen.ScreenOff.apply(this@MainActivity, config, screen, mode, screenOffStartUp) { viewModel.setScreenBlank(it) }) return@launch
                 screen.setScreenMode(
                     mode = mode,
                     window = window,
@@ -472,12 +474,15 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                     terminateApp()
                 }
                 Intent.ACTION_SCREEN_ON -> {
+                    // Odysseus fork: a power button ends a panel-off screensaver (odysseus/screen/ScreenOff.kt)
+                    if (com.msp1974.vacompanion.odysseus.screen.ScreenOff.onSystemScreenOn()) config.screenSaver = false
                     // Handles if screen woken by hardware button
                     if (initialised && !config.screenOn) {
                         config.screenOn = true
                     }
                 }
                 Intent.ACTION_SCREEN_OFF -> {
+                    if (com.msp1974.vacompanion.odysseus.screen.ScreenOff.onSystemScreenOff()) return // Odysseus fork: the screensaver's own panel-off isn't "screen off" (odysseus/screen/ScreenOff.kt)
                     //Handles if screen off by hardware button or timeout
                     if (config.screenOn) {
                         config.screenOn = false
@@ -750,7 +755,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             if (enabled) {
                 ScreenOnMode.ON_DARK
             } else {
-                if (screen.isScreenOn()) ScreenOnMode.ON else ScreenOnMode.OFF
+                if (com.msp1974.vacompanion.odysseus.screen.ScreenOff.screensaverEndTurnsOn(screen.isScreenOn())) ScreenOnMode.ON else ScreenOnMode.OFF // Odysseus fork: a panel-off screensaver ends with the screen on (odysseus/screen/ScreenOff.kt)
             }
         )
     }

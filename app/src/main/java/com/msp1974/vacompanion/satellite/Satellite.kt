@@ -13,7 +13,6 @@ import androidx.core.net.toUri
 import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.audio.AudioOutputRouter
 import com.msp1974.vacompanion.audio.DetectionBuffer
-import com.msp1974.vacompanion.audio.MicLevelMonitor
 import com.msp1974.vacompanion.audio.MicrophoneAudioStream
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.broadcasts.VacaUdpBroadcast
@@ -522,6 +521,14 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
         detectionBuffer = null
     }
 
+    // Odysseus fork: a pipeline drops only the buffer it was given. An interrupted pipeline ends
+    // asynchronously, after a barge-in has started a new wake word's buffer (odysseus/WakeIndicatorPolicy.kt).
+    private fun cancelDetectionBuffer(own: DetectionBuffer?) {
+        own ?: return
+        own.cancel()
+        if (detectionBuffer === own) detectionBuffer = null
+    }
+
     /** True while a pipeline is genuinely in progress: started, and neither ended nor stuck. */
     fun isResponding(): Boolean {
         val pipeline = audioPipeline ?: return false
@@ -542,10 +549,8 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
      */
     private suspend fun interruptResponse(detection: WakeWordEngineProvider.WakeWordDetection) {
         Timber.i("Wake word heard while responding, interrupting")
-        val level = MicLevelMonitor.calibrated(
-            microphone.level.peakDbfs(MicLevelMonitor.WAKE_WORD_WINDOW_MS), config.wakeLevelOffsetDb
-        )
-        VacaUdpBroadcast.instance?.reportInterruption(detection.score, level)
+        val level = odysseus.wakeLevel(microphone.level) // Odysseus fork: the wake word's level and noise floor (odysseus/arbitration/WakeLevelMeter.kt)
+        VacaUdpBroadcast.instance?.reportInterruption(detection.score, level.levelDb, level.floorDb)
         cancelDetectionBuffer()
         audioPipeline?.stop()
         audioPipeline = null
@@ -575,9 +580,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
         var buffer: DetectionBuffer? = null
         try {
             // Measured before the sound plays, so the device's own chime can't count towards it.
-            val level = MicLevelMonitor.calibrated(
-                microphone.level.peakDbfs(MicLevelMonitor.WAKE_WORD_WINDOW_MS), config.wakeLevelOffsetDb
-            )
+            val level = odysseus.wakeLevel(microphone.level) // Odysseus fork: the wake word's level and noise floor (odysseus/arbitration/WakeLevelMeter.kt)
 
             // Every device that heard the wake word reacts at once: the sound tells the user it was
             // heard, and the audio from now on is kept, so nothing said while the devices agree
@@ -588,8 +591,9 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
             val won = VacaUdpBroadcast.instance?.arbitrateWakeWord(
                 detection.score,
-                level,
+                level.levelDb,
                 contest = detection.wakeWordId != "manual_wake",
+                floorDb = level.floorDb,
             ) ?: true
             if (!won) {
                 Timber.i("Another device is nearer to the speaker, not starting audio pipeline")
@@ -607,11 +611,12 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
                 config.screenSaver = false
             }
             audioLogManager.onWakeWordDetected(detection.timestamp, detection.wakeWord, detection.score)
-            if (!odysseus.awaitHaIdle()) return // Odysseus fork: HA's previous run must end first (odysseus/HaRunGate.kt)
+            if (!odysseus.readyForTurn(buffer)) return // Odysseus fork: HA's previous run ended, not locked, audio kept (odysseus/OdysseusSatellite.kt)
             startAudioPipeline(PipelineStartMode.WAKE_WORD_DETECTED, detection.timestamp, buffer)
             buffer = null // the pipeline owns it now
         } finally {
             arbitratingWakeWord = false
+            odysseus.wakeEnded() // Odysseus fork: "Listening…" back to idle unless a turn started (odysseus/WakeIndicatorPolicy.kt)
             buffer?.let {
                 it.cancel()
                 if (detectionBuffer === it) detectionBuffer = null
@@ -720,7 +725,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
                 odysseus.onStage(odysseusTurn, state) // Odysseus fork: listening indicator, the turn
                 audioPipelineLastStateChange = System.currentTimeMillis()
                 // Past listening the kept audio is of no use any more.
-                if (state.ordinal > PipelineStage.VOICE_STARTED.ordinal) cancelDetectionBuffer()
+                if (state.ordinal > PipelineStage.VOICE_STARTED.ordinal) cancelDetectionBuffer(buffer) // Odysseus fork: its own only; a barge-in's new one may be current
                 // Refresh the diagnostics mode (detect/stream). Without a wake word engine there
                 // are no level updates to piggyback on, and the level drops to zero once the
                 // pipeline stops listening.
@@ -750,7 +755,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
             override fun onFinish(reason: PipelineEndReason, continueConversation: Boolean) {
                 Timber.i("Pipeline ended.  Restarting: $continueConversation")
-                cancelDetectionBuffer()
+                cancelDetectionBuffer(buffer) // Odysseus fork: its own only; a barge-in's new one may be current
                 odysseus.afterTurn(startStage, reason, continueConversation) // Odysseus fork: follow-up (odysseus/followup/FollowUp.kt)
                 // A continuing conversation keeps other devices ducked until it really finishes.
                 // This device ducked the others when it won arbitration, so it always unducks them.

@@ -11,6 +11,8 @@ package com.msp1974.vacompanion.odysseus
 // - Barge-in (BargeIn.kt): onWakeWord(), at the top of handleWakeWordDetection.
 // - Lock mode (lock/SatelliteLock.kt): onStart(), onServerPacket(), onWakeWord(), [locked].
 // - The turn (OdysseusTurn.kt, ListeningIndicator.kt's VoiceActivity): beginTurn(), onStage().
+// - The listening indicator for a wake word that ends without a turn (WakeIndicatorPolicy.kt):
+//   showListening(), readyForTurn(), wakeEnded().
 // - Follow-up (followup/FollowUp.kt): afterTurn().
 // - Stop word model only while something can be stopped (wakeword/StopWordGate.kt): stopWordUseful().
 // - Wi-Fi (power/WifiPerformance.kt): full performance from the wake word, or a pipeline starting,
@@ -19,6 +21,8 @@ package com.msp1974.vacompanion.odysseus
 // - Settings the device keeps (settings/DeviceSettings.kt): haSettings(), in handleSettings.
 
 import com.msp1974.vacompanion.audio.DetectionBuffer
+import com.msp1974.vacompanion.audio.MicLevelMonitor
+import com.msp1974.vacompanion.odysseus.arbitration.WakeLevelReading
 import com.msp1974.vacompanion.odysseus.alarms.AlarmClock
 import com.msp1974.vacompanion.odysseus.alarms.TimerRules
 import com.msp1974.vacompanion.broadcasts.VacaUdpBroadcast
@@ -38,6 +42,7 @@ import com.msp1974.vacompanion.wyoming.WyomingCustomEventType
 import com.msp1974.vacompanion.wyoming.WyomingEvent
 import com.msp1974.vacompanion.wyoming.WyomingPacket
 import kotlin.reflect.KMutableProperty0
+import timber.log.Timber
 
 class OdysseusSatellite(
     private val satellite: Satellite,
@@ -124,25 +129,59 @@ class OdysseusSatellite(
      */
     private fun holdVoice() = WifiPerformance.holdWhile(WifiNeed.VOICE) { arbitrating.get() || pipelineActive() }
 
-    /** Show "Listening…" at once. */
-    fun showListening() = VoiceActivity.onWakeWord()
+    // "Listening…" from the wake word until a turn starts or the wake word ends without one
+    // (WakeIndicatorPolicy.kt): the one place that clears it when this device doesn't answer.
+    private val wakeIndicator = WakeIndicatorPolicy(show = VoiceActivity::onWakeWord, hide = VoiceActivity::onIdle)
+
+    /** The wake word's calibrated level and noise floor, for arbitration (arbitration/WakeLevelMeter.kt). */
+    fun wakeLevel(monitor: MicLevelMonitor) = WakeLevelReading.of(monitor.wake, satellite.config.wakeLevelOffsetDb)
+
+    /** Show "Listening…" at once: a wake word was heard and this device may answer it. */
+    fun showListening() = wakeIndicator.wakeHeard()
+
+    /**
+     * The end of Satellite.handleWakeWordDetection, however it ended (its `finally`). Unless a turn
+     * started, the indicator goes back to idle now: lost arbitration, a late report told it lost,
+     * Lock mode, HA's previous run never ending, dropped audio, an error.
+     */
+    fun wakeEnded() = wakeIndicator.wakeEnded()
 
     fun showIdle() = VoiceActivity.onIdle()
 
-    /** Never start a run while HA's previous one is still going (HaRunGate.kt). False: give up. */
-    suspend fun awaitHaIdle(): Boolean = HaRunGate.awaitIdle().also { if (!it) VoiceActivity.onIdle() }
+    /**
+     * Whether the wake word this device won may start a turn now. Never while HA's previous run is
+     * still going (HaRunGate.kt); not if the device locked meanwhile (the engine's mute comes too
+     * late for a wake word already being arbitrated) or the audio kept since the wake word was
+     * dropped (Lock mode drops it; a pipeline started with it would stream nothing). False: give up;
+     * wakeEnded() clears the indicator.
+     */
+    suspend fun readyForTurn(buffer: DetectionBuffer): Boolean {
+        if (!HaRunGate.awaitIdle()) return false
+        if (LockMode.isLocked) {
+            Timber.i("Lock mode: locked while the wake word was arbitrated, not answering")
+            return false
+        }
+        if (buffer.isCancelled) {
+            Timber.w("The audio kept since the wake word was dropped, not answering")
+            return false
+        }
+        return true
+    }
 
     /** Satellite.startAudioPipeline, once the old pipeline is stopped. */
     fun beginTurn(startStage: PipelineStartMode): OdysseusTurn {
         // Not for an announcement (HA's audio-start): that is no Assist run.
         if (startStage != PipelineStartMode.START_STREAM_TTS) HaRunGate.runStarted()
         holdVoice() // also announcements, follow-ups and continued conversations
+        wakeIndicator.turnStarted() // its stages drive the indicator from now on
         return OdysseusTurn.begin(satellite.context, startStage, satellite.config)
     }
 
     /** The pipeline's onStateChange: the on-screen indicator and the turn. */
     fun onStage(turn: OdysseusTurn, state: PipelineStage) {
-        VoiceActivity.onPipelineStage(state)
+        // An older turn's late stages (its ENDED after a barge-in stopped it) don't hide the new
+        // wake word's "Listening…".
+        if (wakeIndicator.stageShown()) VoiceActivity.onPipelineStage(state)
         turn.onStage(state, satellite.mediaManager)
     }
 

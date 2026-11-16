@@ -13,6 +13,9 @@ import kotlin.math.log10
  */
 class MicLevelMonitor {
 
+    /** Odysseus fork: the wake word level used in arbitration and calibration (odysseus/arbitration/WakeLevelMeter.kt). */
+    val wake = com.msp1974.vacompanion.odysseus.arbitration.WakeLevelMeter()
+
     private class Frame(val durationMs: Float, val levelDb: Float)
 
     private val frames = ArrayDeque<Frame>()
@@ -21,6 +24,7 @@ class MicLevelMonitor {
     @Synchronized
     fun update(frame: ShortArray, sampleRate: Int = VACAAudioFormat.SAMPLE_RATE_HZ) {
         if (frame.isEmpty()) return
+        wake.update(frame, sampleRate) // Odysseus fork: see [wake]
         var sum = 0.0
         for (s in frame) {
             val v = s / 32768.0
@@ -54,6 +58,7 @@ class MicLevelMonitor {
 
     @Synchronized
     fun reset() {
+        wake.reset() // Odysseus fork: see [wake]
         frames.clear()
         framesMs = 0f
     }

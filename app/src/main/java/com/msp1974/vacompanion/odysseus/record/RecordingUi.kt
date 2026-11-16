@@ -102,13 +102,6 @@ fun RecordingPill(modifier: Modifier = Modifier) {
         }
     }
 
-    val dot by rememberInfiniteTransition(label = "rec-dot").animateFloat(
-        initialValue = 1f,
-        targetValue = 0.3f,
-        animationSpec = infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "rec-dot-alpha",
-    )
-
     Box(modifier = modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = active,
@@ -116,6 +109,14 @@ fun RecordingPill(modifier: Modifier = Modifier) {
             exit = fadeOut(tween(300)),
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
         ) {
+            // Inside the visible content, so the dot animates only while the pill shows.
+            val dot by rememberInfiniteTransition(label = "rec-dot").animateFloat(
+                initialValue = 1f,
+                targetValue = 0.3f,
+                animationSpec = infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                label = "rec-dot-alpha",
+            )
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier

@@ -27,6 +27,9 @@ class SendspinAudioOutput {
     var isStarted = false
         private set
 
+    // Odysseus fork: lets the feedback thread sleep while no stream plays (docs/odysseus/power.md).
+    private val startedSignal = Object()
+
     private var sampleRate = 0
     private var channels = 0
     private var bytesPerFrame = 0
@@ -69,6 +72,7 @@ class SendspinAudioOutput {
                 existing.setVolume(gain)
                 existing.play()
                 isStarted = true
+                signalStarted() // Odysseus fork: wake the feedback thread (docs/odysseus/power.md)
                 return true
             } catch (e: Exception) {
                 Timber.w(e, "Sendspin: reusing AudioTrack failed, recreating")
@@ -119,6 +123,7 @@ class SendspinAudioOutput {
         newTrack.play()
         track = newTrack
         isStarted = true
+        signalStarted() // Odysseus fork: wake the feedback thread (docs/odysseus/power.md)
         Timber.d("Sendspin: output started rate=$sampleRate channels=$channels buffer=$bufferBytes")
         true
     }
@@ -196,6 +201,20 @@ class SendspinAudioOutput {
     fun setGain(value: Float) {
         gain = value.coerceIn(0f, 1f)
         runCatching { track?.setVolume(gain) }
+    }
+
+    // Odysseus fork (docs/odysseus/power.md): while no stream is started, [pollPlayed] always
+    // returns null, so the feedback thread waits here instead of waking every 10 ms. [start]
+    // wakes it at once, so feedback for a new stream begins exactly as before.
+    @Throws(InterruptedException::class)
+    fun awaitStarted(timeoutMs: Long) {
+        synchronized(startedSignal) {
+            if (!isStarted) startedSignal.wait(timeoutMs)
+        }
+    }
+
+    private fun signalStarted() {
+        synchronized(startedSignal) { startedSignal.notifyAll() }
     }
 
     fun setPreferredDevice(device: AudioDeviceInfo?) {

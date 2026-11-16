@@ -143,7 +143,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
     private val audioLogManager: SatelliteAudioLog = SatelliteAudioLog(config).apply {
         onPlaybackStatusChanged = { playing ->
-            muteMicrophone(playing)
+            muteMicrophone(playing || config.isMuted) // Odysseus fork: stay muted after a diagnostic playback if the user muted (docs/odysseus/power.md)
             sendDiagnostics(lastAudioLevel, lastDetectionLevel)
         }
     }

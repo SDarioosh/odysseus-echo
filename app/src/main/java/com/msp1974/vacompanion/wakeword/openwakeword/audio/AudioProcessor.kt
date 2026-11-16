@@ -2,8 +2,9 @@ package com.msp1974.vacompanion.wakeword.openwakeword.audio
 
 import android.content.res.AssetManager
 import com.msp1974.vacompanion.wakeword.openwakeword.ml.EmbeddingModel
+import com.msp1974.vacompanion.odysseus.audio.SampleHistory
+import com.msp1974.vacompanion.odysseus.audio.plusKeepingLast
 import com.msp1974.vacompanion.wakeword.openwakeword.ml.MelSpectrogram
-import java.util.*
 import kotlin.random.Random
 
 /**
@@ -28,10 +29,14 @@ internal class AudioProcessor(
     private val embeddingModel = EmbeddingModel(assetManager)
 
     private var featureBuffer: Array<FloatArray>? = null
-    private val rawDataBuffer = ArrayDeque<Float>(SAMPLE_RATE * 10)
+    private val rawDataBuffer = SampleHistory(SAMPLE_RATE * 10) // Odysseus fork: was a boxed ArrayDeque<Float> copied whole every frame (docs/odysseus/power.md)
     private var rawDataRemainder = floatArrayOf()
     private var melSpectrogramBuffer: Array<FloatArray> = Array(WINDOW_SIZE) { FloatArray(MEL_SPEC_FRAMES) { 1.0f } }
     private var accumulatedSamples = 0
+
+    // Odysseus fork (docs/odysseus/power.md): the embedding model's input, reused instead of
+    // 2,400 new arrays per frame. Zeroed at the start of each use, as a new one would be.
+    private val embeddingInput = Array(1) { Array(WINDOW_SIZE) { Array(MEL_SPEC_FRAMES) { FloatArray(1) } } }
 
     init {
         // Initialize feature buffer with random data
@@ -84,7 +89,8 @@ internal class AudioProcessor(
         if (accumulatedSamples >= N_PREPARED_SAMPLES && accumulatedSamples % N_PREPARED_SAMPLES == 0) {
             streamingMelSpectrogram(accumulatedSamples)
 
-            val x = Array(1) { Array(WINDOW_SIZE) { Array(MEL_SPEC_FRAMES) { FloatArray(1) } } }
+            val x = embeddingInput // Odysseus fork: reused (docs/odysseus/power.md)
+            for (row in x[0]) for (cell in row) cell[0] = 0f
 
             for (i in (accumulatedSamples / N_PREPARED_SAMPLES) - 1 downTo 0) {
                 val ndx = if (i == 0) melSpectrogramBuffer.size else melSpectrogramBuffer.size - 8 * i
@@ -99,7 +105,7 @@ internal class AudioProcessor(
                 if (x[0].size == WINDOW_SIZE) {
                     val newFeatures = embeddingModel.generateEmbeddings(x)
                     featureBuffer = featureBuffer?.let { existing ->
-                        existing + newFeatures
+                        existing.plusKeepingLast(newFeatures, FEATURE_BUFFER_MAX_LEN) // Odysseus fork: trimmed in the same copy (docs/odysseus/power.md)
                     } ?: newFeatures
                 }
             }
@@ -119,13 +125,8 @@ internal class AudioProcessor(
     }
 
     private fun bufferRawData(data: FloatArray) {
-        // Remove old data if buffer is full
-        while (rawDataBuffer.size + data.size > SAMPLE_RATE * 10) {
-            rawDataBuffer.poll()
-        }
-
-        // Add new data
-        data.forEach { rawDataBuffer.offer(it) }
+        // Keeps the newest 10 s, dropping the oldest samples (Odysseus fork: SampleHistory).
+        rawDataBuffer.append(data)
     }
 
     private fun streamingMelSpectrogram(nSamples: Int) {
@@ -134,19 +135,14 @@ internal class AudioProcessor(
         }
 
         // Get last n_samples + 480 samples
-        val bufferList = rawDataBuffer.toList()
-        val tempArray = bufferList.takeLast(nSamples + 480).toFloatArray()
+        val tempArray = rawDataBuffer.last(nSamples + 480) // Odysseus fork: no copy of the whole 10 s (docs/odysseus/power.md)
 
         // Compute mel-spectrogram
         val newMelSpectrogram = melSpectrogram.computeMelSpectrogram(tempArray)
 
-        // Combine with existing buffer
-        melSpectrogramBuffer = melSpectrogramBuffer + newMelSpectrogram
-
-        // Trim if exceeds max length
-        if (melSpectrogramBuffer.size > MEL_SPECTROGRAM_MAX_LEN) {
-            melSpectrogramBuffer = melSpectrogramBuffer.takeLast(MEL_SPECTROGRAM_MAX_LEN).toTypedArray()
-        }
+        // Combine with existing buffer, keeping at most MEL_SPECTROGRAM_MAX_LEN rows
+        // (Odysseus fork: in one copy, docs/odysseus/power.md)
+        melSpectrogramBuffer = melSpectrogramBuffer.plusKeepingLast(newMelSpectrogram, MEL_SPECTROGRAM_MAX_LEN)
     }
 
     private fun getFeatures(nFeatureFrames: Int, startNdx: Int): Array<Array<FloatArray>> {

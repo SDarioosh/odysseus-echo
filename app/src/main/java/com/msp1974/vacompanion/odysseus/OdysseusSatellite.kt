@@ -12,12 +12,14 @@ package com.msp1974.vacompanion.odysseus
 // - Lock mode (lock/SatelliteLock.kt): onStart(), onServerPacket(), onWakeWord(), [locked].
 // - The turn (OdysseusTurn.kt, ListeningIndicator.kt's VoiceActivity): beginTurn(), onStage().
 // - Follow-up (followup/FollowUp.kt): afterTurn().
+// - Stop word model only while something can be stopped (wakeword/StopWordGate.kt): stopWordUseful().
 
 import com.msp1974.vacompanion.audio.DetectionBuffer
 import com.msp1974.vacompanion.broadcasts.VacaUdpBroadcast
 import com.msp1974.vacompanion.odysseus.followup.FollowUp
 import com.msp1974.vacompanion.odysseus.lock.LockMode
 import com.msp1974.vacompanion.odysseus.lock.SatelliteLock
+import com.msp1974.vacompanion.odysseus.wakeword.StopWordRules
 import com.msp1974.vacompanion.satellite.PipelineEndReason
 import com.msp1974.vacompanion.satellite.PipelineStage
 import com.msp1974.vacompanion.satellite.PipelineStartMode
@@ -35,6 +37,8 @@ class OdysseusSatellite(
     private val arbitrating: KMutableProperty0<Boolean>,
     /** Satellite has a pipeline that hasn't ended. */
     pipelineActive: () -> Boolean,
+    /** Satellite's pipeline is streaming its response (what Satellite.handleStopWord stops). */
+    private val ttsStreaming: () -> Boolean,
     /** Starts Satellite's detection buffer: the microphone's audio from now on. */
     private val keepAudio: () -> DetectionBuffer,
     /** Satellite.cancelDetectionBuffer. */
@@ -86,6 +90,13 @@ class OdysseusSatellite(
         if (!satellite.isResponding()) BargeIn.interruptHaRun(satellite.config.uuid)
         return false
     }
+
+    /**
+     * A "stop" could stop something now (StopWordRules, the same checks as Satellite.handleStopWord).
+     * Read by the wake word engine's thread on every 10 ms feature frame: cheap reads only.
+     */
+    fun stopWordUseful(): Boolean =
+        StopWordRules.useful(ttsStreaming(), satellite.mediaManager.alarmPlayer.isSounding())
 
     /** Show "Listening…" at once. */
     fun showListening() = VoiceActivity.onWakeWord()

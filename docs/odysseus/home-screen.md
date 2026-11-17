@@ -14,10 +14,9 @@ away, and the Echo goes back to the clock by itself.
   nothing playing anywhere, the line is hidden.
 - **Swipe right** (finger moves right) on the clock: the Home Assistant dashboard.
 - **Swipe left** on the dashboard: back to the clock.
-- **Swipe left** on the clock: the **Today page** (see below), when the device is linked to
-  Odysseus. Swipe right to go back to the clock.
-- **Swipe left** again: the **Music page** ([music.md](music.md)), when Home Assistant is signed
-  in and Music Assistant has players (right of the clock when the Today page is off).
+- **Swipe left** on the clock: the **Music page** ([music.md](music.md)), when Home Assistant is
+  signed in and Music Assistant has players. Swipe right to go back to the clock. There is no
+  Today page on the Echo any more (removed 2026-11-17); the clock's Today panel still shows it.
 - **Idle**: after 2 minutes without a touch, the dashboard (or another page) goes back to the
   clock by itself; the Music page stays while something plays on this device when its "Stay
   while playing here" is on.
@@ -34,7 +33,7 @@ Menu → Odysseus → **Home screen**. Stored on the Echo only, not sent to Home
 | Back to the clock after | 1, 2, 5, 10 min, Never | 2 min |
 | Weather | on / off | on |
 | Weather entity | Auto, or one of Home Assistant's `weather.*` entities | Auto |
-| Today page | on / off (shown only while linked to Odysseus) | on |
+| Today page | on / off: no longer a page; it now only turns on the Today data for the clock's Today panel (while linked to Odysseus) | on |
 | Music page (Menu → Odysseus → Music, [music.md](music.md)) | on / off (shown only while Music Assistant has players) | on |
 | Music on other speakers | on / off (also the dashboard's now-playing card) | on |
 | Speaker to follow | Auto (this room first), or one of the listed media players (the Music page's list) | Auto |
@@ -210,7 +209,8 @@ other speakers reach the clock through `clockNowPlaying` / `onClockCommand`.
 
 ## Today page
 
-Page 1, right of the clock. From Odysseus (`GET <voice base>/today`, the same base URL and
+**Not in the page list any more** (`HomePages.all` leaves it out; `TodayPage.kt` is kept, unused).
+Its data still feeds the clock's Today panel. It was page 1, right of the clock. From Odysseus (`GET <voice base>/today`, the same base URL and
 voice token as Menu → Odysseus; contract C1 in
 [plans/2026-11-today-updates-announce-record.md](plans/2026-11-today-updates-announce-record.md)).
 To-dos and action items can be marked done from it (below); everything else is read-only.

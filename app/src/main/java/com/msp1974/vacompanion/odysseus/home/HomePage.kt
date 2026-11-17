@@ -12,7 +12,6 @@ import androidx.compose.ui.Modifier
 import com.msp1974.vacompanion.odysseus.done.DoneMarks
 import com.msp1974.vacompanion.odysseus.done.DoneTarget
 import com.msp1974.vacompanion.odysseus.home.music.MusicPage
-import com.msp1974.vacompanion.odysseus.home.today.TodayPage
 import com.msp1974.vacompanion.odysseus.home.today.TodayView
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherNow
 import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
@@ -74,7 +73,8 @@ object HomePages {
     val all: List<HomePage>
         get() = buildList {
             add(ClockPage)
-            if (TodayPage.available) add(TodayPage)
+            // Odysseus fork: no Today page on the Echo devices; a swipe from the clock goes to Music.
+            // The Today data still feeds the clock's Today panel (home/today/).
             if (MusicPage.available) add(MusicPage) // Odysseus fork: the Music page (home/music/)
         }
 }

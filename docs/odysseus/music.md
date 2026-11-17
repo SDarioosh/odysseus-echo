@@ -7,8 +7,7 @@ its tabs are E13; library and search (E14) add tabs.
 
 ## What you see
 
-The Music page is right of the Today page on the home screen (right of the clock when the Today
-page is off): swipe left from the clock. It is offered only while the Music page is on, Home
+The Music page is right of the clock on the home screen: swipe left from the clock. It is offered only while the Music page is on, Home
 Assistant is signed in and Music Assistant has at least one player.
 
 - **A rail of tabs** on the left (icon and a short label); tap one to switch. The tab chosen is

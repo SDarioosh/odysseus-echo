@@ -56,7 +56,7 @@ fun MusicSettingsSection() {
 
     ManagedSwitchRow(
         enabled, "Music page",
-        "Right of the Today page: what plays in each room, volume, moving and grouping, from Music Assistant through Home Assistant." +
+        "Right of the clock: what plays in each room, volume, moving and grouping, from Music Assistant through Home Assistant." +
             if (MusicRepository.available) "" else " Shows once Home Assistant is signed in and Music Assistant has players.",
         managedKey = MusicSettings.KEY_ENABLED,
     ) { MusicSettings.enabled = it }

@@ -1,0 +1,56 @@
+{
+  "date": "2026-11-06",
+  "generated": "2026-11-06T05:15:45+01:00",
+  "headline": "The dentist at three; the plumber is due today.",
+  "focus": [
+    {
+      "ref": "todo:0ba57096-fbe2-4dd4-9715-b68334f36ffb:0",
+      "title": "Call the plumber",
+      "why": "Due today"
+    },
+    {
+      "ref": "205e6a2c-b081-4e7e-974e-1bc830e0c30d",
+      "title": "Dentist",
+      "why": "At 15:00"
+    }
+  ],
+  "events": [
+    {
+      "uid": "db434e9b-738a-4f41-980b-a02b62d680c3",
+      "title": "Recycling day",
+      "start": "2026-11-06T00:00:00+01:00",
+      "end": "2026-11-07T00:00:00+01:00",
+      "all_day": true,
+      "location": null
+    },
+    {
+      "uid": "d4ca75a2-92aa-414d-9576-ac7d143784fa::2026-11-06T09:00",
+      "title": "Standup",
+      "start": "2026-11-06T10:00:00+01:00",
+      "end": "2026-11-06T10:15:00+01:00",
+      "all_day": false,
+      "location": null
+    },
+    {
+      "uid": "205e6a2c-b081-4e7e-974e-1bc830e0c30d",
+      "title": "Dentist",
+      "start": "2026-11-06T16:00:00+01:00",
+      "end": "2026-11-06T16:30:00+01:00",
+      "all_day": false,
+      "location": "Main St"
+    }
+  ],
+  "todos": [
+    {
+      "ref": "todo:0ba57096-fbe2-4dd4-9715-b68334f36ffb:0",
+      "title": "Call the plumber",
+      "due": "2026-11-06",
+      "list": "Home"
+    }
+  ],
+  "action_items": [],
+  "counts": {
+    "todos_open": 1,
+    "action_items_open": 0
+  }
+}

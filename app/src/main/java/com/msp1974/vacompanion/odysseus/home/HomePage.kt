@@ -9,21 +9,41 @@ package com.msp1974.vacompanion.odysseus.home
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
+import com.msp1974.vacompanion.odysseus.done.DoneMarks
+import com.msp1974.vacompanion.odysseus.done.DoneTarget
+import com.msp1974.vacompanion.odysseus.home.music.MusicPage
+import com.msp1974.vacompanion.odysseus.home.today.TodayView
 import com.msp1974.vacompanion.odysseus.home.weather.WeatherNow
 import com.msp1974.vacompanion.sendspin.SendspinNowPlaying
 
 /** Everything a page may show or do. Add fields here when a new page needs more. */
 @Immutable
 data class HomePageContext(
+    /** This device's own Sendspin player (the Music page reads it as this device's). */
     val nowPlaying: SendspinNowPlaying = SendspinNowPlaying(),
+    /**
+     * What the clock shows for "Now playing from: This device": [nowPlaying], or another speaker's
+     * music while this device plays nothing (players/OtherPlayers). Null: [nowPlaying].
+     */
+    val clockNowPlaying: SendspinNowPlaying? = null,
     val isNetworkConnected: Boolean = true,
     /** Home Assistant is connected to this device. */
     val isServerConnected: Boolean = true,
     val isDND: Boolean = false,
     /** Current weather from Home Assistant; null = don't show any. */
     val weather: WeatherNow? = null,
+    /** The Today page's data from Odysseus (today/TodayRepository). */
+    val today: TodayView = TodayView.NotLinked,
+    /** The Today page's Done marks (today/TodayDone). */
+    val todayDone: DoneMarks = DoneMarks(),
+    /** Marks a Today row done: target, its title and its place in its list. */
+    val onTodayDone: (DoneTarget, String, Int) -> Unit = { _, _, _ -> },
+    /** Undoes a Today row's done. */
+    val onTodayUndo: (DoneTarget) -> Unit = {},
     /** Sends a Sendspin transport command ("play", "pause", "next", …). */
     val onSendspinCommand: (String) -> Unit = {},
+    /** Sends a transport command to what [clockNowPlaying] shows. Null: [onSendspinCommand]. */
+    val onClockCommand: ((String) -> Unit)? = null,
 )
 
 interface HomePage {
@@ -36,9 +56,25 @@ interface HomePage {
      */
     @Composable
     fun Content(context: HomePageContext, modifier: Modifier)
+
+    /**
+     * True while this page, when shown, should keep the screen from going back to the clock after
+     * the idle time (the Music page while music plays here). Read from HomeScreenController, so
+     * read only Compose state here and nothing slow.
+     */
+    fun idleExempt(): Boolean = false
 }
 
 object HomePages {
-    /** Left to right. Index 0 is where the idle timer returns to. */
-    val all: List<HomePage> by lazy { listOf(ClockPage) }
+    /**
+     * Left to right. Index 0 is where the idle timer returns to. A getter, not a fixed list: a page
+     * can come and go with its setting (reads Compose state, so readers recompose).
+     */
+    val all: List<HomePage>
+        get() = buildList {
+            add(ClockPage)
+            // Odysseus fork: no Today page on the Echo devices; a swipe from the clock goes to Music.
+            // The Today data still feeds the clock's Today panel (home/today/).
+            if (MusicPage.available) add(MusicPage) // Odysseus fork: the Music page (home/music/)
+        }
 }

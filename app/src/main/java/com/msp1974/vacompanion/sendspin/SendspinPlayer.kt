@@ -146,7 +146,7 @@ class SendspinPlayer(
         } else {
             NativeSendspin.nativeUpdateVolume(handle, volume)
             NativeSendspin.nativeUpdateMuted(handle, muted)
-            NativeSendspin.nativeSetPreferredServer(handle, preferredServerIp())
+            NativeSendspin.nativeSetPreferredServer(handle, allowedServerAddresses())
             NativeSendspin.nativeSetTrustedServerIds(handle, config.sendspinTrustedServerIds) // Odysseus fork
             // Odysseus fork: encryption and pairing.
             val clientId = NativeSendspin.nativeClientId(handle)
@@ -181,6 +181,14 @@ class SendspinPlayer(
         return host
     }
 
+    // Odysseus fork: the preferred server's address plus the one Home Assistant connects to this
+    // device from (Music Assistant reaches a Tailscale device from there). See SendspinAllowedAddresses.
+    private fun allowedServerAddresses(): String {
+        val addresses = SendspinAllowedAddresses.of(preferredServerIp(), config.pairedDeviceId)
+        Timber.i("Sendspin: allowed server addresses '${addresses.ifEmpty { "any" }}'")
+        return addresses
+    }
+
     /** [restarting]: the player will come back (see [NativeSendspin.nativeDestroy]). */
     fun destroy(restarting: Boolean = false) {
         if (!destroyed.compareAndSet(false, true)) return
@@ -209,6 +217,11 @@ class SendspinPlayer(
         val thread = Thread {
             Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
             while (!destroyed.get()) {
+                // Odysseus fork: sleep while no stream plays; start() wakes this at once (docs/odysseus/power.md).
+                if (!output.isStarted) {
+                    try { output.awaitStarted(IDLE_WAIT_MS) } catch (_: InterruptedException) { break }
+                    continue
+                }
                 val h = handle
                 if (h != 0L) {
                     output.pollPlayed()?.let { played ->
@@ -529,9 +542,10 @@ class SendspinPlayer(
 
     override fun onEventTriggered(event: Event) {
         when (event.eventName) {
-            "sendspin_preferred_server" -> {
+            // Odysseus fork: paired_device_id is Home Assistant's address (see allowedServerAddresses).
+            "sendspin_preferred_server", "paired_device_id" -> {
                 val h = handle
-                if (h != 0L) NativeSendspin.nativeSetPreferredServer(h, preferredServerIp())
+                if (h != 0L) NativeSendspin.nativeSetPreferredServer(h, allowedServerAddresses())
             }
             // Odysseus fork: servers trusted from any address (Tailscale).
             "sendspin_trusted_server_ids" -> {
@@ -606,6 +620,7 @@ class SendspinPlayer(
         private const val SAMPLE_RATE = 48_000
         private const val AUDIO_BUFFER_BYTES = 1_000_000
         private const val FEEDBACK_INTERVAL_MS = 10L
+        private const val IDLE_WAIT_MS = 1_000L // Odysseus fork: fallback only; start() notifies
 
         private const val UNDUCK_STEP = 0.1f
         private const val UNDUCK_INTERVAL_MS = 100L

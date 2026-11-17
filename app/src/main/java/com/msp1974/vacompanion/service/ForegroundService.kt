@@ -59,6 +59,8 @@ class VAForegroundService @Inject constructor() : LifecycleService(), EventListe
         super.onCreate()
         firebase = FirebaseManager.getInstance(this)
         config.eventBroadcaster.addListener(this)
+        // Odysseus fork: the recorder lives with the process, HA connected or not (odysseus/record/RecorderController.kt)
+        com.msp1974.vacompanion.odysseus.record.RecorderController.install(this, deviceManager)
 
         // Some Amazon devices are not seeing this permission so we are trying to check
         val permission = "android.permission.DISABLE_KEYGUARD"

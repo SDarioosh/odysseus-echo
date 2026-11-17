@@ -62,7 +62,7 @@ fun WeatherBadge(weather: WeatherNow, modifier: Modifier = Modifier) {
 /** Whole degrees; the unit letter is left out, as on most clocks. */
 private fun degrees(value: Double) = "${value.roundToInt()}°"
 
-private fun drawableFor(icon: WeatherIcon): Int = when (icon) {
+internal fun drawableFor(icon: WeatherIcon): Int = when (icon) {
     WeatherIcon.SUNNY -> R.drawable.odysseus_mdi_weather_sunny
     WeatherIcon.NIGHT -> R.drawable.odysseus_mdi_weather_night
     WeatherIcon.PARTLY_CLOUDY -> R.drawable.odysseus_mdi_weather_partly_cloudy

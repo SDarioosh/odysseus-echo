@@ -37,6 +37,10 @@ class MicroWakeWord(
         outputZeroPoint = outputQuantParams.zeroPoint
     }
 
+    // Odysseus fork: what pausing and warming up a stop model needs (odysseus/wakeword/StopWordGate.kt).
+    val featureFramesPerInference: Int = interpreter.getInputTensor(0).shape().getOrElse(1) { 1 }
+    val probabilityWindow: Int get() = slidingWindowSize
+
     fun processAudioFeatures(features: FloatArray): DetectionInfo {
         if (features.isEmpty())
             return (DetectionInfo(false, 0f))

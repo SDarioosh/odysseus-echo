@@ -24,6 +24,8 @@ class MicrophoneInput (
     private val suppressor: MicSuppressor = MicSuppressor(),
     // Fed every frame as it is read, before any processing, so the real loudness can be told.
     private val level: MicLevelMonitor? = null,
+    // Odysseus fork: given a copy of every frame as read, before any processing (odysseus/audio/MicFrames.kt)
+    private val onRawFrame: ((ShortArray) -> Unit)? = null,
 ) : AutoCloseable {
 
     private val gate = MicGate()
@@ -157,6 +159,7 @@ class MicrophoneInput (
         if (readCount > 0) {
             val frame = audioBuffer.copyOfRange(0, readCount)
             level?.update(frame, sampleRateInHz)
+            onRawFrame?.invoke(frame.copyOf()) // Odysseus fork: raw tee (odysseus/audio/MicFrames.kt)
             if (applyEnhancement) {
                 // Too quiet to be speech: send silence, and leave WebRTC alone so its gain doesn't
                 // wind up on the noise.

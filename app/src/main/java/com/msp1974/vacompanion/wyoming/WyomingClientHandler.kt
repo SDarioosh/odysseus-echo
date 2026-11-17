@@ -14,10 +14,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.readByteArray
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -26,8 +26,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import timber.log.Timber
+import com.msp1974.vacompanion.odysseus.wyoming.WyomingSilencePolicy
 import java.net.SocketException
-import kotlin.time.Duration.Companion.seconds
 
 const val WATCHDOG_SOCKET_TIMEOUT = 5000L
 interface IClientHandler {
@@ -43,8 +43,8 @@ abstract class WyomingClientHandler (
     val socketId = socket.remoteAddress.port().toString()
     val clientId = socketId
     var lastMessage: Long = System.currentTimeMillis()
-    private lateinit var watchDogJob: Job
-    private lateinit var pingJob: Job
+    // Odysseus fork: no own ping, the read itself is the watchdog (odysseus/wyoming/WyomingSilencePolicy)
+    private var silenceExpected = false
     private lateinit var writeHandlerJob: Job
 
     val receiveChannel = socket.openReadChannel()
@@ -81,29 +81,16 @@ abstract class WyomingClientHandler (
                 }
             }
 
-            watchDogJob = scope.launch {
-                watchDogProcess(WATCHDOG_SOCKET_TIMEOUT)
-            }
-
-            pingJob = scope.launch {
-                pinger()
-            }
-
             while (runClient) {
-                val header = StringBuilder()
-                val byte = receiveChannel.readByte()
-                if (byte.toInt() == -1) throw java.io.EOFException("Connection closed by peer")
-
-                header.append(byte.toInt().toChar())
-
-                val remaining = receiveChannel.readLine()
-                if (remaining != null) header.append(remaining)
-
+                // Odysseus fork: each read times out after WATCHDOG_SOCKET_TIMEOUT without a message (odysseus/wyoming/WyomingSilencePolicy)
+                val header = withinWatchdog { readHeader() } ?: break
 
                 if (!header.isEmpty()) {
                     lastMessage = System.currentTimeMillis()
-                    val message = readMessage(header.toString())
+                    val read = withinWatchdog { Read(readMessage(header.toString())) } ?: break
+                    val message = read.packet
                     if (message != null) {
+                        silenceExpected = WyomingSilencePolicy.silenceExpectedAfter(message.type)
                         onWyomingMessage(socketId, message)
                     }
                 }
@@ -112,8 +99,6 @@ abstract class WyomingClientHandler (
             if (e is CancellationException) throw e
         } finally {
             withContext(NonCancellable) {
-                watchDogJob.cancel()
-                pingJob.cancel()
                 socket.close()
                 onClientDisconnected(socketId)
             }
@@ -124,25 +109,26 @@ abstract class WyomingClientHandler (
         runClient = false
     }
 
-    private suspend fun pinger() {
-        while(runClient) {
-            delay(3.seconds)
-            val packet = WyomingPacket( WyomingEvent.PING, buildJsonObject { put("text","") })
-            if (runClient)  writeMessage(packet)
-        }
+    // Odysseus fork: replaces the 3 s pinger and the 1 s watchdog loop (odysseus/wyoming/WyomingSilencePolicy)
+    private class Read(val packet: WyomingPacket?)
+
+    private suspend fun readHeader(): StringBuilder {
+        val header = StringBuilder()
+        val byte = receiveChannel.readByte()
+        if (byte.toInt() == -1) throw java.io.EOFException("Connection closed by peer")
+        header.append(byte.toInt().toChar())
+        val remaining = receiveChannel.readLine()
+        if (remaining != null) header.append(remaining)
+        return header
     }
 
-    private suspend fun watchDogProcess(timeout: Long) {
-        try {
-            while (runClient) {
-                delay(1.seconds)
-                if (System.currentTimeMillis() - lastMessage > timeout) {
-                    Timber.w("Watchdog timeout for client: $clientId. Disconnecting")
-                    runClient = false
-                }
-            }
-        } catch (e: Throwable) {
-            if (e is CancellationException) throw e
+    /** Runs [block], or returns null when Home Assistant has been silent for the watchdog time. */
+    private suspend fun <T : Any> withinWatchdog(block: suspend () -> T): T? {
+        val limit = WyomingSilencePolicy.readLimitMs(
+            lastMessage, System.currentTimeMillis(), WATCHDOG_SOCKET_TIMEOUT, silenceExpected
+        ) ?: return block()
+        return withTimeoutOrNull(limit) { block() }.also {
+            if (it == null) Timber.w("Watchdog timeout for client: $clientId. Disconnecting")
         }
     }
 

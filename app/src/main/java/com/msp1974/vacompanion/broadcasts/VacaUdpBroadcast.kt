@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -39,7 +40,11 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
+import com.msp1974.vacompanion.odysseus.arbitration.WakeDecisionLog
+import com.msp1974.vacompanion.odysseus.arbitration.WakeWordPickRules
+import com.msp1974.vacompanion.odysseus.power.MasterKeepAlivePolicy
+import com.msp1974.vacompanion.odysseus.power.WifiNeed
+import com.msp1974.vacompanion.odysseus.power.WifiPerformance
 
 /** Message types carried by [VacaUdpBroadcast]. Add new ones here. */
 object VacaBroadcastType {
@@ -47,11 +52,18 @@ object VacaBroadcastType {
     const val MASTER_CLAIM = "master_claim"
     const val MASTER_HEARTBEAT = "master_heartbeat"
 
+    // Odysseus fork: a device that stopped hearing the master asks before claiming; only the master
+    // answers (unicast). A master that shuts down says so, and the others elect at once.
+    const val MASTER_QUERY = "master_query"
+    const val MASTER_RESIGN = "master_resign"
+
     // Sent by a device when its listener comes up; the master answers with an immediate heartbeat.
     const val DEVICE_HELLO = "device_hello"
 
     // Sent by every device every few seconds, and when it hears a hello, so the others know who is
     // around and which wake word each listens for (see PeerPresence).
+    // Odysseus fork: sent to the master only (every 30 s, on a wake word change), and to a device
+    // that says hello or claims; the master's keep-alive carries its own wake word.
     const val PRESENCE = "presence"
 
     // Wake word arbitration: devices report detections to the master, which announces the winner.
@@ -141,9 +153,11 @@ class VacaUdpBroadcast(
         const val DATA_LEVEL = "level"
         const val DATA_WAKE_WORD = "wake_word"
         const val DATA_RESPONDING = "responding"
+        const val DATA_FLOOR = "floor" // Odysseus fork: calibrated noise floor, logged by the master only
 
-        // How often every device says it is still here. Peers are dropped after PeerPresence.PEER_TIMEOUT_MS.
-        private const val PRESENCE_INTERVAL_MS = 10_000L
+        // How often a device that isn't master tells the master it is here. Peers are dropped after
+        // PeerPresence.PEER_TIMEOUT_MS. Odysseus fork: 30 s, unicast to the master (was 10 s, broadcast).
+        private const val PRESENCE_INTERVAL_MS = MasterKeepAlivePolicy.PRESENCE_INTERVAL_MS
 
         // A hello is answered after a random delay up to this, so a room of devices doesn't all reply at once.
         private const val PRESENCE_REPLY_JITTER_MS = 500
@@ -159,14 +173,10 @@ class VacaUdpBroadcast(
         // How long a device waits for the master's decision before assuming it is gone and going ahead.
         private const val DECISION_TIMEOUT_MS = 1_500L
 
-        private const val HEARTBEAT_INTERVAL_MS = 2_000L
-        private const val HEARTBEAT_TIMEOUT_MS = 6_000L
-
-        // How long a freshly started device waits for the master to answer its hello before claiming.
-        private const val STARTUP_MASTER_WAIT_MS = 2_500L
-
-        // Devices wait a random time up to this before claiming mastership, so the fastest claims it.
-        private const val ELECTION_JITTER_MS = 500
+        // Odysseus fork: keep-alive, failover and election timing are in MasterKeepAlivePolicy
+        // (odysseus/power/): heartbeat every 5 s (was 2 s), master presumed gone after 12.5 s and a
+        // query (was 6 s), 2.5 s for a master to answer a query or the start-up hello.
+        private const val ELECTION_JITTER_MS = MasterKeepAlivePolicy.ELECTION_JITTER_MS
 
         // Set while running, so the satellite can arbitrate without holding a reference.
         @Volatile var instance: VacaUdpBroadcast? = null
@@ -189,15 +199,32 @@ class VacaUdpBroadcast(
         instance = this
         config.eventBroadcaster.addListener(this)
 
-        addHandler(VacaBroadcastType.MASTER_CLAIM) { msg -> onMasterSeen(msg.senderId) }
+        addHandler(VacaBroadcastType.MASTER_CLAIM) { msg ->
+            val wasMaster = isMaster
+            onMasterSeen(msg.senderId)
+            // Odysseus fork: a claim from a higher id while this device is master: tell the claimer
+            // at once (it may have missed our keep-alives), so two masters never last.
+            if (wasMaster && isMaster) sendHeartbeat(to = msg.sourceAddress)
+            // Odysseus fork: a new master knows only what it has heard; tell it who is here.
+            if (masterId == msg.senderId) replyPresence(msg.sourceAddress)
+        }
         addHandler(VacaBroadcastType.MASTER_HEARTBEAT) { msg -> onMasterSeen(msg.senderId) }
         // A device just came up and doesn't know the master: tell it straight away.
-        addHandler(VacaBroadcastType.DEVICE_HELLO) {
-            if (isMaster) send(VacaBroadcastType.MASTER_HEARTBEAT)
+        addHandler(VacaBroadcastType.DEVICE_HELLO) { msg ->
+            if (isMaster) sendHeartbeat(to = msg.sourceAddress) // Odysseus fork: unicast
             // ...and tell it who else is here, so it needn't wait to hear from each of us.
-            scope.launch {
-                delay((0..PRESENCE_REPLY_JITTER_MS).random().milliseconds)
-                sendPresence()
+            replyPresence(msg.sourceAddress)
+        }
+        // Odysseus fork: master_query and master_resign (see VacaBroadcastType).
+        addHandler(VacaBroadcastType.MASTER_QUERY) { msg -> if (isMaster) sendHeartbeat(to = msg.sourceAddress) }
+        addHandler(VacaBroadcastType.MASTER_RESIGN) { msg ->
+            if (msg.senderId == masterId) {
+                Timber.i("VacaUdpBroadcast: master ${msg.senderId} has stopped, electing")
+                masterId = null
+                lastMasterSeen = 0L
+                // It said it has gone, so there is nobody to ask: claim (after the jitter) straight away.
+                masterQueryAt = SystemClock.elapsedRealtime() - keepAlive.queryWaitMs
+                loopPoke.trySend(Unit)
             }
         }
         addHandler(VacaBroadcastType.WAKE_DETECTION) { msg ->
@@ -206,8 +233,9 @@ class VacaUdpBroadcast(
             val level = msg.data[DATA_LEVEL]?.jsonPrimitive?.floatOrNull
             val wakeWord = msg.data[DATA_WAKE_WORD]?.jsonPrimitive?.contentOrNull
             val responding = msg.data[DATA_RESPONDING]?.jsonPrimitive?.booleanOrNull ?: false
+            val floor = msg.data[DATA_FLOOR]?.jsonPrimitive?.floatOrNull // Odysseus fork: for the decision log
             if (isMaster) {
-                collectDetection(key(wakeWord), WakeWordArbiter.Contender(id, msg.senderId, score, level, wakeWord, responding))
+                collectDetection(key(wakeWord), WakeWordArbiter.Contender(id, msg.senderId, score, level, wakeWord, responding, floor, SystemClock.elapsedRealtime()))
             }
         }
         addHandler(VacaBroadcastType.WAKE_DECISION) { msg ->
@@ -234,8 +262,30 @@ class VacaUdpBroadcast(
     private val presence = PeerPresence()
 
     @Volatile private var masterId: String? = null
+        set(value) { field = value; updateWifiNeed() } // Odysseus fork: the master keeps Wi-Fi awake (odysseus/power/)
     @Volatile private var lastMasterSeen = 0L
     private val isMaster get() = masterId == config.uuid
+
+    // Odysseus fork: unicast where only one device needs a message (odysseus/power/MasterKeepAlivePolicy.kt).
+    private val keepAlive = MasterKeepAlivePolicy()
+    // Where each device was last heard from, so reports, decisions and replies can go to it alone.
+    private val peerAddresses = ConcurrentHashMap<String, InetAddress>()
+    private val masterAddress get() = masterId?.let { peerAddresses[it] }
+    // When this device last asked whether there is a master (its hello at start-up counts).
+    @Volatile private var masterQueryAt: Long? = null
+    // Wakes the election loop early: a resign, a forced election.
+    private val loopPoke = Channel<Unit>(Channel.CONFLATED)
+    // Master: detection ids already collected (each report comes unicast and as a broadcast copy).
+    private val collectedIds = LinkedHashMap<String, Long>()
+
+    /** Odysseus fork: the master holds Wi-Fi out of power save while other devices could report to it. */
+    private fun updateWifiNeed() {
+        val need = started && MasterKeepAlivePolicy.masterNeedsLock(isMaster, presence.competitors(null, config.uuid).size)
+        if (need == masterNeedsWifi) return
+        masterNeedsWifi = need
+        WifiPerformance.set(WifiNeed.ARBITRATION_MASTER, need)
+    }
+    @Volatile private var masterNeedsWifi = false
 
     // Master only: detections gathered per wake word (see [key]) while a decision window is open.
     private val pending = HashMap<String, MutableList<WakeWordArbiter.Contender>>()
@@ -264,7 +314,7 @@ class VacaUdpBroadcast(
      * if no other device listens for this wake word, if no master is known yet, or it doesn't
      * answer, so a dead master never silences a device.
      */
-    suspend fun arbitrateWakeWord(score: Float, levelDb: Float? = null, contest: Boolean = true): Boolean {
+    suspend fun arbitrateWakeWord(score: Float, levelDb: Float? = null, contest: Boolean = true, floorDb: Float? = null): Boolean {
         val wakeWordKey = key(config.wakeWord)
         if (!contest || !config.wakeWordArbitrationEnabled || wakeWordKey.isEmpty() || masterId == null) {
             sendDuck()
@@ -273,7 +323,10 @@ class VacaUdpBroadcast(
 
         // No other device listens for this wake word, so nobody else could have heard it and there
         // is nothing to decide: no round trip to the master and no window to wait out.
-        if (presence.competitors(config.wakeWord, config.uuid).isEmpty()) {
+        // Odysseus fork: only the master's list counts. The others no longer hear every device's
+        // presence (it goes to the master alone), and may sleep through a broadcast; the master,
+        // awake, answers a lone device at once (everyone has reported), one unicast round trip.
+        if (isMaster && presence.competitors(config.wakeWord, config.uuid).isEmpty()) {
             Timber.d("VacaUdpBroadcast: no other device listens for ${config.wakeWord}, answering without arbitration")
             sendDuck()
             return true
@@ -283,18 +336,22 @@ class VacaUdpBroadcast(
         val id = "$me-${detectionCounter.incrementAndGet()}"
         val decision = CompletableDeferred<String>()
         awaiting[id] = decision
-        report(id, score, levelDb, responding = false)
+        report(id, score, levelDb, responding = false, floorDb = floorDb)
         val winner = withTimeoutOrNull(DECISION_TIMEOUT_MS.milliseconds) { decision.await() }
         awaiting.remove(id)
 
         if (winner == null) {
             Timber.w("VacaUdpBroadcast: no decision from master $masterId, starting anyway")
-            if (!isMaster) lastMasterSeen = 0L // forces a new election
+            if (!isMaster) {
+                lastMasterSeen = 0L // forces a new election
+                masterQueryAt = null; loopPoke.trySend(Unit) // Odysseus fork: ask now, claim if nobody answers
+            }
             sendDuck()
             return true
         }
-        val won = winner == id
-        Timber.i("VacaUdpBroadcast: wake word arbitration ${if (won) "won" else "lost"} (score=$score, level=$levelDb)")
+        // Odysseus fork: or another report of this device's won, its barge-in's interruption (odysseus/arbitration/WakeWordPickRules.kt)
+        val won = winner == id || WakeWordPickRules.isOwnReport(winner, me)
+        Timber.i("VacaUdpBroadcast: wake word arbitration ${if (won) "won" else "lost"} (score=$score, level=$levelDb, floor=$floorDb)")
         if (won) sendDuck()
         return won
     }
@@ -304,20 +361,26 @@ class VacaUdpBroadcast(
     }
 
     /** Sends this device's report of the wake word to the master, or hands it over if this is the master. */
-    private fun report(id: String, score: Float, levelDb: Float?, responding: Boolean) {
+    private fun report(id: String, score: Float, levelDb: Float?, responding: Boolean, floorDb: Float? = null) {
         if (isMaster) {
             collectDetection(
                 key(config.wakeWord),
-                WakeWordArbiter.Contender(id, config.uuid, score, levelDb, config.wakeWord, responding)
+                WakeWordArbiter.Contender(id, config.uuid, score, levelDb, config.wakeWord, responding, floorDb, SystemClock.elapsedRealtime())
             )
         } else {
-            send(VacaBroadcastType.WAKE_DETECTION, buildJsonObject {
+            val data = buildJsonObject {
                 put(DATA_ID, JsonPrimitive(id))
                 put(DATA_SCORE, JsonPrimitive(score))
                 put(DATA_WAKE_WORD, JsonPrimitive(config.wakeWord))
                 if (levelDb != null) put(DATA_LEVEL, JsonPrimitive(levelDb))
                 if (responding) put(DATA_RESPONDING, JsonPrimitive(true))
-            })
+                if (floorDb != null) put(DATA_FLOOR, JsonPrimitive(floorDb)) // Odysseus fork
+            }
+            // Odysseus fork: straight to the master, which is awake, so the access point doesn't
+            // hold it until a beacon; and as a broadcast too, in case this device's idea of the
+            // master is out of date. The master counts it once.
+            masterAddress?.let { send(VacaBroadcastType.WAKE_DETECTION, data, to = it) }
+            send(VacaBroadcastType.WAKE_DETECTION, data)
         }
     }
 
@@ -328,11 +391,11 @@ class VacaUdpBroadcast(
      * an answer. Only devices that heard the wake word are told; a responding device that didn't hear
      * it isn't asked to stop.
      */
-    fun reportInterruption(score: Float, levelDb: Float?) {
+    fun reportInterruption(score: Float, levelDb: Float?, floorDb: Float? = null) {
         if (!config.wakeWordArbitrationEnabled || key(config.wakeWord).isEmpty() || masterId == null) return
         // Nobody else listens for this wake word, so there is nobody to tell.
-        if (presence.competitors(config.wakeWord, config.uuid).isEmpty()) return
-        report("${config.uuid}-${detectionCounter.incrementAndGet()}", score, levelDb, responding = true)
+        if (isMaster && presence.competitors(config.wakeWord, config.uuid).isEmpty()) return // Odysseus fork: see arbitrateWakeWord
+        report("${config.uuid}-${detectionCounter.incrementAndGet()}", score, levelDb, responding = true, floorDb = floorDb)
     }
 
     private fun completeAwaiting(winner: String, ids: List<String>) {
@@ -345,6 +408,7 @@ class VacaUdpBroadcast(
      */
     private fun collectDetection(group: String, detection: WakeWordArbiter.Contender) {
         if (group.isEmpty()) return
+        if (!firstCopy(detection.id)) return // Odysseus fork: each report arrives unicast and broadcast
         var lateWinner: String? = null
         var opensWindow = false
         var everyoneReported = false
@@ -362,11 +426,10 @@ class VacaUdpBroadcast(
             pending[group]?.let { everyoneReported = hasEveryoneReported(it) }
         }
         lateWinner?.let { winner ->
-            Timber.i("VacaUdpBroadcast: ${detection.sender} reported after the decision, telling it it lost")
-            send(VacaBroadcastType.WAKE_DECISION, buildJsonObject {
-                put(DATA_WINNER, JsonPrimitive(winner))
-                put(DATA_IDS, buildJsonArray { add(JsonPrimitive(detection.id)) })
-            })
+            // Odysseus fork: with its inputs; a device whose own report won (a barge-in) answers (WakeWordPickRules.isOwnReport)
+            val own = WakeWordPickRules.isOwnReport(winner, detection.sender)
+            Timber.i("VacaUdpBroadcast: ${detection.sender} reported after the decision, telling it it ${if (own) "won (its own earlier report did)" else "lost"}: ${WakeDecisionLog.report(detection)}")
+            sendDecision(winner, listOf(detection))
             completeAwaiting(winner, listOf(detection.id)) // our own broadcasts don't loop back to us
             return
         }
@@ -392,65 +455,115 @@ class VacaUdpBroadcast(
     private fun decide(groupKey: String) {
         val detections = synchronized(pending) { pending.remove(groupKey) } ?: return
         val decision = arbiter.decide(groupKey, detections) ?: return
-        val best = decision.winner
         val winner = decision.winnerId
-        val reports = detections.joinToString { d ->
-            "${d.sender.take(8)} ${d.levelDb?.let { "%.1f".format(it) } ?: "?"} dB, score ${"%.2f".format(d.score)}" +
-                if (d.responding) ", responding" else ""
-        }
-        Timber.i("VacaUdpBroadcast: decided winner ${best.sender.take(8)}${if (best.responding) " (interrupting its response)" else ""} from ${detections.size} detection(s): $reports")
+        // Odysseus fork: every reporter's inputs and the rule that decided (odysseus/arbitration/WakeDecisionLog.kt)
+        Timber.i("VacaUdpBroadcast: decided ${decision.pick?.let { WakeDecisionLog.decision(it, detections) } ?: "winner ${decision.winner.sender.take(8)}"}")
 
         val ids = detections.map { it.id }
-        send(VacaBroadcastType.WAKE_DECISION, buildJsonObject {
-            put(DATA_WINNER, JsonPrimitive(winner))
-            put(DATA_IDS, buildJsonArray { ids.forEach { add(JsonPrimitive(it)) } })
-        })
+        sendDecision(winner, detections)
         completeAwaiting(winner, ids) // our own broadcasts don't loop back to us
+    }
+
+    /**
+     * Odysseus fork: the decision goes to each device that reported, directly (it holds Wi-Fi awake
+     * from its wake word, so it gets it at once), and as a broadcast too, as before.
+     */
+    private fun sendDecision(winner: String, detections: List<WakeWordArbiter.Contender>) {
+        val data = buildJsonObject {
+            put(DATA_WINNER, JsonPrimitive(winner))
+            put(DATA_IDS, buildJsonArray { detections.forEach { add(JsonPrimitive(it.id)) } })
+        }
+        detections.map { it.sender }.distinct().filter { it != config.uuid }
+            .mapNotNull { peerAddresses[it] }
+            .forEach { send(VacaBroadcastType.WAKE_DECISION, data, to = it) }
+        send(VacaBroadcastType.WAKE_DECISION, data)
+    }
+
+    /** Odysseus fork: true the first time detection [id] is seen (ids are remembered for 10 s). */
+    private fun firstCopy(id: String): Boolean = synchronized(collectedIds) {
+        val now = SystemClock.elapsedRealtime()
+        collectedIds.entries.removeIf { now - it.value > 10_000L }
+        collectedIds.put(id, now) == null
     }
 
     /** A claim or heartbeat arrived. The lowest id wins if two devices both think they are master. */
     private fun onMasterSeen(sender: String) {
         val current = masterId
-        if (current == null || current == sender || sender < current) {
+        // Odysseus fork: or the master this device knows has gone quiet (it is asking about it).
+        val currentGone = current != config.uuid &&
+            SystemClock.elapsedRealtime() - lastMasterSeen >= keepAlive.masterTimeoutMs
+        if (current == null || current == sender || sender < current || currentGone) {
             if (current == config.uuid && sender != current) Timber.i("VacaUdpBroadcast: $sender is master, standing down")
             masterId = sender
             lastMasterSeen = SystemClock.elapsedRealtime()
         }
     }
 
+    // Odysseus fork: event-driven (was a 1 s loop): it sleeps until the policy's next step is due,
+    // or until poked. Timing: odysseus/power/MasterKeepAlivePolicy.kt.
     private suspend fun masterLoop() {
-        // Starting as a listener gives an existing master time to answer our hello before we claim.
-        lastMasterSeen = SystemClock.elapsedRealtime() - (HEARTBEAT_TIMEOUT_MS - STARTUP_MASTER_WAIT_MS)
+        // Starting up counts as asking: the hello sent when the listener comes up is answered by an
+        // existing master. Nobody answering within the query wait, this device claims.
+        lastMasterSeen = 0L
+        masterQueryAt = SystemClock.elapsedRealtime()
         var lastHeartbeat = 0L
         while (scope.isActive) {
             val now = SystemClock.elapsedRealtime()
-            if (isMaster) {
-                if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
-                    send(VacaBroadcastType.MASTER_HEARTBEAT)
+            updateWifiNeed() // peers time out without a message
+            when (val step = keepAlive.next(now, isMaster, lastHeartbeat, lastMasterSeen, masterQueryAt)) {
+                MasterKeepAlivePolicy.Step.Heartbeat -> {
+                    sendHeartbeat()
                     lastHeartbeat = now
                 }
-            } else if (now - lastMasterSeen > HEARTBEAT_TIMEOUT_MS) {
-                val seen = lastMasterSeen
-                masterId = null
-                delay((0..ELECTION_JITTER_MS).random().milliseconds)
-                if (masterId == null && lastMasterSeen == seen) {
-                    Timber.i("VacaUdpBroadcast: no master heard, claiming")
-                    masterId = config.uuid
-                    lastMasterSeen = SystemClock.elapsedRealtime()
-                    send(VacaBroadcastType.MASTER_CLAIM)
-                    lastHeartbeat = lastMasterSeen
+                MasterKeepAlivePolicy.Step.QueryMaster -> {
+                    Timber.i("VacaUdpBroadcast: nothing from master $masterId for a while, asking")
+                    masterQueryAt = now
+                    send(VacaBroadcastType.MASTER_QUERY)
                 }
+                MasterKeepAlivePolicy.Step.Claim -> {
+                    val seen = lastMasterSeen
+                    masterId = null
+                    masterQueryAt = null
+                    delay((0..ELECTION_JITTER_MS).random().milliseconds)
+                    if (masterId == null && lastMasterSeen == seen) {
+                        Timber.i("VacaUdpBroadcast: no master heard, claiming")
+                        masterId = config.uuid
+                        lastMasterSeen = SystemClock.elapsedRealtime()
+                        send(VacaBroadcastType.MASTER_CLAIM, wakeWordData())
+                        lastHeartbeat = lastMasterSeen
+                    }
+                }
+                is MasterKeepAlivePolicy.Step.Wait ->
+                    withTimeoutOrNull(step.ms.milliseconds) { loopPoke.receive() }
             }
-            delay(1.seconds)
         }
     }
+
+    /** Odysseus fork: the master's keep-alive, which also says its wake word (its presence). */
+    private fun sendHeartbeat(to: InetAddress? = null) = send(VacaBroadcastType.MASTER_HEARTBEAT, wakeWordData(), to)
+
+    private fun wakeWordData() = buildJsonObject { put(DATA_WAKE_WORD, JsonPrimitive(config.wakeWord)) }
 
     fun shutdown() {
         instance = null
         config.eventBroadcaster.removeListener(this)
         handlers.clear()
         receiveSocket?.close()
-        sendSocket?.close()
+        // Odysseus fork: a master that stops says so, so the others elect at once instead of
+        // waiting out the keep-alive. Sent on its own thread: the scope is going and this may be
+        // the main thread.
+        val resign = if (isMaster) payload(VacaBroadcastType.MASTER_RESIGN, JsonObject(emptyMap())) else null
+        masterNeedsWifi = false
+        WifiPerformance.set(WifiNeed.ARBITRATION_MASTER, false)
+        val socket = sendSocket
+        if (resign != null && socket != null) {
+            Thread {
+                transmit(socket, resign, null)
+                socket.close()
+            }.start()
+        } else {
+            socket?.close()
+        }
         scope.cancel()
     }
 
@@ -459,31 +572,41 @@ class VacaUdpBroadcast(
         handlers.getOrPut(type) { CopyOnWriteArrayList() }.add(handler)
     }
 
-    /** Broadcasts a message of [type] (with optional [data]) to the local network. */
-    fun send(type: String, data: JsonObject = JsonObject(emptyMap())) {
+    /**
+     * Broadcasts a message of [type] (with optional [data]) to the local network.
+     * Odysseus fork: or sends it to one device, [to], when only that one needs it. The format is the
+     * same; a device in power save gets a unicast frame when it next wakes, where it can sleep
+     * through a broadcast.
+     */
+    fun send(type: String, data: JsonObject = JsonObject(emptyMap()), to: InetAddress? = null) {
         scope.launch {
             try {
-                val payload = buildJsonObject {
-                    put("magic", JsonPrimitive(MAGIC))
-                    put("v", JsonPrimitive(VERSION))
-                    put("type", JsonPrimitive(type))
-                    put("sender", JsonPrimitive(config.uuid))
-                    put("data", JsonObject(data + (DATA_DUCK_GROUP to JsonPrimitive(config.duckGroupKey))))
-                }.toString().toByteArray()
-
+                val payload = payload(type, data)
                 val socket = sendSocket ?: DatagramSocket().apply { broadcast = true }.also { sendSocket = it }
-                // Subnet broadcast is delivered on networks that drop the limited broadcast address.
-                // Only one target is used: sending to both makes every receiver see each message twice.
-                val target = subnetBroadcastAddress() ?: InetAddress.getByName("255.255.255.255")
-                try {
-                    socket.send(DatagramPacket(payload, payload.size, target, PORT))
-                } catch (e: Exception) {
-                    Timber.d("VacaUdpBroadcast: send to $target failed: ${e.message}")
-                }
-                if (type != VacaBroadcastType.MASTER_HEARTBEAT) Timber.d("VacaUdpBroadcast: sent $type")
+                transmit(socket, payload, to)
+                if (type != VacaBroadcastType.MASTER_HEARTBEAT) Timber.d("VacaUdpBroadcast: sent $type${to?.let { " to ${it.hostAddress}" } ?: ""}")
             } catch (e: Exception) {
                 Timber.e("VacaUdpBroadcast: send failed: ${e.message}")
             }
+        }
+    }
+
+    private fun payload(type: String, data: JsonObject): ByteArray = buildJsonObject {
+        put("magic", JsonPrimitive(MAGIC))
+        put("v", JsonPrimitive(VERSION))
+        put("type", JsonPrimitive(type))
+        put("sender", JsonPrimitive(config.uuid))
+        put("data", JsonObject(data + (DATA_DUCK_GROUP to JsonPrimitive(config.duckGroupKey))))
+    }.toString().toByteArray()
+
+    private fun transmit(socket: DatagramSocket, payload: ByteArray, to: InetAddress?) {
+        // Subnet broadcast is delivered on networks that drop the limited broadcast address.
+        // Only one target is used: sending to both makes every receiver see each message twice.
+        val target = to ?: subnetBroadcastAddress() ?: InetAddress.getByName("255.255.255.255")
+        try {
+            socket.send(DatagramPacket(payload, payload.size, target, PORT))
+        } catch (e: Exception) {
+            Timber.d("VacaUdpBroadcast: send to $target failed: ${e.message}")
         }
     }
 
@@ -522,6 +645,11 @@ class VacaUdpBroadcast(
         if (message.senderId == config.uuid) return
         // Any message shows the sender is around; presence and detections also say its wake word.
         presence.seen(message.senderId, message.data[DATA_WAKE_WORD]?.jsonPrimitive?.contentOrNull)
+        // Odysseus fork: where to reach it directly; anything from the master shows it is alive;
+        // a first device around makes the master keep Wi-Fi awake.
+        peerAddresses[message.senderId] = message.sourceAddress
+        if (message.senderId == masterId) lastMasterSeen = SystemClock.elapsedRealtime()
+        if (isMaster) updateWifiNeed()
         if (message.type != VacaBroadcastType.MASTER_HEARTBEAT) Timber.d("VacaUdpBroadcast: received ${message.type} from ${message.senderId}")
         handlers[message.type]?.forEach {
             try {
@@ -568,17 +696,28 @@ class VacaUdpBroadcast(
         }
     }
 
-    /** Tells the other devices this one is here, and which wake word it listens for. */
-    private fun sendPresence() {
-        send(VacaBroadcastType.PRESENCE, buildJsonObject {
-            put(DATA_WAKE_WORD, JsonPrimitive(config.wakeWord))
-        })
+    /**
+     * Tells the other devices this one is here, and which wake word it listens for.
+     * Odysseus fork: only the master uses it, so it goes to the master alone when there is one
+     * ([to] overrides). The master's own presence is its keep-alive.
+     */
+    private fun sendPresence(to: InetAddress? = masterAddress) {
+        if (to == null && isMaster) return
+        send(VacaBroadcastType.PRESENCE, wakeWordData(), to)
+    }
+
+    /** Odysseus fork: presence in answer to a hello or a claim, to the asker, after a random delay. */
+    private fun replyPresence(to: InetAddress) {
+        scope.launch {
+            delay((0..PRESENCE_REPLY_JITTER_MS).random().milliseconds)
+            send(VacaBroadcastType.PRESENCE, wakeWordData(), to)
+        }
     }
 
     private suspend fun presenceLoop() {
         while (scope.isActive) {
             delay(PRESENCE_INTERVAL_MS.milliseconds)
-            sendPresence()
+            if (!isMaster) sendPresence()
         }
     }
 

@@ -58,6 +58,24 @@ handshake, that it is the server the owner approved.
 - API changes taken in the bridge: `config.client_id` is gone, `set_static_delay_adjustable` →
   `set_output_delay_adjustable`, `ControllerRole::send_command` returns `bool`. The source and
   visualizer roles are compiled out.
+- Files: here `src/main/cpp/CMakeLists.txt` (the pin), `sendspin_jni.cpp`, `blob_store.h` (+ host test
+  `src/test/cpp/blob_store_test.cpp`), `NativeSendspin.kt`; in the app `sendspin/SendspinSecurity.kt`,
+  `odysseus/SendspinPairingOverlay.kt` (shown through `odysseus/OdysseusOverlays.kt`, which also
+  turns the screen on: `OdysseusUi.SCREEN_ON_EVENTS`; hooks in `MainActivity.kt`),
+  `sendspin/SendspinPlayer.kt`, `SendspinManager.kt`, `settings/Settings.kt`,
+  `ui/layouts/config/ServicesConfig.kt` (Player id, Allow pairing, Allow unpaired servers), and
+  `res/xml/data_extraction_rules.xml`, `backup_rules.xml` (`files/sendspin/` not backed up).
+
+**noise-c patch.** sendspin-cpp's noise-c (esphome-libs v0.1.13) is patched at fetch time
+(`src/main/cpp/patches/noise-c-pattern-expand-fortify.patch`, applied through our own
+`FetchContent_Declare(noise_c ...)` in `src/main/cpp/CMakeLists.txt`). Unpatched,
+`noise_pattern_expand()` calls `memchr()` with a 62-byte bound on a ~10-byte static pattern, and
+Android's fortified libc aborts the app (`FORTIFY: memchr: prevented 62-byte read from 10-byte
+buffer`) as soon as Music Assistant opens an encrypted connection. The configure step fails if the
+patch is missing. On-device regression test (32-bit ARM, like the Echo):
+`src/test/native/run_noise_fortify_test.sh <.cxx/.../_deps/noise_c-src> [serial]`. When bumping
+sendspin-cpp, keep our noise-c `GIT_TAG` in step with its `cmake/host.cmake`, and drop the patch once
+upstream has the fix.
 
 ## Goodbye reason when the app stops (Odysseus fork)
 
@@ -82,3 +100,6 @@ pushes the image over the Sendspin connection itself.
   stream-end clear (pause) keeps it until another track comes up without new art.
 - `SendspinNowPlaying.artwork` carries it; the clock page and the now-playing overlay prefer it and
   fall back to fetching `artworkUrl` only when there is none (a server without the artwork role).
+- Files: `sendspin_jni.cpp` (the role), app `sendspin/SendspinPlayer.kt`, `PushedArtwork.kt`,
+  `SendspinNowPlaying.kt`, `ui/components/NowPlayingOverlay.kt` and the clock's player
+  (`odysseus/player/`).

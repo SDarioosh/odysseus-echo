@@ -1,0 +1,10 @@
+[
+  {"entity_id": "media_player.bedroom_tv", "name": "Bedroom TV", "area": "Bedroom", "state": "idle", "ma": true, "type": "player",
+   "members": [], "ids": [["music_assistant", "roku_fictional01"]], "entry": "01JFICTIONALENTRY0000000000", "vaca": false, "device": null},
+  {"entity_id": "media_player.bedroom_echo", "name": "Bedroom Echo", "area": "", "state": "idle", "ma": true, "type": "player",
+   "members": [], "ids": [["music_assistant", "fictional-sendspin-id-01"]], "entry": "01JFICTIONALENTRY0000000000", "vaca": false, "device": null},
+  {"entity_id": "media_player.bedroom_echo_media_player", "name": "Bedroom Echo Media Player", "area": "Bedroom", "state": "idle", "ma": false, "type": null,
+   "members": [], "ids": [], "entry": null, "vaca": true, "device": "Bedroom Echo"},
+  {"entity_id": "media_player.kitchen_echo_media_player", "name": "Kitchen Echo Media Player", "area": "Kitchen", "state": "idle", "ma": false, "type": null,
+   "members": [], "ids": [], "entry": null, "vaca": true, "device": "Kitchen Echo"}
+]

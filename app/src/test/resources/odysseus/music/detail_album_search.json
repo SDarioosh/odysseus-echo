@@ -1,0 +1,8 @@
+{"tracks": [
+  {"media_type": "track", "uri": "library://track/303", "name": "Low Tide", "image": null,
+   "artists": [{"name": "The Copper Lanterns"}], "album": {"uri": "library://album/21", "name": "Harbour Lights"}},
+  {"media_type": "track", "uri": "library://track/301", "name": "Lantern Song", "image": null,
+   "artists": [{"name": "The Copper Lanterns"}], "album": {"uri": "library://album/21", "name": "Harbour Lights"}},
+  {"media_type": "track", "uri": "fictional://track/88", "name": "Harbour Lights", "image": null,
+   "artists": [{"name": "Someone Else Entirely"}], "album": {"uri": "fictional://album/88", "name": "Night Ferries"}}
+ ]}

@@ -110,6 +110,7 @@ fun EchoSetupPanel(config: APPConfig, autoStart: Boolean = false, qrSize: Dp = 2
             if (!st.ok) Button(onClick = { EchoSetup.start(config) }) { Text("Set up again") }
         }
         EchoSetup.State.Starting -> Text("Starting setup…", fontSize = 15.sp, color = muted)
+        EchoSetup.State.WaitingForNetwork -> Text("Waiting for a network address (Wi-Fi or Tailscale)…", fontSize = 15.sp, color = muted)
         else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Button(onClick = { EchoSetup.start(config) }) { Text("Set up with phone (QR code)") }
             (st as? EchoSetup.State.Stopped)?.let { Text(it.reason, color = muted, fontSize = 14.sp) }

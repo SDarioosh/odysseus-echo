@@ -239,17 +239,29 @@ public:
 
     uint16_t listen_port = 0;
 
-    // Dotted IPv4 address of the only server allowed to connect; empty accepts any. Only touched
-    // on the loop thread (changes are queued).
-    std::string preferred_ip;
+    // Dotted IPv4 addresses a server may connect from; empty accepts any. Odysseus fork: a list,
+    // the preferred server plus Home Assistant's address (Music Assistant on the HA host reaches a
+    // Tailscale device from its Tailscale address). Only touched on the loop thread (changes are
+    // queued).
+    std::vector<std::string> preferred_ips;
 
-    // Id of the connected server once it has been confirmed to be at preferred_ip.
+    bool is_preferred(const std::string& ip) const {
+        return std::find(preferred_ips.begin(), preferred_ips.end(), ip) != preferred_ips.end();
+    }
+
+    std::string preferred_text() const {
+        std::string text;
+        for (const auto& ip : preferred_ips) text += (text.empty() ? "" : ",") + ip;
+        return text;
+    }
+
+    // Id of the connected server once it has been confirmed to be at a preferred address.
     std::string verified_id;
     std::chrono::steady_clock::time_point next_check{};
 
     // Odysseus fork: ids of servers allowed whatever address they connect from (set on the device,
     // never by HA). Lets the one Music Assistant reach the device over Tailscale, where it arrives
-    // from its Tailscale address rather than the LAN address in preferred_ip.
+    // from its Tailscale address rather than the LAN address in preferred_ips.
     std::set<std::string> trusted_ids;
 
     // Server id to the address it was last seen connecting from; kept in memory only.
@@ -295,7 +307,7 @@ public:
 
     enum class Verdict { UNDECIDED, ALLOW, REFUSE };
 
-    // Whether the connected server [id] is the one at preferred_ip.
+    // Whether the connected server [id] is at one of preferred_ips.
     Verdict check_server(const std::string& id) {
         if (trusted_ids.count(id) != 0) return Verdict::ALLOW;  // Odysseus fork
         // Odysseus fork: a paired server proved it holds this device's pairing record in the
@@ -308,11 +320,12 @@ public:
         if (peers.size() == 1) id_to_ip[id] = peers[0];
         const auto known = id_to_ip.find(id);
         if (known != id_to_ip.end()) {
-            return known->second == preferred_ip ? Verdict::ALLOW : Verdict::REFUSE;
+            return is_preferred(known->second) ? Verdict::ALLOW : Verdict::REFUSE;
         }
         // Several peers and this server not seen alone yet: allow it if the preferred server is
         // among them, since there is no way to tell which one is active.
-        return std::find(peers.begin(), peers.end(), preferred_ip) != peers.end()
+        return std::any_of(peers.begin(), peers.end(),
+                           [this](const std::string& peer) { return is_preferred(peer); })
                    ? Verdict::ALLOW
                    : Verdict::REFUSE;
     }
@@ -347,7 +360,7 @@ public:
                 verified_id.clear();
                 server_paired = false;
             }
-            if (now_connected && !preferred_ip.empty()) {
+            if (now_connected && !preferred_ips.empty()) {
                 // The library accepts whichever server connects first and has no hook to refuse
                 // one earlier, so a server that isn't the preferred one is dropped as soon as its
                 // hello names it, before it is reported as connected.
@@ -367,9 +380,9 @@ public:
                             case Verdict::REFUSE:
                                 __android_log_print(
                                     ANDROID_LOG_INFO, TAG,
-                                    "refusing server '%s' (%s): not the preferred server %s or a trusted server id",
+                                    "refusing server '%s' (%s): not from %s or a trusted server id",
                                     info->name.c_str(), info->server_id.c_str(),
-                                    preferred_ip.c_str());
+                                    preferred_text().c_str());
                                 client->disconnect(sendspin::SendspinGoodbyeReason::ANOTHER_SERVER);
                                 break;
                             case Verdict::UNDECIDED:
@@ -923,9 +936,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_msp1974_sendspin_NativeSendspin_nativ
     JNIEnv* env, jobject, jlong handle, jstring ip) {
     Bridge* bridge = bridge_from(handle);
     if (bridge == nullptr) return;
+    // Odysseus fork: a comma separated list of addresses.
     std::string value = to_std_string(env, ip);
-    bridge->post([bridge, value = std::move(value)] {
-        bridge->preferred_ip = value;
+    std::replace(value.begin(), value.end(), ',', ' ');
+    std::vector<std::string> parsed;
+    std::istringstream stream(value);
+    for (std::string address; stream >> address;) parsed.push_back(address);
+    bridge->post([bridge, parsed = std::move(parsed)] {
+        bridge->preferred_ips = parsed;
         bridge->verified_id.clear();
         bridge->next_check = {};
     });

@@ -1,7 +1,5 @@
 package com.msp1974.vacompanion
 
-import com.msp1974.vacompanion.odysseus.ListeningIndicator // Odysseus fork
-
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
@@ -204,12 +202,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                             }
                         }
 
-                        // Odysseus fork: listening/thinking/answering overlay over any layout.
-                        if (vaUiState.satelliteRunning) ListeningIndicator()
-                        // Odysseus fork: what a voice turn did: actions, sources, confirmation (odysseus/TurnCard.kt)
-                        if (vaUiState.satelliteRunning) com.msp1974.vacompanion.odysseus.TurnCard()
-                        // Odysseus fork: Sendspin pairing code / approval (odysseus/SendspinPairingOverlay.kt)
-                        com.msp1974.vacompanion.odysseus.SendspinPairingOverlay()
+                        // Odysseus fork: overlays over any layout; Lock mode closes the menu (odysseus/OdysseusOverlays.kt)
+                        com.msp1974.vacompanion.odysseus.OdysseusOverlays(vaUiState.satelliteRunning) { viewModel.setShowMenu(false) }
 
                         vaUiState.onboardingDeviceId?.let { defaultId ->
                             UUIDEditDialog(
@@ -322,6 +316,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         screenModeJob = lifecycleScope.launch {
             if (mode == ScreenOnMode.OFF) screenOffInProgress = true
             try {
+                // Odysseus fork: the screensaver turns the panel off for real with device admin (odysseus/screen/ScreenOff.kt)
+                if (com.msp1974.vacompanion.odysseus.screen.ScreenOff.apply(this@MainActivity, config, screen, mode, screenOffStartUp) { viewModel.setScreenBlank(it) }) return@launch
                 screen.setScreenMode(
                     mode = mode,
                     window = window,
@@ -436,6 +432,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 BroadcastSender.SATELLITE_STARTED -> {
                     setScreenSettings()
                     webView.setZoomLevel(config.zoomLevel)
+                    webView.setTextSize(config.textSize) // Odysseus fork: text size may be restored before HA connects (odysseus/settings/DeviceSettings.kt)
                     config.screenOn = screen.isScreenOn()
                     val url = deviceManager.authenticationManager.getHAUrl()
                     Timber.d("Satellite started -> loading URL: $url")
@@ -478,12 +475,15 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                     terminateApp()
                 }
                 Intent.ACTION_SCREEN_ON -> {
+                    // Odysseus fork: a power button ends a panel-off screensaver (odysseus/screen/ScreenOff.kt)
+                    if (com.msp1974.vacompanion.odysseus.screen.ScreenOff.onSystemScreenOn()) config.screenSaver = false
                     // Handles if screen woken by hardware button
                     if (initialised && !config.screenOn) {
                         config.screenOn = true
                     }
                 }
                 Intent.ACTION_SCREEN_OFF -> {
+                    if (com.msp1974.vacompanion.odysseus.screen.ScreenOff.onSystemScreenOff()) return // Odysseus fork: the screensaver's own panel-off isn't "screen off" (odysseus/screen/ScreenOff.kt)
                     //Handles if screen off by hardware button or timeout
                     if (config.screenOn) {
                         config.screenOn = false
@@ -588,6 +588,12 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         return super.dispatchTouchEvent(ev)
     }
 
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        // Odysseus fork: the Echo Show's privacy button records (odysseus/record/RecordButton.kt)
+        if (com.msp1974.vacompanion.odysseus.record.RecordButton.onKeyEvent(event)) return true
+        return super.dispatchKeyEvent(event)
+    }
+
     private fun terminateApp() {
         finishAffinity()
     }
@@ -598,6 +604,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             firebaseManager?.logEvent(FirebaseManager.MAIN_ACTIVITY_BACKGROUND_TASK_ALREADY_RUNNING, mapOf())
             if (viewModel.vacaState.value.satelliteRunning) {
                 webView.setZoomLevel(config.zoomLevel)
+                webView.setTextSize(config.textSize) // Odysseus fork: text size may be restored before HA connects (odysseus/settings/DeviceSettings.kt)
                 val url = deviceManager.authenticationManager.getHAUrl()
                 Timber.d("Run background tasks -> loading URL: $url")
                 webView.loadUrl(url)
@@ -710,7 +717,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 "screenSaver" -> if (!screenOffStartUp) onScreenSaver(event.newValue as Boolean)
                 "screenOrientationMode" -> screen.setScreenOrientation(this@MainActivity, event.newValue as String)
                 "deviceBump" -> if (config.screenOnBump) applyScreenMode(ScreenOnMode.ON)
-                "sendspinPairingPrompt" -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: show the pairing code
+                in com.msp1974.vacompanion.odysseus.OdysseusUi.SCREEN_ON_EVENTS -> applyScreenMode(ScreenOnMode.ON) // Odysseus fork: pairing code, announcement, REC pill
                 "proximity" -> if (config.screenOnProximity && event.newValue as Float == 0f) applyScreenMode(ScreenOnMode.ON)
                 "motion" -> onMotion(event.newValue as Boolean)
                 "showToastMessage" -> Toast.makeText(
@@ -750,7 +757,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             if (enabled) {
                 ScreenOnMode.ON_DARK
             } else {
-                if (screen.isScreenOn()) ScreenOnMode.ON else ScreenOnMode.OFF
+                if (com.msp1974.vacompanion.odysseus.screen.ScreenOff.screensaverEndTurnsOn(screen.isScreenOn())) ScreenOnMode.ON else ScreenOnMode.OFF // Odysseus fork: a panel-off screensaver ends with the screen on (odysseus/screen/ScreenOff.kt)
             }
         )
     }

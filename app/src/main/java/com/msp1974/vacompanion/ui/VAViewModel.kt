@@ -200,7 +200,7 @@ class VAViewModel @Inject constructor(
         _vacaState.value = State()
 
         //TODO: put under device manager
-        network.setWifiLock()
+        // Odysseus fork: no Wi-Fi lock for the app's whole life; odysseus/power/WifiPerformance.kt holds one only while needed.
 
         config.eventBroadcaster.addListener(this)
         initValues()
@@ -491,6 +491,7 @@ class VAViewModel @Inject constructor(
      */
     fun sendSettingToHA(key: String, value: Any) {
         config.pendingHaSettings[key] = value
+        com.msp1974.vacompanion.odysseus.settings.DeviceSettings.fromDevice(key, value) // Odysseus fork: the device keeps it (odysseus/settings/DeviceSettings.kt)
         config.eventBroadcaster.notifyEvent(Event("sendSettingToHA", key, value))
     }
 

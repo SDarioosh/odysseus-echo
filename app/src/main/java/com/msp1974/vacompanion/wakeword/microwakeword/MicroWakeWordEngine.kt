@@ -29,7 +29,8 @@ open class MicroWakeWordEngine (
     val availableWakeWords: List<WakeWordWithId>,
     val availableStopWords: List<WakeWordWithId>,
     private val audio: Flow<ShortArray>,
-    muted: Boolean = false
+    muted: Boolean = false,
+    private val stopWordsWanted: () -> Boolean = { true }, // Odysseus fork: a "stop" could stop something now (odysseus/wakeword/StopWordModels.kt)
 ): WakeWordEngineProvider() {
     private val config: APPConfig = deviceManager.config
     private val _availableWakeWords = availableWakeWords.associateBy { it.id }
@@ -67,6 +68,7 @@ open class MicroWakeWordEngine (
             var wakeWords = activeWakeWords.value
             var stopWords = activeStopWords.value
             var detector: MicroWakeWordDetector? = null
+            var frameBuffer: ByteBuffer? = null // Odysseus fork: reused per frame (docs/odysseus/power.md)
 
             try {
                 detector = createDetector(wakeWords, stopWords)
@@ -91,7 +93,9 @@ open class MicroWakeWordEngine (
                     }
 
                     // Always run audio through the models to keep their internal state up to date
-                    val detections = detector!!.detect(toByteBuffer(frame))
+                    val frameBytes = toByteBuffer(frame, frameBuffer).also { frameBuffer = it } // Odysseus fork: reused buffer (docs/odysseus/power.md)
+                    val detections = detector!!.detect(frameBytes)
+                    com.msp1974.vacompanion.odysseus.wakeword.WakeClips.onFrame(context, deviceManager, frame, detections, wakeWords) // Odysseus fork: wake word training clips (odysseus/wakeword/WakeClips.kt)
                     for (detection in detections) {
                         if (detection.score > 0.1f) {
                             if (detection.wakeWordId in wakeWords) {
@@ -118,8 +122,14 @@ open class MicroWakeWordEngine (
     }
 
     // The detector's native frontend reads from a direct little-endian buffer.
-    private fun toByteBuffer(frame: ShortArray): ByteBuffer {
-        val buffer = ByteBuffer.allocateDirect(frame.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+    // Odysseus fork (docs/odysseus/power.md): [reuse] is the previous frame's buffer, refilled
+    // while the frame size stays the same instead of allocating a new one every 80 ms. It belongs
+    // to one run of the detection flow, which handles frames one at a time, and detect() copies
+    // the audio out before returning.
+    private fun toByteBuffer(frame: ShortArray, reuse: ByteBuffer? = null): ByteBuffer {
+        val buffer = reuse?.takeIf { it.capacity() == frame.size * 2 }
+            ?: ByteBuffer.allocateDirect(frame.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+        buffer.clear()
         buffer.asShortBuffer().put(frame)
         buffer.rewind()
         return buffer
@@ -128,10 +138,13 @@ open class MicroWakeWordEngine (
     private suspend fun createDetector(
         wakeWords: List<String>,
         stopWords: List<String>
-    ) = MicroWakeWordDetector(
+    ) = loadWakeWords(stopWords, _availableStopWords).let { stopModels -> // Odysseus fork: stop models gated (odysseus/wakeword/StopWordModels.kt)
+        MicroWakeWordDetector(
             loadWakeWords(wakeWords, _availableWakeWords, config.wakeWordThreshold) +
-            loadWakeWords(stopWords, _availableStopWords)
+            stopModels,
+            com.msp1974.vacompanion.odysseus.wakeword.StopWordModels(stopModels, stopWordsWanted) // Odysseus fork
         )
+    }
 
 
     private suspend fun loadWakeWords(

@@ -74,7 +74,14 @@ Cost on a 1 GB device: about 40–60 MB RAM for the Tailscale service. Battery d
   two or more). The URL is the LAN address, but over the tailnet MA connects from its
   Tailscale address, so the player refuses it:
   `refusing server '<name>' (<server id>): not the preferred server <LAN IP> or a trusted server id`.
-- Fix (fork): `sendspin_trusted_server_ids`, an on-device setting HA never touches. Server ids
+- Fix (fork, since 0.14.0+odysseus.32, no setup): the player also accepts the address Home
+  Assistant connects to the device from (`paired_device_id`). Music Assistant runs on the HA host,
+  so over the tailnet it arrives from that same Tailscale address, and on the LAN from the LAN
+  address in the URL. One build works for LAN-only and Tailscale devices and survives a data wipe.
+  Logcat: `Sendspin: allowed server addresses '<LAN IP>,<HA tailnet IP>'`. If Music Assistant runs
+  on another host than HA, use pairing or the trusted ids below.
+- Older fix (fork): `sendspin_trusted_server_ids`, an on-device setting HA never touches. Needs a
+  debug build (`run-as`) to set, and a data wipe removes it. Server ids
   in it (comma separated) are accepted from any address; every other server still has to
   match the preferred server. Set it with the id from that log line:
 
@@ -92,3 +99,12 @@ Cost on a 1 GB device: about 40–60 MB RAM for the Tailscale service. Battery d
 - Since 0.14.0+odysseus.24 (encrypted Sendspin): once Music Assistant is **paired** with the device
   it is accepted from any address, LAN or Tailscale, without a trusted id. The trusted-id setting
   above stays for an unpaired server. See `sendspin/README.md` "Encryption and pairing".
+- Before that fix, and still working: trusted Music Assistant server ids
+  (`sendspin_trusted_server_ids`, on-device only) are accepted from any address. A paired server
+  is too (`sendspin/README.md`, "Encryption and pairing").
+- Album art comes over the Sendspin connection itself, since MA's `artwork_url` is a LAN address
+  (`sendspin/README.md`, "Album art pushed over the connection"). When the app stops, the player
+  says goodbye with `restart`, so MA re-dials a manually added address ("Goodbye reason").
+- Files: `sendspin/SendspinAllowedAddresses.kt` (which addresses pass), `sendspin/SendspinPlayer.kt`,
+  `settings/Settings.kt` (the settings); in the `:sendspin` module `src/main/cpp/sendspin_jni.cpp`
+  (the check on inbound sockets) and `NativeSendspin.kt`.

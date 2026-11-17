@@ -1,0 +1,10 @@
+{"media_player.kitchen_echo": {
+  "queue_id": "Zk3vQ-fictional-client-id", "active": true, "name": "Kitchen Echo", "items": 42,
+  "shuffle_enabled": false, "repeat_mode": "off", "current_index": 3, "elapsed_time": 61.5,
+  "current_item": {"queue_item_id": "q-aaa", "name": "The Copper Lanterns - Lantern Song", "duration": 214,
+    "media_item": {"media_type": "track", "uri": "library://track/301", "name": "Lantern Song", "version": "", "image": "http://192.168.1.20:8095/imageproxy/t301",
+                   "favorite": false, "artists": [{"media_type": "artist", "uri": "library://artist/7", "name": "The Copper Lanterns"}],
+                   "album": {"media_type": "album", "uri": "library://album/21", "name": "Harbour Lights"}},
+    "stream_title": null},
+  "next_item": {"queue_item_id": "q-bbb", "name": "Harbour FM", "duration": 0, "media_item": null, "stream_title": "Morning Show"}
+}}

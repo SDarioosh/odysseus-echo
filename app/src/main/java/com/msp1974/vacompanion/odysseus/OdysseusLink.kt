@@ -4,12 +4,18 @@ package com.msp1974.vacompanion.odysseus
 // completed. Home Assistant passes only the spoken answer to the satellite (Extended OpenAI
 // Conversation drops everything else), so the device asks Odysseus directly:
 //
-//   GET <base>/actions?since=<epoch ms>&limit=<n>      Authorization: Bearer <voice token>
-//   <base> is the same OpenAI base URL Home Assistant uses: https://<odysseus>/api/chat/voice/v1
-//   -> {"actions": [VoiceAction, ...]}   newest first; see VoiceAction for the fields.
-//   GET <base>/turns/latest?since=<epoch ms>           -> {"turn": VoiceTurn | null}  (VoiceTurnApi.kt)
-//   POST <base>/satellite/turn (multipart)             -> device, area, wake word and the spoken command
-//   POST <base>/satellite/interrupt (form: device_id)  -> a barge-in: end this device's turn now (BargeIn.kt)
+//   <base> is the same OpenAI base URL Home Assistant uses: https://<odysseus>/api/chat/voice/v1,
+//   every request with Authorization: Bearer <voice token>.
+//   GET <base>/turns/latest?context_id=<id> | ?since=<epoch ms> -> {"turn": VoiceTurn | null}  (VoiceTurnApi.kt)
+//   POST <base>/satellite/turn (multipart)             -> device, area, wake word and the spoken command;
+//                                                         answers the turn's context id
+//   POST <base>/satellite/interrupt (form: device_id, context_id?) -> a barge-in: end that turn now (BargeIn.kt)
+//   POST <base>/satellite/timing (JSON, context_id?)   -> the turn's stage times (TurnTimings.kt)
+//   GET <base>/today                                   -> the home screen's Today page (home/today/)
+//   GET <base>/app/latest, GET <base>/app/apk          -> updates from the hub (odysseus/update/; the APK by openGet)
+//   POST <base>/todos/done, /reminders/done, /action-items/done, /todos/undo, /action-items/undo
+//                                                      -> Done buttons (odysseus/done/, through HubHttp)
+//   POST <base>/satellite/wakeword/clip (multipart)    -> a wake word training clip (odysseus/wakeword/, through HubHttp)
 //
 
 // The token is the same `voice`-scope token Home Assistant uses (read-only plus voice actions).
@@ -24,8 +30,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import timber.log.Timber
+import kotlin.coroutines.cancellation.CancellationException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.KeyStore
@@ -34,14 +40,15 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+/** One thing a voice turn created or completed (VoiceTurn.actions). */
 @Serializable
 data class VoiceAction(
     val id: String = "",
     /** ISO-8601 time the action was done. */
     val at: String = "",
-    /** "created" or "completed". */
+    /** "created", "completed" or "cancelled" (an alarm). */
     val action: String = "created",
-    /** "todo", "reminder", "list_item", "note", "event" or "action_item". */
+    /** "todo", "reminder", "list_item", "note", "event", "action_item" or "alarm" (odysseus/alarms/). */
     val kind: String = "todo",
     val title: String = "",
     val detail: String? = null,
@@ -54,10 +61,7 @@ data class VoiceAction(
     val source: String = "odysseus",
 )
 
-@Serializable
-private data class VoiceActionsResponse(val actions: List<VoiceAction> = emptyList())
-
-object OdysseusLink {
+object OdysseusLink : HubHttp {
     private const val PREFS = "odysseus_link"
     private const val KEY_URL = "base_url"
     private const val KEY_TOKEN = "token_enc"
@@ -67,7 +71,6 @@ object OdysseusLink {
     private const val KEY_DEVICE_NAME = "device_name"
     private const val KEYSTORE_ALIAS = "odysseus_link_token"
 
-    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     @Volatile private var appContext: Context? = null
 
     fun init(context: Context) {
@@ -102,7 +105,15 @@ object OdysseusLink {
         get() = prefs()?.getString(KEY_DEVICE_NAME, "") ?: ""
         set(value) { prefs()?.edit()?.putString(KEY_DEVICE_NAME, value.trim())?.apply() }
 
-    val hasToken: Boolean get() = !prefs()?.getString(KEY_TOKEN, null).isNullOrEmpty()
+    /**
+     * A token is saved and can be read. One that can't be decrypted (its Keystore key is gone, e.g.
+     * after the app's data was moved to another device) counts as none: the device shows "Not
+     * linked" and sends nothing until a token is typed in again.
+     */
+    val hasToken: Boolean get() = token() != null
+
+    /** Changes whenever a token is saved (a hash of the stored, encrypted form; never the token). */
+    val tokenStamp: Int get() = prefs()?.getString(KEY_TOKEN, null)?.hashCode() ?: 0
 
     val isConfigured: Boolean get() = baseUrl.startsWith("http") && hasToken
 
@@ -114,9 +125,12 @@ object OdysseusLink {
         prefs()?.edit()?.putString(KEY_TOKEN, encrypt(t))?.apply()
     }
 
-    private fun token(): String? = prefs()?.getString(KEY_TOKEN, null)?.let {
-        runCatching { decrypt(it) }.onFailure { e -> Timber.w(e, "Odysseus token unreadable") }.getOrNull()
-    }
+    /** The voice token, for the recorder's uploads to the same hub (odysseus/record/HubRelayTransport.kt). */
+    internal fun bearerToken(): String? = token()
+
+    private val tokenMemo = TokenMemo({ decrypt(it) }) { e -> Timber.w(e, "Odysseus token unreadable; link again in Menu → Odysseus") }
+
+    private fun token(): String? = tokenMemo.read(prefs()?.getString(KEY_TOKEN, null))
 
     // --- Keystore ---------------------------------------------------------------------------
 
@@ -148,16 +162,20 @@ object OdysseusLink {
 
     // --- API --------------------------------------------------------------------------------
 
-    sealed interface Result {
-        data class Ok(val actions: List<VoiceAction>) : Result
-        data class Failed(val message: String) : Result
+    /**
+     * A failed request for logs and the settings screen. An answer that can't be read says only
+     * so: the JSON parser's message quotes the answer, which holds the owner's words (turn
+     * titles, spoken answers, announcements), never logged.
+     */
+    fun failureText(e: Throwable): String = when (e) {
+        is kotlinx.serialization.SerializationException, is IllegalArgumentException ->
+            "unreadable answer (${e.javaClass.simpleName})"
+        else -> e.message ?: e.javaClass.simpleName
     }
 
     sealed interface TurnResult {
         /** The newest finished turn since the time asked, or null when there is none yet. */
         data class Ok(val turn: VoiceTurn?) : TurnResult
-        /** The hub has no turn feed (404): an older Odysseus; use fetchActions instead. */
-        data object NotSupported : TurnResult
         data class Failed(val message: String) : TurnResult
     }
 
@@ -166,25 +184,24 @@ object OdysseusLink {
         data class Failed(val message: String) : PostResult
     }
 
-    private class Reply(val code: Int, val body: String)
+    /** How much of an error answer [send] keeps (errorBody). */
+    internal const val ERROR_BODY_MAX = 2000
 
-    private fun describe(code: Int, what: String) = when (code) {
-        401, 403 -> "token refused ($code)"
-        404 -> "Odysseus has no $what (404)"
-        else -> "HTTP $code"
-    }
-
-    /** One request to the hub; null body for a GET. Runs on the caller's dispatcher. */
-    private fun request(path: String, contentType: String? = null, body: ByteArray? = null, readTimeoutMs: Int = 6000): Reply {
-        val base = baseUrl
-        val token = token()
-        if (!base.startsWith("http") || token.isNullOrEmpty()) throw IllegalStateException("not set up")
-        val conn = URL("$base$path").openConnection() as HttpURLConnection
+    /**
+     * The one hub request: [url] with the Bearer [token], a GET without [body] (or [method], e.g. DELETE). Blocking, on the
+     * caller's thread; throws on network errors. The reply's body is at most [maxBodyChars] of a
+     * 2xx answer, else "" (with [errorBody] the first ERROR_BODY_MAX chars of the error answer).
+     * Unit-tested against a local server (OdysseusLinkHttpTest).
+     */
+    internal fun send(
+        url: String, token: String, contentType: String? = null, body: ByteArray? = null,
+        readTimeoutMs: Int = 6000, connectTimeoutMs: Int = 4000, maxBodyChars: Int = Int.MAX_VALUE,
+        errorBody: Boolean = false, method: String? = null,
+    ): HubReply {
+        val conn = open(url, token, connectTimeoutMs, readTimeoutMs)
         try {
-            conn.connectTimeout = 4000
-            conn.readTimeout = readTimeoutMs
-            conn.setRequestProperty("Authorization", "Bearer $token")
             conn.setRequestProperty("Accept", "application/json")
+            if (method != null) conn.requestMethod = method
             if (body != null) {
                 conn.requestMethod = "POST"
                 conn.doOutput = true
@@ -193,35 +210,85 @@ object OdysseusLink {
                 conn.outputStream.use { it.write(body) }
             }
             val code = conn.responseCode
-            val text = if (code in 200..299) conn.inputStream.bufferedReader().use { it.readText() } else ""
-            return Reply(code, text)
+            val text = when {
+                code in 200..299 -> conn.inputStream.bufferedReader().use { readAtMost(it, maxBodyChars) }
+                errorBody -> runCatching {
+                    conn.errorStream?.bufferedReader()?.use { readAtMost(it, minOf(ERROR_BODY_MAX, maxBodyChars)) }
+                }.getOrNull().orEmpty()
+                else -> ""
+            }
+            return HubReply(code, text, conn.date.takeIf { it > 0 })
         } finally {
             conn.disconnect()
         }
     }
 
-    suspend fun fetchActions(sinceEpochMs: Long, limit: Int = 8): Result = withContext(Dispatchers.IO) {
-        try {
-            val r = request("/actions?since=$sinceEpochMs&limit=$limit")
-            if (r.code != 200) return@withContext Result.Failed(describe(r.code, "actions feed"))
-            Result.Ok(json.decodeFromString<VoiceActionsResponse>(r.body).actions)
-        } catch (e: Exception) {
-            Result.Failed(e.message ?: e.javaClass.simpleName)
-        }
+    /** [send] to `<base><path>` with the voice token. Blocking; throws when not linked. */
+    internal fun sendToHub(
+        path: String, contentType: String? = null, body: ByteArray? = null,
+        readTimeoutMs: Int = 6000, connectTimeoutMs: Int = 4000, maxBodyChars: Int = Int.MAX_VALUE,
+        errorBody: Boolean = false, method: String? = null,
+    ): HubReply {
+        val (base, token) = link()
+        return send("$base$path", token, contentType, body, readTimeoutMs, connectTimeoutMs, maxBodyChars, errorBody, method)
     }
 
-    /** GET /turns/latest: the newest finished voice turn that started at or after [sinceEpochMs]. */
-    suspend fun fetchLatestTurn(sinceEpochMs: Long): TurnResult = withContext(Dispatchers.IO) {
-        try {
-            val r = request("/turns/latest?since=$sinceEpochMs")
-            when (r.code) {
-                200 -> TurnResult.Ok(VoiceTurnApi.parseLatestTurn(r.body))
-                404 -> TurnResult.NotSupported
-                else -> TurnResult.Failed(describe(r.code, "turn feed"))
-            }
-        } catch (e: Exception) {
-            TurnResult.Failed(e.message ?: e.javaClass.simpleName)
+    /** The [HubHttp] of the device: [call] under the base URL, on the IO dispatcher. */
+    override suspend fun request(call: HubCall): HubReply = withContext(Dispatchers.IO) {
+        sendToHub(call.path, call.contentType, call.body, call.readTimeoutMs, errorBody = call.errorBody, method = call.method)
+    }
+
+    /**
+     * An authorised GET to the hub for the streamed APK download (odysseus/update/), not yet
+     * connected: the caller adds headers (Range), reads the stream and disconnects. Throws when
+     * not linked.
+     */
+    fun openGet(path: String, readTimeoutMs: Int = 30_000): HttpURLConnection {
+        val (base, token) = link()
+        return open("$base$path", token, connectTimeoutMs = 10_000, readTimeoutMs = readTimeoutMs)
+    }
+
+    /** The base URL and the token, or throws when not linked. */
+    private fun link(): Pair<String, String> {
+        val base = baseUrl
+        val token = token()
+        if (!base.startsWith("http") || token.isNullOrEmpty()) throw IllegalStateException("not set up")
+        return base to token
+    }
+
+    private fun open(url: String, token: String, connectTimeoutMs: Int, readTimeoutMs: Int): HttpURLConnection =
+        (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            // A redirect is answered as it is: following it would send the token to wherever it points.
+            instanceFollowRedirects = false
+            setRequestProperty("Authorization", "Bearer $token")
         }
+
+    /** The first [max] chars of [reader], without reading (or waiting for) the rest. */
+    private fun readAtMost(reader: java.io.Reader, max: Int): String {
+        val out = StringBuilder()
+        val buf = CharArray(8192)
+        while (out.length < max) {
+            val n = reader.read(buf, 0, minOf(buf.size, max - out.length))
+            if (n < 0) break
+            out.appendRange(buf, 0, n)
+        }
+        return out.toString()
+    }
+
+    /**
+     * GET /turns/latest: the finished turn of [contextId] when known (the /satellite/turn answer),
+     * else the newest finished voice turn that started at or after [sinceEpochMs].
+     */
+    suspend fun fetchLatestTurn(contextId: String?, sinceEpochMs: Long, http: HubHttp = this): TurnResult = try {
+        val r = http.request(HubCall(VoiceTurnApi.latestTurnPath(contextId, sinceEpochMs)))
+        if (r.code != 200) TurnResult.Failed(hubStatusText(r.code))
+        else TurnResult.Ok(VoiceTurnApi.parseLatestTurn(r.body))
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        TurnResult.Failed(failureText(e))
     }
 
     /**
@@ -229,75 +296,89 @@ object OdysseusLink {
      * [audioWav] is given, the spoken command for Athena's speaker check. The hub forwards the
      * audio to Athena and never stores it.
      */
-    suspend fun postSatelliteTurn(form: SatelliteTurnForm, audioWav: ByteArray?): PostResult = withContext(Dispatchers.IO) {
-        try {
-            val boundary = "odysseus-" + UUID.randomUUID().toString()
-            val body = VoiceTurnApi.multipartBody(boundary, form.fields(), audioWav)
-            val r = request("/satellite/turn", "multipart/form-data; boundary=$boundary", body, readTimeoutMs = 10_000)
-            if (r.code !in 200..299) return@withContext PostResult.Failed(describe(r.code, "satellite route"))
-            PostResult.Ok(VoiceTurnApi.parseSatelliteTurnResponse(r.body))
-        } catch (e: Exception) {
-            PostResult.Failed(e.message ?: e.javaClass.simpleName)
-        }
+    suspend fun postSatelliteTurn(form: SatelliteTurnForm, audioWav: ByteArray?): PostResult = try {
+        val boundary = "odysseus-" + UUID.randomUUID().toString()
+        val body = VoiceTurnApi.multipartBody(boundary, form.fields(), audioWav)
+        val r = request(HubCall("/satellite/turn", "multipart/form-data; boundary=$boundary", body, readTimeoutMs = 10_000))
+        if (r.code !in 200..299) PostResult.Failed(hubStatusText(r.code))
+        else PostResult.Ok(VoiceTurnApi.parseSatelliteTurnResponse(r.body))
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        PostResult.Failed(failureText(e))
     }
 
     sealed class InterruptResult {
         /** The hub cut [cut] running turns short and marked [marked] it hadn't been asked yet. */
         data class Ok(val cut: Int, val marked: Int) : InterruptResult()
-        /** An older Odysseus without the route: the barge-in waits for the old answer as before. */
-        object NotSupported : InterruptResult()
         data class Failed(val message: String) : InterruptResult()
     }
 
     /**
      * POST /satellite/interrupt: this device's wake word interrupted its turn, so Odysseus ends
-     * that turn at once and Home Assistant can end its run (odysseus/BargeIn.kt).
+     * that turn at once and Home Assistant can end its run (odysseus/BargeIn.kt). With
+     * [contextId] (the interrupted turn's) only that turn is cut; without, this device's turns.
      */
-    suspend fun interruptTurn(deviceId: String): InterruptResult = withContext(Dispatchers.IO) {
-        try {
-            val body = "device_id=" + java.net.URLEncoder.encode(deviceId, "UTF-8")
-            val r = request("/satellite/interrupt", "application/x-www-form-urlencoded", body.toByteArray(), readTimeoutMs = 4000)
-            when (r.code) {
-                200 -> VoiceTurnApi.parseInterruptResponse(r.body)
-                404, 405 -> InterruptResult.NotSupported
-                else -> InterruptResult.Failed(describe(r.code, "interrupt route"))
-            }
+    suspend fun interruptTurn(deviceId: String, contextId: String?, http: HubHttp = this): InterruptResult = try {
+        val body = VoiceTurnApi.interruptForm(deviceId, contextId)
+        val r = http.request(HubCall("/satellite/interrupt", "application/x-www-form-urlencoded", body.toByteArray(), readTimeoutMs = 4000))
+        if (r.code != 200) InterruptResult.Failed(hubStatusText(r.code))
+        else VoiceTurnApi.parseInterruptResponse(r.body)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        InterruptResult.Failed(failureText(e))
+    }
+
+    /**
+     * POST /satellite/timing: when each stage of a finished turn happened ([TurnTimings.toJson]).
+     * True when the hub took them; a failure is logged here.
+     */
+    suspend fun postTimings(json: String): Boolean {
+        val failure = try {
+            val r = request(HubCall("/satellite/timing", "application/json", json.toByteArray(), readTimeoutMs = 4000))
+            if (r.code in 200..299) null else hubStatusText(r.code)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            InterruptResult.Failed(e.message ?: e.javaClass.simpleName)
+            failureText(e)
         }
+        failure?.let { Timber.w("Odysseus turn timings: $it") }
+        return failure == null
     }
 
-    sealed class TimingResult {
-        object Ok : TimingResult()
-        /** An older Odysseus without the route. */
-        object NotSupported : TimingResult()
-        data class Failed(val message: String) : TimingResult()
-    }
-
-    /** POST /satellite/timing: when each stage of a finished turn happened ([TurnTimings.toJson]). */
-    suspend fun postTimings(json: String): TimingResult = withContext(Dispatchers.IO) {
-        try {
-            val r = request("/satellite/timing", "application/json", json.toByteArray(), readTimeoutMs = 4000)
-            when (r.code) {
-                in 200..299 -> TimingResult.Ok
-                404, 405 -> TimingResult.NotSupported
-                else -> TimingResult.Failed(describe(r.code, "timing route"))
-            }
-        } catch (e: Exception) {
-            TimingResult.Failed(e.message ?: e.javaClass.simpleName)
-        }
-    }
-
-    /** Tests the saved link: (ok, message to show). An older hub without the turn feed is tested with /actions. */
-    suspend fun testLink(): Pair<Boolean, String> {
-        val dayAgo = System.currentTimeMillis() - 86_400_000L
-        return when (val t = fetchLatestTurn(dayAgo)) {
+    /** Tests the saved link with the turn feed: (ok, message to show). */
+    suspend fun testLink(): Pair<Boolean, String> =
+        when (val t = fetchLatestTurn(null, System.currentTimeMillis() - 86_400_000L)) {
             is TurnResult.Ok -> true to "Linked: Odysseus answered"
             is TurnResult.Failed -> false to "Saved, but the test failed: ${t.message}"
-            TurnResult.NotSupported -> when (val r = fetchActions(dayAgo, 1)) {
-                is Result.Ok -> true to "Linked: Odysseus answered (an older Odysseus: actions only, no sources or voice check)"
-                is Result.Failed -> false to "Saved, but the test failed: ${r.message}"
-            }
         }
+}
+
+/**
+ * The decrypted token, kept for the stored (encrypted) value it came from, so the Keystore is
+ * asked once per saved token, not on every request and every `hasToken`. A value that can't be
+ * decrypted is tried again only after [retryMs] (or at once when a new one is saved), so it
+ * doesn't log a stack trace on every request.
+ */
+internal class TokenMemo(
+    private val decrypt: (String) -> String,
+    private val retryMs: Long = 10 * 60_000L,
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val onFailure: (Throwable) -> Unit = {},
+) {
+    private var stored: String? = null
+    private var plain: String? = null
+    private var failedAt: Long? = null
+
+    @Synchronized
+    fun read(enc: String?): String? {
+        if (enc.isNullOrEmpty()) return null
+        val failed = failedAt
+        if (enc == stored && (failed == null || clock() - failed < retryMs)) return plain
+        stored = enc
+        plain = runCatching { decrypt(enc) }.onFailure(onFailure).getOrNull()
+        failedAt = if (plain == null) clock() else null
+        return plain
     }
 }

@@ -1,0 +1,12 @@
+[
+  {"entity_id": "media_player.kitchen_2", "name": "Kitchen", "area": "", "state": "idle", "ma": true, "type": "player",
+   "members": [], "ids": [["music_assistant", "RINCON_fictional01"]], "entry": "01JFICTIONALENTRY0000000000"},
+  {"entity_id": "media_player.kitchen", "name": "Kitchen", "area": "Kitchen", "state": "playing", "ma": false, "type": null,
+   "members": [], "ids": [], "entry": null},
+  {"entity_id": "media_player.living_room_tv", "name": "Living Room TV", "area": "Living Room", "state": "playing", "ma": false, "type": null,
+   "members": [], "ids": [], "entry": null},
+  {"entity_id": "media_player.bedroom_cast", "name": "Bedroom Cast", "area": "Bedroom", "state": "off", "ma": false, "type": null,
+   "members": [], "ids": [], "entry": null},
+  {"entity_id": "media_player.study_speaker", "name": "Study Speaker", "area": "Study", "state": "unavailable", "ma": true, "type": "player",
+   "members": [], "ids": [["music_assistant", "ma_study02"]], "entry": "01JFICTIONALENTRY0000000000"}
+]

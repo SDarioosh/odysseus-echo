@@ -1,0 +1,8 @@
+{"artists": [{"media_type": "artist", "uri": "library://artist/7", "name": "The Copper Lanterns", "version": "", "image": "http://192.168.1.20:8095/imageproxy/art7", "favorite": true, "artists": []}],
+ "albums": [{"media_type": "album", "uri": "library://album/21", "name": "Harbour Lights", "version": "Deluxe", "image": null, "favorite": false,
+             "artists": [{"media_type": "artist", "uri": "library://artist/7", "name": "The Copper Lanterns", "version": "", "image": null}]}],
+ "tracks": [{"media_type": "track", "uri": "library://track/301", "name": "Lantern Song", "version": "", "image": null, "favorite": false,
+             "artists": [{"media_type": "artist", "uri": "library://artist/7", "name": "The Copper Lanterns"}, {"media_type": "artist", "uri": "library://artist/9", "name": "Ada Brightwater"}],
+             "album": {"media_type": "album", "uri": "library://album/21", "name": "Harbour Lights"}}],
+ "playlists": [], "radio": [{"media_type": "radio", "uri": "radiobrowser://radio/fict-1", "name": "Harbour FM", "image": "https://radio.example.test/logo.png"}],
+ "audiobooks": [], "podcasts": []}

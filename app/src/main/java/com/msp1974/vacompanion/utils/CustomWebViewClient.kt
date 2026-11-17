@@ -192,6 +192,22 @@ class CustomWebViewClient(val viewModel: VAViewModel): WebViewClientCompat()  {
         view.loadUrl(ERROR_URL)
     }
 
+    // Odysseus fork: a server error for the dashboard page itself (HA restarting behind a proxy:
+    // 502, 503) is a failed load like a connection error: the error page, then reloads
+    // (odysseus/kiosk/DashboardAutoReload.kt)
+    override fun onReceivedHttpError(
+        view: WebView,
+        request: android.webkit.WebResourceRequest,
+        errorResponse: android.webkit.WebResourceResponse
+    ) {
+        super.onReceivedHttpError(view, request, errorResponse)
+        if (request.isForMainFrame && errorResponse.statusCode >= 500) {
+            Timber.e("Dashboard page returned HTTP ${errorResponse.statusCode}")
+            setPageLoadingState(PageLoadingStage.ERROR)
+            view.loadUrl(ERROR_URL)
+        }
+    }
+
     @SuppressLint("WebViewClientOnReceivedSslError")
     override fun onReceivedSslError(
         view: WebView,

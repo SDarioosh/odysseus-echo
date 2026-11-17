@@ -45,6 +45,13 @@ class VACAApplication: Application(), CameraXConfig.Provider {
 
         activityManager = ActivityManager(this)
 
+        // Odysseus fork: come back to the front after another app was left open (odysseus/kiosk/ReturnToDashboard.kt)
+        com.msp1974.vacompanion.odysseus.kiosk.ReturnToDashboard.install(this)
+        // Odysseus fork: locked outside the work hours, PIN to unlock (odysseus/lock/LockMode.kt)
+        com.msp1974.vacompanion.odysseus.lock.LockMode.install(this)
+        // Odysseus fork: check the Odysseus hub for app updates (odysseus/update/UpdateManager.kt)
+        com.msp1974.vacompanion.odysseus.update.UpdateManager.start(this)
+
         // Create the notification channel (required for Android 8.0 and above)
         val channel = NotificationChannel(
             "VACAForegroundServiceChannelId",

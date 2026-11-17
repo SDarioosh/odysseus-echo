@@ -1,0 +1,26 @@
+diff --git a/src/protocol/patterns.c b/src/protocol/patterns.c
+index dcba9a4..1a77b3d 100644
+--- a/src/protocol/patterns.c
++++ b/src/protocol/patterns.c
+@@ -686,10 +686,17 @@ int noise_pattern_expand
+     if (!base_pattern)
+         return NOISE_ERROR_UNKNOWN_NAME;
+ 
+-    /* Copy the base pattern into the return buffer */
+-    pattern_end = (const uint8_t *)memchr
+-        (base_pattern + 2, NOISE_TOKEN_END,
+-         NOISE_MAX_TOKENS - NOISE_PATTERN_HEADER_LEN);
++    /* Copy the base pattern into the return buffer. The base patterns are
++       short static arrays, so scan byte by byte and stop at the end token:
++       memchr() with the full NOISE_MAX_TOKENS bound is rejected by fortified
++       C libraries (Android bionic aborts) as reading past the array. */
++    pattern_end = 0;
++    for (index = NOISE_PATTERN_HEADER_LEN; index < NOISE_MAX_TOKENS; ++index) {
++        if (base_pattern[index] == NOISE_TOKEN_END) {
++            pattern_end = base_pattern + index;
++            break;
++        }
++    }
+     if (!pattern_end)
+         return NOISE_ERROR_INVALID_LENGTH;
+     pattern_len = pattern_end + 1 - base_pattern;

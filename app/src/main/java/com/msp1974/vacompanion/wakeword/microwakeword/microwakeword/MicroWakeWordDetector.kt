@@ -11,7 +11,11 @@ private const val SAMPLES_PER_CHUNK = 160  // 10ms
 private const val BYTES_PER_SAMPLE = 2  // 16-bit
 private const val BYTES_PER_CHUNK = SAMPLES_PER_CHUNK * BYTES_PER_SAMPLE
 
-class MicroWakeWordDetector(private val wakeWords: List<MicroWakeWord>) : AutoCloseable {
+class MicroWakeWordDetector(
+    private val wakeWords: List<MicroWakeWord>,
+    // Odysseus fork: stop models run only while something can be stopped (odysseus/wakeword/StopWordModels.kt).
+    private val stopWords: com.msp1974.vacompanion.odysseus.wakeword.StopWordModels = com.msp1974.vacompanion.odysseus.wakeword.StopWordModels(emptyList()) { true },
+) : AutoCloseable {
     private val frontend = MicroFrontend()
     private val buffer = ByteBuffer.allocateDirect(BYTES_PER_CHUNK)
 
@@ -26,7 +30,7 @@ class MicroWakeWordDetector(private val wakeWords: List<MicroWakeWord>) : AutoCl
             if (processOutput.features.isEmpty())
                 continue
             for (wakeWord in wakeWords) {
-                val result = wakeWord.processAudioFeatures(processOutput.features)
+                val result = stopWords.process(wakeWord, processOutput.features) ?: continue // Odysseus fork: null while a stop model is paused (odysseus/wakeword/StopWordModels.kt)
 
                 // Hold highest detect or highest none detect if no detection
                 if (!detections.any { it.wakeWordId == wakeWord.id } || (result.detected && detections.any { it.wakeWordId == wakeWord.id && it.score < result.score }))

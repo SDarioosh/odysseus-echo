@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-06",
+  "generated": "2026-11-06T04:09:52+00:00",
+  "headline": "The dentist at three; the plumber is due today.",
+  "focus": [
+    {
+      "ref": "todo:0ba57096-fbe2-4dd4-9715-b68334f36ffb:0",
+      "title": "Call the plumber",
+      "why": "Due today"
+    },
+    {
+      "ref": "205e6a2c-b081-4e7e-974e-1bc830e0c30d",
+      "title": "Dentist",
+      "why": "At 15:00"
+    }
+  ],
+  "events": [
+    {
+      "uid": "db434e9b-738a-4f41-980b-a02b62d680c3",
+      "title": "Recycling day",
+      "start": "2026-11-06T00:00:00+00:00",
+      "end": "2026-11-07T00:00:00+00:00",
+      "all_day": true,
+      "location": null
+    },
+    {
+      "uid": "d4ca75a2-92aa-414d-9576-ac7d143784fa::2026-11-06T09:00",
+      "title": "Standup",
+      "start": "2026-11-06T09:00:00+00:00",
+      "end": "2026-11-06T09:15:00+00:00",
+      "all_day": false,
+      "location": null
+    },
+    {
+      "uid": "205e6a2c-b081-4e7e-974e-1bc830e0c30d",
+      "title": "Dentist",
+      "start": "2026-11-06T15:00:00+00:00",
+      "end": "2026-11-06T15:30:00+00:00",
+      "all_day": false,
+      "location": "Main St"
+    }
+  ],
+  "todos": [
+    {
+      "ref": "todo:4eb50fe3-e5bf-425a-8504-deb1a249e0a4:0",
+      "title": "Return library books",
+      "due": "2026-11-04",
+      "list": "Errands"
+    },
+    {
+      "ref": "todo:0ba57096-fbe2-4dd4-9715-b68334f36ffb:0",
+      "title": "Call the plumber",
+      "due": "2026-11-06",
+      "list": "Home"
+    },
+    {
+      "ref": "todo:0ba57096-fbe2-4dd4-9715-b68334f36ffb:1",
+      "title": "Water the fictional ferns",
+      "due": "2026-11-06",
+      "list": "Home"
+    },
+    {
+      "ref": "todo:5594a473-b67e-4d3c-9644-99f7f133bf63:0",
+      "title": "Pack the tent",
+      "due": null,
+      "list": "Packing"
+    }
+  ],
+  "action_items": [
+    {
+      "id": "1",
+      "title": "Send Sam the photos",
+      "source": "athena"
+    },
+    {
+      "id": "2",
+      "title": "Buy tulip bulbs",
+      "source": "athena"
+    },
+    {
+      "id": "3",
+      "title": "Call Dana",
+      "source": "athena"
+    }
+  ],
+  "counts": {
+    "todos_open": 4,
+    "action_items_open": 3
+  }
+}

@@ -4,8 +4,9 @@ package com.msp1974.vacompanion.odysseus
 // (docs/odysseus/turn-card.md, "Timings"). OdysseusTurn marks every pipeline stage here and, once
 // the turn has ended, posts the report to Odysseus (POST <base>/satellite/timing), which joins it
 // to its own times for the same turn: the hub sees its own steps, the device sees Home
-// Assistant's speech to text and text to speech. Only numbers, the device id and a few flags:
-// never the question, the answer or audio.
+// Assistant's speech to text and text to speech. With the turn's context id (the /satellite/turn
+// answer) the hub joins them exactly, else by time. Only numbers, the device id, the context id
+// and a few flags: never the question, the answer or audio.
 
 import com.msp1974.vacompanion.satellite.PipelineStage
 import kotlinx.serialization.json.buildJsonObject
@@ -32,10 +33,11 @@ class TurnTimings(private val startedAtMs: Long, private val startMode: String) 
     @Synchronized
     fun marks(): Map<String, Long> = LinkedHashMap(marks)
 
-    /** The JSON body of POST /satellite/timing. */
+    /** The JSON body of POST /satellite/timing; [contextId] (the turn's, when known) lets the hub join it exactly. */
     @Synchronized
-    fun toJson(deviceId: String): String = buildJsonObject {
+    fun toJson(deviceId: String, contextId: String? = null): String = buildJsonObject {
         put("device_id", deviceId)
+        if (!contextId.isNullOrEmpty()) put("context_id", contextId)
         put("started_at", startedAtMs)
         put("start_mode", startMode)
         putJsonObject("marks") { marks.forEach { (k, v) -> put(k, v) } }

@@ -125,6 +125,7 @@ abstract class SatelliteWakeWorkHandler(
                 )
                 engine?.setActiveWakeWords(listOf(config.wakeWord))
                 engine?.setActiveStopWords(listOf("stop"))
+                engine?.stopWordsWanted = ::stopWordUseful // Odysseus fork: stop model only while it can stop something (odysseus/wakeword/StopWordModels.kt)
                 runWakeWordDetection()
             }
             state = WakeWordHandlerState.RUNNING
@@ -200,7 +201,7 @@ abstract class SatelliteWakeWorkHandler(
 
                                 if (lastDetection == null || detectionCooldownMs == 0L || now - lastDetection >= detectionCooldownMs) {
                                     // Measured on the raw microphone, before gain control.
-                                    val rawLevel = microphone.level.peakDbfs(MicLevelMonitor.WAKE_WORD_WINDOW_MS)
+                                    val rawLevel = microphone.level.wake.wakeWordDbfs() // Odysseus fork: the wake word's speech-band level, as arbitration uses (odysseus/arbitration/WakeLevelMeter.kt)
                                     val micLevel = MicLevelMonitor.calibrated(rawLevel, config.wakeLevelOffsetDb)
                                     val levelText = micLevel?.let { l -> "%.1f dB".format(l) } ?: "unknown"
                                     if (config.wakeLevelCalibration.isActive) {
@@ -210,7 +211,7 @@ abstract class SatelliteWakeWorkHandler(
                                         detectionCooldowns[it.detection.wakeWordId] = now
                                     } else {
                                         Timber.i("Wake word detected: ${it.detection.wakeWord} (mic level $levelText)")
-                                        wakeWordDetected(it.detection)
+                                        if (!com.msp1974.vacompanion.odysseus.wakeword.WakeClips.onWake(it.detection.score)) wakeWordDetected(it.detection) // Odysseus fork: no wake during a training take; notes the wake for missed-wake clips (odysseus/wakeword/WakeClips.kt)
                                         detectionCooldowns[it.detection.wakeWordId] = now
                                     }
                                 }
@@ -272,6 +273,9 @@ abstract class SatelliteWakeWorkHandler(
             }
         }
     }
+
+    // Odysseus fork: whether a "stop" could stop something now; true (always listen) unless overridden (odysseus/wakeword/StopWordGate.kt).
+    open fun stopWordUseful(): Boolean = true
 
     fun terminateWakeWordDetection() {
 

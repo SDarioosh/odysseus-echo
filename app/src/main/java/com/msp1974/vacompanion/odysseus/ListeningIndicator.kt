@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.msp1974.vacompanion.odysseus.record.RecordButton
 import com.msp1974.vacompanion.satellite.PipelineStage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -110,14 +111,15 @@ fun ListeningIndicator(modifier: Modifier = Modifier) {
     val micMuted by VoiceActivity.micMuted.collectAsState()
     val context = LocalContext.current
 
-    // The Echo Show's privacy button mutes the microphone in hardware; Android reports it as a
-    // microphone mute (AudioService.setMicrophoneMuteFromSwitch). Show it on screen.
+    // The Echo Show's privacy button mutes the microphone; Android reports it as a microphone
+    // mute (AudioService.setMicrophoneMuteFromSwitch). Show it on screen, except while the button
+    // is the record button (record/RecordButton.kt): then the flag flips on every press.
     DisposableEffect(context) {
         val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        VoiceActivity.setMicMuted(audio.isMicrophoneMute)
+        VoiceActivity.setMicMuted(RecordButton.effectiveMicMute(audio.isMicrophoneMute))
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, i: Intent?) {
-                VoiceActivity.setMicMuted(audio.isMicrophoneMute)
+                VoiceActivity.setMicMuted(RecordButton.effectiveMicMute(audio.isMicrophoneMute))
             }
         }
         context.registerReceiver(receiver, IntentFilter(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED))
@@ -138,13 +140,6 @@ fun ListeningIndicator(modifier: Modifier = Modifier) {
         VoiceActivity.Phase.ANSWERING -> Triple("Answering…", AnsweringColor, 1600)
         VoiceActivity.Phase.IDLE -> Triple("", ListeningColor, 1000)
     }
-
-    val pulse by rememberInfiniteTransition(label = "voice-pulse").animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(periodMs, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "voice-pulse-alpha",
-    )
 
     Box(modifier = modifier.fillMaxSize()) {
         AnimatedVisibility(
@@ -170,6 +165,15 @@ fun ListeningIndicator(modifier: Modifier = Modifier) {
             exit = fadeOut(tween(300)),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
+            // Inside the visible content, so the pulse runs only while the bar shows (and fades
+            // out): an idle indicator no longer asks for a frame on every screen refresh.
+            val pulse by rememberInfiniteTransition(label = "voice-pulse").animateFloat(
+                initialValue = 0.35f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(periodMs, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                label = "voice-pulse-alpha",
+            )
+
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = label,

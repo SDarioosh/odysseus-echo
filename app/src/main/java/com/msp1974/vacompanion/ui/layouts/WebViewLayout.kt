@@ -62,6 +62,9 @@ fun WebViewScreen (webView: CustomWebView, vaViewModel: VAViewModel = viewModel(
         }
     }
 
+    // Odysseus fork: reload by itself when the dashboard failed to load (odysseus/kiosk/DashboardAutoReload.kt)
+    com.msp1974.vacompanion.odysseus.kiosk.DashboardAutoReload(webView, vaUiState.webViewPageLoadingStage, vaUiState.isNetworkConnected)
+
     LaunchedEffect(webView) {
         webView.setOnGestureListener(object : WebViewGestureDetector.OnGestureListener {
             override fun onSwipe(
@@ -129,8 +132,9 @@ fun WebViewScreen (webView: CustomWebView, vaViewModel: VAViewModel = viewModel(
         // Never so narrow that the track details and controls don't fit.
         if (vaUiState.sendspinOverlayEnabled) {
             NowPlayingOverlay(
-                nowPlaying = vaUiState.sendspinNowPlaying,
-                onCommand = { vaViewModel.onSendspinCommand(it) },
+                // Odysseus fork: or another speaker's music, from Home Assistant (odysseus/home/players/OtherPlayers.kt)
+                nowPlaying = com.msp1974.vacompanion.odysseus.home.players.OtherPlayers.nowPlaying(vaUiState.sendspinNowPlaying),
+                onCommand = { com.msp1974.vacompanion.odysseus.home.players.OtherPlayers.command(vaUiState.sendspinNowPlaying, it, vaViewModel.deviceManager, vaViewModel::onSendspinCommand) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .widthIn(min = 300.dp)

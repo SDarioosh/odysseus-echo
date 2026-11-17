@@ -106,6 +106,19 @@ class HomeNavigatorTest {
     }
 
     @Test
+    fun aPageThatComesBackDoesNotPullTheScreenToIt() {
+        // On the Today page; it goes (unlinked), the clock shows; later it comes back (linked
+        // again): the screen stays where it is rather than jumping to it.
+        pages = 2
+        nav.onSwipe(SwipeDirection.LEFT, 0)
+        assertEquals(page(1), nav.current())
+        pages = 1
+        assertEquals(page(0), nav.current())
+        pages = 2
+        assertEquals(page(0), nav.current())
+    }
+
+    @Test
     fun noIdleDeadlineOnTheClock() {
         nav.onUserActivity(1_000)
         assertNull(nav.idleDeadlineMs())
@@ -171,5 +184,50 @@ class HomeNavigatorTest {
         assertEquals(125_000L, nav.idleDeadlineMs())
         nav.goTo(page(0), 6_000)
         assertEquals(page(0), nav.current())
+    }
+
+    // ---- idle exemption (HomePage.idleExempt: the Music page while music plays here) ----
+
+    private var exemptPages = setOf<Int>()
+    private val exemptNav = HomeNavigator({ pages }, { enabled }, { timeoutMs }, { it in exemptPages })
+
+    @Test
+    fun anExemptPageHasNoIdleDeadline() {
+        pages = 3
+        exemptPages = setOf(2)
+        exemptNav.goTo(page(2), 1_000)
+        assertNull(exemptNav.idleDeadlineMs(500_000))
+        assertFalse(exemptNav.checkIdle(10_000_000))
+        assertEquals(page(2), exemptNav.current())
+    }
+
+    @Test
+    fun exemptionOnlyCountsForThePageShown() {
+        pages = 3
+        exemptPages = setOf(2)
+        exemptNav.goTo(page(1), 1_000)
+        assertEquals(121_000L, exemptNav.idleDeadlineMs(2_000))
+        assertTrue(exemptNav.checkIdle(121_000))
+        assertEquals(page(0), exemptNav.current())
+    }
+
+    @Test
+    fun idleTimeRestartsWhenTheExemptionEnds() {
+        pages = 3
+        exemptPages = setOf(2)
+        exemptNav.goTo(page(2), 1_000)
+        assertNull(exemptNav.idleDeadlineMs(600_000))
+        exemptPages = emptySet() // the music stopped
+        assertEquals(800_000L + 120_000L, exemptNav.idleDeadlineMs(800_000))
+        assertFalse(exemptNav.checkIdle(900_000))
+        assertTrue(exemptNav.checkIdle(920_000))
+        assertEquals(page(0), exemptNav.current())
+    }
+
+    @Test
+    fun defaultNavigatorHasNoExemptPages() {
+        pages = 2
+        nav.goTo(page(1), 0)
+        assertEquals(120_000L, nav.idleDeadlineMs(10))
     }
 }

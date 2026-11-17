@@ -61,4 +61,13 @@ class TurnTimingsTest {
         assertTrue(body["flags"]!!.jsonObject[TurnTimings.THINKING_SOUND]!!.jsonPrimitive.boolean)
         assertFalse(TurnTimings.BARGE_IN in body["flags"]!!.jsonObject)
     }
+
+    @Test
+    fun theReportNamesTheTurnsContextIdWhenKnown() {
+        val t = TurnTimings(wake, "wake_word_detected")
+        val with = Json.parseToJsonElement(t.toJson("echo-kitchen", "ctx-1")).jsonObject
+        assertEquals("ctx-1", with["context_id"]!!.jsonPrimitive.content)
+        val without = Json.parseToJsonElement(t.toJson("echo-kitchen", null)).jsonObject
+        assertFalse("context_id" in without)
+    }
 }

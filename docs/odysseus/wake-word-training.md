@@ -9,7 +9,7 @@ as the voice assistant), are never logged, and must never be committed or upload
 
 ## On the Echo
 
-Menu → Odysseus → **Wake word training**:
+Menu → Odysseus → Voice → **Wake word training**:
 
 - **Record clips (about 1 minute).** A full-screen guide asks for "Hey Athena" 10 times, each a
   bit differently (normal voice, quickly, quietly, from further away, looking away, slowly, from

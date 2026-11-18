@@ -42,7 +42,7 @@ While anything records:
 
 These devices have no vibration, so the sounds and the pill are the only feedback.
 
-## Settings: Menu → Odysseus → Recording
+## Settings: Menu → Odysseus → Privacy
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -145,7 +145,7 @@ voice base URL (`https://<hub>/api/chat/voice/v1` → `https://<hub>`), with the
 
 The token needs the `athena:ingest` scope. Echo tokens made by the hub's `/echo/link` have it
 (hub change H4). An Echo linked before H4 has a voice-only token and gets 403: relink it from
-the phone (Menu → Odysseus → Set up with phone).
+the phone (Menu → Odysseus → Link → Set up with phone).
 
 ## The privacy button
 
@@ -251,7 +251,7 @@ All in `odysseus/record/` unless named otherwise:
 | `ChunkQueue.kt` | the durable queue in `files/odysseus/recordings/` |
 | `RecordingUploader.kt`, `UploadRules.kt`, `HubRelayTransport.kt` | uploads to the hub relay (contract C4), retry waits, the queue cap |
 | `RecordButton.kt`, `RecordButtonGestures.kt` | the privacy button: key and switch paths (pure gestures) |
-| `RecorderSettings.kt`, `RecordingSettingsSection.kt` | Menu → Odysseus → Recording (Privacy button: Record / Mute) |
+| `RecorderSettings.kt`, `RecordingSettingsSection.kt` | Menu → Odysseus → Privacy (Privacy button: Record / Mute) |
 | `RecordingUi.kt`, `RecordingText.kt` | the REC/NOTE pill, the buttons (`Modifier.recordGestures()`), the wording |
 | `odysseus/ListeningIndicator.kt` | the "Microphone off" pill in Mute mode |
 | `assets/odysseus/record_start.wav`, `record_stop.wav` | the sounds (above) |
@@ -293,7 +293,7 @@ Record button).
 2. Hold the clock's record button for 1 s and say "remind me to water the plants at 6". Tap to
    stop. In Athena, a voice note appears, and the reminder is in Odysseus.
 3. Start a recording, turn Wi-Fi off for a few minutes, then turn it back on. Menu → Odysseus →
-   Recording shows chunks waiting, and then everything arrives (or tap "Upload now").
+   Privacy shows chunks waiting, and then everything arrives (or tap "Upload now").
 4. Say "Hey Athena" during a recording. It answers, and the recording goes on.
 5. `adb logcat | grep Recorder` shows the start, the chunks and the uploads.
 6. The privacy button: the checks in

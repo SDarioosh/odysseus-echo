@@ -97,7 +97,7 @@ fun SettingsLayout(
                         currentScreen = SettingsScreen.APP_LAUNCHER
                     }
                     // Odysseus fork: link to Odysseus to show voice actions (odysseus/OdysseusSettingsLayout.kt)
-                    add("Odysseus", "Show what you add or complete by voice", Icons.Default.TaskAlt) {
+                    add("Odysseus", "Link, voice, home screen, clock face, music and more", Icons.Default.TaskAlt) {
                         currentScreen = SettingsScreen.ODYSSEUS
                     }
                     if (vaUiState.menuOpenedByAction && viewModel.deviceInfo.hardware.hasFrontCamera) {

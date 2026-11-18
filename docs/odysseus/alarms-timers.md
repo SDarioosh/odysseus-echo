@@ -32,7 +32,7 @@ set a timer these events; upstream dropped them, the fork handles them in
 - Kept across an app restart (SharedPreferences `odysseus_alarm_clock`). HA keeps its timers in
   memory only: after an HA restart the device still rings its copy, but HA no longer knows it.
 - On screen: a pill at the top centre over every screen with the three soonest timers
-  ("Pasta 4:59"; a pause sign while paused, "+N" for more). Menu → Odysseus → Alarms and timers
+  ("Pasta 4:59"; a pause sign while paused, "+N" for more). Menu → Odysseus → Alarms
   lists them all.
 
 ## Alarms
@@ -56,7 +56,7 @@ DELETE <base>/alarms/<alarm id>?device_id=<id>   -> {"ok": true}   (idempotent)
   (turn card fetch; the card shows it with an alarm icon, "Cancelled" for a cancelled one).
 - The last list is kept on the device (SharedPreferences `odysseus_alarm_clock`), so alarms ring
   when the hub is down or the device isn't linked any more.
-- Menu → Odysseus → **Alarms and timers** lists the alarms (time, label, "Weekdays" or the day)
+- Menu → Odysseus → **Alarms** lists the alarms (time, label, "Weekdays" or the day)
   with a **Delete** button each (`DELETE /alarms/<id>`).
 
 ## Ringing
@@ -92,7 +92,7 @@ All in `app/src/main/java/com/msp1974/vacompanion/odysseus/alarms/`:
 | `AlarmClockReceiver.kt` | Android's alarm clock fired: starts the clock and makes it look |
 | `Alarms.kt` | fetches this device's alarms from the hub, deletes one |
 | `AlarmOverlays.kt` | the timers pill and the ringing card |
-| `AlarmsSettingsSection.kt` | Menu → Odysseus → Alarms and timers |
+| `AlarmsSettingsSection.kt` | Menu → Odysseus → Alarms |
 
 Hooks: `OdysseusSatellite.onServerPacket` (timer events), `announce/Announcements.kt` (starts the
 clock and the alarm list, the `"alarms"` feed item), `announce/AnnouncementApi.kt` and

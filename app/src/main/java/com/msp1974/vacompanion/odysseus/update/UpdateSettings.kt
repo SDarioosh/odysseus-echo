@@ -31,7 +31,7 @@ fun UpdateSettingsSection() {
     )
     val status = when (state) {
         UpdateState.Idle -> "Checks Odysseus for updates a minute after starting, then daily."
-        UpdateState.NotLinked -> "Link this device to Odysseus (above) to get updates from it."
+        UpdateState.NotLinked -> "Link this device to Odysseus (the Link section) to get updates from it."
         UpdateState.Checking -> "Checking…"
         UpdateState.UpToDate -> "Up to date."
         UpdateState.NoRelease -> "Odysseus has no app release uploaded."

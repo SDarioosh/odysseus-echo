@@ -38,12 +38,28 @@ Menu → Odysseus → **Home screen**. Stored on the Echo only, not sent to Home
 | Music page (Menu → Odysseus → Music, [music.md](music.md)) | on / off (shown only while Music Assistant has players) | on |
 | Music on other speakers | on / off (also the dashboard's now-playing card) | on |
 | Speaker to follow | Auto (this room first), or one of the listed media players (the Music page's list) | Auto |
-| Clock style | a preset, then fonts, colours and elements (below) | Classic |
+| Clock face | its own section, Menu → Odysseus → Clock face (below); "Change how the clock looks" goes there | Classic |
 
-## Clock style
+## Clock face
 
-Menu → Odysseus → Home screen → **Clock style**. Stored on the Echo only (`home_clock_style` in
-`odysseus_home`, JSON), not sent to Home Assistant. A change shows as soon as the menu closes.
+Menu → Odysseus → **Clock face**. Stored on the Echo only (`home_clock_style` in
+`odysseus_home`, JSON), not sent to Home Assistant.
+
+The page is a **live preview** of the clock (drawn at the screen's size and scaled down, so a
+change shows at once; touches don't reach it; "Show with music playing" puts a sample track in
+it) beside five tabs:
+
+| Tab | What it has |
+|---|---|
+| Look | the designs (presets) as small pictures in their own colours and fonts; "Undo my changes"; dimming |
+| Colours | colour schemes that go together (`ClockPalettes`: the presets' colours and a few more, plus the app's own colours); a warning when the time or secondary text would be hard to read (WCAG contrast under 3:1 or 1.8:1, against the background and the middle of a gradient); cover art as the background; **Fine-tune colours** opens each colour on its own |
+| Fonts | font pairings (`ClockFontPairs`: a time font, weight and spacing with a text font); **Fine-tune fonts** opens time font, weight, space between digits and text font |
+| Layout | the shown elements in reading order (top row first, left to right), each with a summary ("Top left · Medium · Badge"); tap one to place it on the 3×3 grid, size it, pick its look, move it up or down in its stack, or hide it. "Now playing from" sits in the Now playing element. Hidden elements are listed below with a line on what each is; + shows one |
+| Night | the night look (below) |
+
+The schemes, pairings, contrast rule and layout helpers are plain Kotlin in
+`home/clock/ClockDesign.kt` (tested in `ClockDesignTest`). Picking a scheme changes only the
+colours, a pairing only the fonts; the stored style is the same JSON as before.
 
 **Presets** (each a complete style; pick one, then change anything):
 
@@ -79,8 +95,8 @@ element or the cover-art background). With *Selected room* and no Music page, th
 (`PlayerState.rate`).
 
 **Elements**, each on/off, at one of nine places (a 3×3 grid: top/middle/bottom × left/centre/right),
-with a size (S, M, L, XL) and a look where it has several. Elements at the same place stack top to
-bottom; ↑ moves one above the one before it.
+with a size (Small, Medium, Large, Extra large) and a look where it has several. Elements at the same
+place stack top to bottom; Up and Down move one within its stack.
 
 | Element | Looks |
 |---|---|
@@ -96,7 +112,7 @@ bottom; ↑ moves one above the one before it.
 | Record button | the recorder's clock button (when turned on under Recording) |
 | Update notice | a downloaded Odysseus update |
 
-**Night look** (off by default; Clock style → Night look): the clock switches to a night preset
+**Night look** (off by default; Clock face → Night): the clock switches to a night preset
 (Nightstand unless another is picked) while the room is dark, read from the Echo's ambient light
 sensor, and back when the light returns.
 
@@ -121,7 +137,9 @@ values clamped, unknown fonts and variants fall back), `ClockPresets.kt`, `Clock
 event, counts; plain Kotlin), `ClockTheming.kt` (hands the style's colours and text font to
 `MaterialTheme`, so shared pieces like the weather badge and the Done rows follow it; the
 background, with the cover art blurred by drawing a 12×12 copy scaled up, since Android 11 has no
-blur effect), `ClockElements.kt` (one composable per element) and `ClockStyleSettingsSection.kt`.
+blur effect), `ClockElements.kt` (one composable per element), `ClockDesign.kt` (schemes, pairings,
+contrast, layout helpers), `ClockPreview.kt` (the menu's live preview) and `ClockStyleSettingsSection.kt`
+(the Clock face page).
 The now-playing looks are the shared player pieces of `odysseus/player/` (`RowPlayer`, `PillPlayer`,
 `MiniPlayer`, `LinePlayer`, `BarPlayer`, `FullPlayer`, built from `Artwork`, `Transport`,
 `TitleArtist`, `Progress`), drawn over the neutral `music/PlayerState`: `ClockElements` turns the
@@ -345,7 +363,10 @@ read `LocalHomeStripPosition` (the strip's position, null outside `HomeHost`) in
 | `odysseus/home/clock/ClockElements.kt` | one composable per element and look |
 | `odysseus/player/` | the shared player pieces over `music/PlayerState`, Sendspin mapping, `PlayerClock`, `PlayerMetrics`, `VolumeBar`, `RoomChip` |
 | `odysseus/home/clock/NightRules.kt`, `NightMode.kt` | the night look: when (plain Kotlin), light sensor, backlight |
-| `odysseus/home/clock/ClockStyleSettingsSection.kt` | Menu → Odysseus → Home screen → Clock style |
+| `odysseus/home/clock/ClockStyleSettingsSection.kt` | Menu → Odysseus → Clock face: the tabs |
+| `odysseus/home/clock/ClockDesign.kt` | colour schemes, font pairings, contrast check, layout helpers. Plain Kotlin |
+| `odysseus/home/clock/ClockPreview.kt` | the Clock face page's live preview |
+| `app/src/test/.../odysseus/home/clock/ClockDesignTest.kt`, `.../screenshots/OdysseusMenuShotsTest.kt` | the design system's rules; screenshots of Menu → Odysseus and each Clock face tab |
 | `res/font/clock_*.ttf` | the clock fonts (SIL OFL, `assets/licenses/*-OFL.txt`) |
 | `odysseus/home/weather/WeatherClient.kt` | the Home Assistant calls for the weather (over `HaApi`) |
 | `odysseus/home/weather/WeatherForecasts.kt` | today's high/low and condition → icon, plain Kotlin |
@@ -367,7 +388,7 @@ read `LocalHomeStripPosition` (the strip's position, null outside `HomeHost`) in
 | `odysseus/home/today/TodaySettingsSection.kt` | the "Today page" setting |
 | `odysseus/home/music/` | the Music page (files in [music.md](music.md#files)) |
 | `odysseus/home/HomeHost.kt` | draws the layers, swipes, animation, idle timer |
-| `odysseus/OdysseusSettingsLayout.kt` | the Home screen settings |
+| `odysseus/OdysseusSettingsLayout.kt` | Menu → Odysseus: the section rail, and the Home screen, Link, Voice and Kiosk sections |
 | `MainActivity.kt`, `ui/layouts/WebViewLayout.kt` | hooks (marked `Odysseus fork`) |
 | `app/src/test/.../odysseus/home/HomeNavigatorTest.kt` | tests of the rules |
 | `app/src/test/.../odysseus/home/clock/{ClockStyle,ClockToday,NightRules}Test.kt` | tests of the style model, presets, JSON and the clock's Today labels |

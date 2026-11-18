@@ -14,7 +14,7 @@ message. The hub side is Odysseus's `fork/voice/announce.py` (hub docs: `docs/fo
   ```
   POST <base>/satellite/hello    application/x-www-form-urlencoded, Authorization: Bearer <voice token>
     device_id         VACA's device id (APPConfig.uuid)
-    device_name       Menu → Odysseus → Device name; blank: "VACA <id>" (as in the satellite post)
+    device_name       Menu → Odysseus → Link → Device name; blank: "VACA <id>" (as in the satellite post)
     area              the HA area this device is in (APPConfig.area), may be empty
     app_version_code  BuildConfig.VERSION_CODE
   -> {"ok": true}

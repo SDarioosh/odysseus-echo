@@ -1,8 +1,8 @@
 package com.msp1974.vacompanion.odysseus.home
 
 // Odysseus fork: page 0 of the home screen, where the idle timer returns to. What it shows and
-// how it looks come from the clock style (home/clock/, Menu → Odysseus → Home screen → Clock
-// style): a theme (colours, fonts, background) and elements (time, date, weather, now playing,
+// how it looks come from the clock style (home/clock/, Menu → Odysseus → Clock
+// face): a theme (colours, fonts, background) and elements (time, date, weather, now playing,
 // Odysseus's Today data, status, record button) placed at nine anchors (top/middle/bottom × left/centre/
 // right); elements sharing an anchor stack in order. The "Classic" style is the clock as it was before styles.
 // Built for the Echo Show 5 (about 790×395 dp, 1 GB RAM): the clock redraws once a minute, not

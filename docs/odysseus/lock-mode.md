@@ -4,7 +4,7 @@ Locks the Echo outside the work hours, for an Echo in an office: Monday to Frida
 08:00 to 18:00 (changeable in 15-minute steps) and locked the rest of the time, all weekend too. A
 PIN unlocks it on the device. Code: `app/src/main/java/com/msp1974/vacompanion/odysseus/lock/`.
 
-**Off by default.** Turn it on in Menu → Odysseus → Lock outside work hours, after setting a PIN
+**Off by default.** Turn it on in Menu → Odysseus → Privacy → Lock outside work hours, after setting a PIN
 (4 to 8 digits) there. It applies at once: turned on in the evening, the device locks straight away.
 
 ## While locked
@@ -32,7 +32,7 @@ PIN unlocks it on the device. Code: `app/src/main/java/com/msp1974/vacompanion/o
 | How | Effect |
 |---|---|
 | PIN on the lock screen | Unlocked until the schedule's **next lock time** (e.g. Monday 20:00 → Tuesday 18:00; Saturday → Monday 18:00). |
-| Menu → Odysseus → **Lock now** | Locked until the schedule's **next opening** (leaving early on Tuesday → Wednesday 08:00). |
+| Menu → Odysseus → Privacy → **Lock now** | Locked until the schedule's **next opening** (leaving early on Tuesday → Wednesday 08:00). |
 | Home Assistant `odysseus://unlock` | As the PIN. |
 | Home Assistant `odysseus://lock` | As Lock now. |
 

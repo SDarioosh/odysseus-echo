@@ -74,7 +74,7 @@ class MicrophoneAudioStream(
         try {
             withContext(Dispatchers.IO) { microphone.start() }
             Timber.d("Microphone opened")
-            launch(Dispatchers.IO) {
+            launch(AudioThreads.capture) {
                 // Odysseus fork: a recorder that only fails to read is reopened (odysseus/audio/MicFrames.kt)
                 val emptyReads = com.msp1974.vacompanion.odysseus.audio.EmptyReads(DEAD_AFTER_EMPTY_READS)
                 while (isActive) {

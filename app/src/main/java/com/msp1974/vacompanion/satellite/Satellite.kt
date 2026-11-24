@@ -162,7 +162,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             sendSatelliteMessage(clientId, WyomingEvent.CUSTOM_EVENT, buildJsonObject {
                 put(EVENT_TYPE, WyomingCustomEventType.SETTINGS)
             })
-            if (!waitForSettings(2000)) {
+            if (!waitForSettings(5000)) {
                 state = SatelliteState.ERROR
                 return
             }
@@ -273,7 +273,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             withTimeout(waitTime.milliseconds) {
                 // Wait for settings to be processed
                 while (!config.initSettings) {
-                    delay(10.milliseconds)
+                    delay(100.milliseconds)
                 }
                 Timber.d("Initial settings downloaded")
             }
@@ -340,7 +340,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
             sendSatelliteMessage(clientId, WyomingEvent.CUSTOM_EVENT, buildJsonObject {
                 put(EVENT_TYPE, WyomingCustomEventType.SETTINGS)
             })
-            if (!waitForSettings(2000)) {
+            if (!waitForSettings(5000)) {
                 if (this.clientId != clientId) return
 
                 // Connection is live; continue with cached settings rather than
@@ -362,6 +362,7 @@ abstract class Satellite(var context: Context, val deviceManager: DeviceManager,
 
     suspend fun stop() {
         state = SatelliteState.STOPPING
+        config.initSettings = false
         config.eventBroadcaster.removeListener(this)
         audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
         AudioInRouter.removeActiveMicInputListener(activeMicInputListener)

@@ -18,6 +18,11 @@ stays as close to upstream as possible, so new VACA releases can be rebased onto
   the Echo Show; see [docs/odysseus/history.md](docs/odysseus/history.md)). Use the HA integration **v0.14.0** (its
   only later change is a translation). The fork on the 0.14.0 release is kept on branch
   `odysseus-on-0.14.0`.
+- Later upstream fixes taken on top (`git cherry-pick -x`; the next rebase onto a commit that
+  has them drops `eb229b4` by itself and needs the other two dropped by hand, since they were
+  ported): `eb229b4` (light sensor kept an old value), `ad06a64` (audio threads at audio
+  priority; the read loop is the fork's), `accacb3` (mDNS retries and re-advertises on a UUID
+  change; the Bluetooth proxy keeps its short node name, Sendspin keeps the Lock mode check).
 - Package `com.msp1974.vacompanion.odysseus`, version `0.14.0+odysseus.N`, set once as
   `odysseusVersionName` in `app/build.gradle.kts`. `versionCode` is worked out from it
   (`major*10^7 + minor*10^5 + patch*10^3 + N`, e.g. 1400016), so bumping `N` for a release (or

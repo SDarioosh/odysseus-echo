@@ -211,6 +211,8 @@ class BluetoothProxyManager(
         mac[0] = ((mac[0].toInt() or 0x02) and 0xFE).toByte()
         val btMac = mac.copyOf().also { it[5] = (it[5] + 1).toByte() }
         return ProxyIdentity(
+            // Odysseus fork: keep the short node name of earlier builds (upstream accacb3 renamed it to
+            // the full uuid), so Home Assistant keeps the existing proxy device.
             nodeName = "vaca-btproxy-$suffix",
             friendlyName = "VACA ${config.uuid} BT Proxy",
             mac = formatMac(mac),
@@ -283,11 +285,21 @@ class BluetoothProxyManager(
 
     // The setting is SharedPreferences-backed, so the event carries no typed value - read it back.
     override fun onEventTriggered(event: Event) {
-        if (event.eventName != "bluetooth_proxy_enabled") return
-        Timber.d("BluetoothProxyManager: bluetooth_proxy_enabled=${config.bluetoothProxyEnabled}")
-        if (config.bluetoothProxyEnabled) startProxy() else {
-            unregisterPermissionReceiver()
-            stopProxy()
+        when (event.eventName) {
+            "bluetooth_proxy_enabled" -> {
+                Timber.d("BluetoothProxyManager: bluetooth_proxy_enabled=${config.bluetoothProxyEnabled}")
+                if (config.bluetoothProxyEnabled) startProxy() else {
+                    unregisterPermissionReceiver()
+                    stopProxy()
+                }
+            }
+            // The node name, MAC and friendly name are all derived from the uuid.
+            "restartZeroconf" -> {
+                if (server == null) return
+                Timber.d("BluetoothProxyManager: device UUID changed, restarting proxy")
+                stopProxy()
+                if (config.bluetoothProxyEnabled) startProxy()
+            }
         }
     }
 

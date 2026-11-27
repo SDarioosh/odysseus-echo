@@ -1,11 +1,43 @@
 package com.msp1974.vacompanion.odysseus
 
-// Odysseus fork: Menu → Odysseus. "Set up with phone" runs the whole setup (EchoSetup.kt); the
-// fields below link the device to Odysseus by hand so it can show what voice turns did
-// (TurnCard), tell Odysseus where a turn was asked and who asked it (OdysseusTurn), and play
-// the thinking sound. The base URL and token are the same ones Home Assistant's conversation
-// agent uses; the token is stored encrypted (OdysseusLink).
+// Odysseus fork: Menu → Odysseus, in sections (a rail on the left, the section on the right):
+// Link (phone setup or by hand), Voice (turn card, voice check, thinking sound, follow-ups, wake
+// word training), Home screen (the clock over the dashboard and what it reads), Clock face (how it
+// looks: home/clock/ClockStyleSettingsSection.kt), Music, Alarms, Privacy (recording, the privacy
+// button, lock mode), Kiosk and Updates. Each feature's own settings composable is called from
+// its section with one line.
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -49,104 +81,250 @@ import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.ui.components.MenuLayout
 import kotlinx.coroutines.launch
 
+/** The sections of Menu → Odysseus, in the order the rail lists them. */
+enum class OdysseusSection(val title: String, val icon: ImageVector) {
+    LINK("Link", Icons.Default.Link),
+    VOICE("Voice", Icons.Default.RecordVoiceOver),
+    HOME("Home screen", Icons.Default.Home),
+    CLOCK("Clock face", Icons.Default.Palette),
+    MUSIC("Music", Icons.Default.MusicNote),
+    ALARMS("Alarms", Icons.Default.Alarm),
+    PRIVACY("Privacy", Icons.Default.Shield),
+    KIOSK("Kiosk", Icons.Default.Tv),
+    UPDATES("Updates", Icons.Default.SystemUpdate),
+}
+
+/**
+ * Menu → Odysseus: a rail of sections on the left (labelled on a wide screen, icons on a narrow
+ * one, like Configuration) and the chosen section on the right. Opens on Link until the device
+ * is linked, then on Home screen.
+ */
 @Composable
-fun OdysseusSettingsLayout(onBack: () -> Unit) {
+fun OdysseusSettingsLayout(onBack: () -> Unit, initial: OdysseusSection? = null) {
     OdysseusLink.init(LocalContext.current)
-    val scope = rememberCoroutineScope()
-    var url by remember { mutableStateOf(OdysseusLink.baseUrl) }
-    var token by remember { mutableStateOf("") }
-    var show by remember { mutableStateOf(OdysseusLink.showActions) }
-    var checkVoice by remember { mutableStateOf(OdysseusLink.checkVoice) }
-    var thinking by remember { mutableStateOf(OdysseusLink.thinkingSound) }
-    var deviceName by remember { mutableStateOf(OdysseusLink.deviceName) }
-    var status by remember {
-        mutableStateOf(if (OdysseusLink.isConfigured) "Linked (token saved)" else "Not linked")
+    HomeSettings.init(LocalContext.current)
+    var selected by rememberSaveable {
+        mutableStateOf(initial ?: if (OdysseusLink.isConfigured) OdysseusSection.HOME else OdysseusSection.LINK)
     }
+    val colors = MaterialTheme.colorScheme
 
     MenuLayout(title = "Odysseus", level = 1, onClose = onBack) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // Set up the whole Echo (Odysseus link, Home Assistant login and entry) from a phone.
-            EchoSetupPanel(viewModel<VAViewModel>().config)
-            Text(
-                "Or type them here. Use the base URL and voice token from " +
-                    "Odysseus → Settings → Integrations → Voice assistant (the same ones Home Assistant uses).",
-                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp,
-            )
-            OutlinedTextField(
-                value = url, onValueChange = { url = it }, singleLine = true,
-                label = { Text("Base URL (…/api/chat/voice/v1)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = token, onValueChange = { token = it }, singleLine = true,
-                label = { Text(if (OdysseusLink.hasToken) "Voice token (saved; type to replace)" else "Voice token") },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            ManagedSwitchRow(show, "Show what a voice turn did", "Added and completed items, its sources, and questions waiting for a yes") {
-                show = it; OdysseusLink.showActions = it
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val compact = maxWidth < 600.dp
+            Row(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier
+                        .width(if (compact) 84.dp else 200.dp)
+                        .fillMaxHeight()
+                        .background(colors.surfaceContainer)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 8.dp),
+                ) {
+                    OdysseusSection.entries.forEachIndexed { i, section ->
+                        RailItem(section, OdysseusTheme.sectionColors[i % OdysseusTheme.sectionColors.size], section == selected, compact) {
+                            selected = section
+                        }
+                    }
+                }
+                VerticalDivider(color = colors.outlineVariant)
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    when (selected) {
+                        // The clock face lays out its own preview and scrolling.
+                        OdysseusSection.CLOCK -> com.msp1974.vacompanion.odysseus.home.clock.ClockFaceSettings(HomeSettings.enabled)
+                        else -> SectionPage { SectionContent(selected) { selected = it } }
+                    }
+                }
             }
-            ManagedSwitchRow(checkVoice, "Check my voice", "Send the spoken command to Odysseus so Athena can tell if it's you. Not stored.") {
-                checkVoice = it; OdysseusLink.checkVoice = it
-            }
-            ManagedSwitchRow(thinking, "Thinking sound", "A soft tone once when an answer takes longer than 5 seconds") {
-                thinking = it; OdysseusLink.thinkingSound = it
-            }
-            com.msp1974.vacompanion.odysseus.followup.FollowUpSettingsSection() // answer without the wake word (odysseus/followup/)
-            com.msp1974.vacompanion.odysseus.wakeword.WakeWordTrainingSection() // real "Hey Athena" clips for retraining (odysseus/wakeword/)
-            OutlinedTextField(
-                value = deviceName,
-                onValueChange = { deviceName = it; OdysseusLink.deviceName = it },
-                singleLine = true,
-                label = { Text("Device name told to Odysseus (e.g. Kitchen Echo; blank: VACA <id>)") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = {
-                    OdysseusLink.baseUrl = url
-                    if (token.isNotBlank()) OdysseusLink.setToken(token)
-                    token = ""
-                    status = "Saved. Testing…"
-                    scope.launch { status = OdysseusLink.testLink().second }
-                }) { Text("Save and test") }
-                OutlinedButton(onClick = {
-                    OdysseusLink.setToken(""); OdysseusLink.baseUrl = ""
-                    ManagedSettings.releaseAll("unlinked") // Odysseus fork: settings back to the device (odysseus/managed/)
-                    url = ""; token = ""; status = "Not linked"
-                }) { Text("Unlink") }
-            }
-            Text(status, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            HomeScreenSettings()
-            com.msp1974.vacompanion.odysseus.home.today.TodaySettingsSection()
-            com.msp1974.vacompanion.odysseus.home.music.MusicSettingsSection() // Menu → Odysseus → Music (home/music/)
-            KioskSettingsSection()
-            com.msp1974.vacompanion.odysseus.alarms.AlarmsSettingsSection() // this device's alarms and timers (odysseus/alarms/)
-            com.msp1974.vacompanion.odysseus.lock.LockSettingsSection() // locked outside work hours (odysseus/lock/)
-            com.msp1974.vacompanion.odysseus.update.UpdateSettingsSection()
-            com.msp1974.vacompanion.odysseus.record.RecordingSettingsSection() // Menu → Odysseus → Recording (odysseus/record/)
         }
     }
 }
 
-/** Menu → Odysseus → Home screen: the clock over the dashboard (odysseus/home/). */
+@Composable
+private fun SectionContent(section: OdysseusSection, go: (OdysseusSection) -> Unit) {
+    when (section) {
+        OdysseusSection.LINK -> LinkSettings()
+        OdysseusSection.VOICE -> VoiceSettings()
+        OdysseusSection.HOME -> HomeScreenSettings(onClockFace = { go(OdysseusSection.CLOCK) })
+        OdysseusSection.CLOCK -> Unit
+        OdysseusSection.MUSIC -> com.msp1974.vacompanion.odysseus.home.music.MusicSettingsSection() // home/music/
+        OdysseusSection.ALARMS -> com.msp1974.vacompanion.odysseus.alarms.AlarmsSettingsSection() // this device's alarms and timers (odysseus/alarms/)
+        OdysseusSection.PRIVACY -> {
+            com.msp1974.vacompanion.odysseus.record.RecordingSettingsSection() // recording and the privacy button (odysseus/record/)
+            com.msp1974.vacompanion.odysseus.lock.LockSettingsSection() // locked outside work hours (odysseus/lock/)
+        }
+        OdysseusSection.KIOSK -> KioskSettingsSection()
+        OdysseusSection.UPDATES -> com.msp1974.vacompanion.odysseus.update.UpdateSettingsSection()
+    }
+}
+
+/** A section's page: one scrolling column. */
+@Composable
+private fun SectionPage(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        content = content,
+    )
+}
+
+/** A line under a section's name in the rail: what it is set to now. */
+@Composable
+private fun railStatus(section: OdysseusSection): String? = when (section) {
+    OdysseusSection.LINK -> if (OdysseusLink.isConfigured) "Linked" else "Not linked"
+    OdysseusSection.HOME -> if (HomeSettings.enabled) "Clock on" else "Off"
+    OdysseusSection.CLOCK -> com.msp1974.vacompanion.odysseus.home.clock.ClockPresets.label(HomeSettings.clockStyle.preset) +
+        if (HomeSettings.clockStyle.isPresetUnchanged) "" else " (changed)"
+    OdysseusSection.UPDATES -> when (com.msp1974.vacompanion.odysseus.update.UpdateManager.state) {
+        is com.msp1974.vacompanion.odysseus.update.UpdateState.Ready -> "Update ready"
+        is com.msp1974.vacompanion.odysseus.update.UpdateState.Waiting -> "Update available"
+        else -> null
+    }
+    else -> null
+}
+
+@Composable
+private fun RailItem(section: OdysseusSection, color: Color, selected: Boolean, compact: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val textColor = if (selected) colors.onSurface else colors.onSurfaceVariant
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) color.copy(alpha = 0.2f) else Color.Transparent,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+    ) {
+        if (compact) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 10.dp),
+            ) {
+                Icon(section.icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+                Text(
+                    section.title, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = textColor,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                Icon(section.icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+                Column(Modifier.padding(start = 12.dp)) {
+                    Text(
+                        section.title, style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = textColor,
+                    )
+                    railStatus(section)?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String, detail: String? = null) {
+    Column(Modifier.padding(top = 12.dp)) {
+        Text(text, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary)
+        if (detail != null) Text(detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/**
+ * Menu → Odysseus → Link. "Set up with phone" runs the whole setup (EchoSetup.kt); the fields
+ * below link the device to Odysseus by hand. The base URL and token are the same ones Home
+ * Assistant's conversation agent uses; the token is stored encrypted (OdysseusLink).
+ */
+@Composable
+private fun LinkSettings() {
+    val scope = rememberCoroutineScope()
+    var url by remember { mutableStateOf(OdysseusLink.baseUrl) }
+    var token by remember { mutableStateOf("") }
+    var deviceName by remember { mutableStateOf(OdysseusLink.deviceName) }
+    var status by remember {
+        mutableStateOf(if (OdysseusLink.isConfigured) "Linked (token saved)" else "Not linked")
+    }
+    SectionTitle("Link to Odysseus", "Odysseus shows what voice turns did, sends updates, alarms and the Today page.")
+    // Set up the whole Echo (Odysseus link, Home Assistant login and entry) from a phone.
+    EchoSetupPanel(viewModel<VAViewModel>().config)
+    SectionTitle(
+        "Or type them here",
+        "Use the base URL and voice token from Odysseus → Settings → Integrations → Voice assistant " +
+            "(the same ones Home Assistant uses).",
+    )
+    OutlinedTextField(
+        value = url, onValueChange = { url = it }, singleLine = true,
+        label = { Text("Base URL (…/api/chat/voice/v1)") },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    OutlinedTextField(
+        value = token, onValueChange = { token = it }, singleLine = true,
+        label = { Text(if (OdysseusLink.hasToken) "Voice token (saved; type to replace)" else "Voice token") },
+        visualTransformation = PasswordVisualTransformation(),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    OutlinedTextField(
+        value = deviceName,
+        onValueChange = { deviceName = it; OdysseusLink.deviceName = it },
+        singleLine = true,
+        label = { Text("Device name told to Odysseus (e.g. Kitchen Echo; blank: VACA <id>)") },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Button(onClick = {
+            OdysseusLink.baseUrl = url
+            if (token.isNotBlank()) OdysseusLink.setToken(token)
+            token = ""
+            status = "Saved. Testing…"
+            scope.launch { status = OdysseusLink.testLink().second }
+        }) { Text("Save and test") }
+        OutlinedButton(onClick = {
+            OdysseusLink.setToken(""); OdysseusLink.baseUrl = ""
+            ManagedSettings.releaseAll("unlinked") // Odysseus fork: settings back to the device (odysseus/managed/)
+            url = ""; token = ""; status = "Not linked"
+        }) { Text("Unlink") }
+    }
+    Text(status, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** Menu → Odysseus → Voice: what a voice turn shows and sends, follow-ups, wake word training. */
+@Composable
+private fun VoiceSettings() {
+    var show by remember { mutableStateOf(OdysseusLink.showActions) }
+    var checkVoice by remember { mutableStateOf(OdysseusLink.checkVoice) }
+    var thinking by remember { mutableStateOf(OdysseusLink.thinkingSound) }
+    SectionTitle("Voice turns")
+    ManagedSwitchRow(show, "Show what a voice turn did", "Added and completed items, its sources, and questions waiting for a yes") {
+        show = it; OdysseusLink.showActions = it
+    }
+    ManagedSwitchRow(checkVoice, "Check my voice", "Send the spoken command to Odysseus so Athena can tell if it's you. Not stored.") {
+        checkVoice = it; OdysseusLink.checkVoice = it
+    }
+    ManagedSwitchRow(thinking, "Thinking sound", "A soft tone once when an answer takes longer than 5 seconds") {
+        thinking = it; OdysseusLink.thinkingSound = it
+    }
+    SectionTitle("Follow-up answers")
+    com.msp1974.vacompanion.odysseus.followup.FollowUpSettingsSection() // answer without the wake word (odysseus/followup/)
+    com.msp1974.vacompanion.odysseus.wakeword.WakeWordTrainingSection() // real "Hey Athena" clips for retraining (odysseus/wakeword/)
+}
+
+/**
+ * Menu → Odysseus → Home screen: the clock over the dashboard (odysseus/home/), what it reads
+ * (weather, other speakers, Today). How it looks is the Clock face section.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun HomeScreenSettings() {
-    HomeSettings.init(LocalContext.current)
+private fun HomeScreenSettings(onClockFace: () -> Unit) {
     // HomeSettings is Compose state, so these recompose when it changes.
     val enabled = HomeSettings.enabled
     val idle = HomeSettings.idleSeconds
-    Text(
-        "Home screen", fontSize = 18.sp, color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 12.dp),
-    )
+    SectionTitle("Home screen")
     ManagedSwitchRow(
         enabled, "Clock home screen",
         "A clock and the playing song over the dashboard. Swipe right for the dashboard, left for the clock.",
@@ -154,6 +332,12 @@ private fun HomeScreenSettings() {
     ) { HomeSettings.enabled = it }
     Text("Back to the clock after", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
     SecondsChips(HomeSettings.IDLE_CHOICES_SECONDS, idle, "home.idle_seconds", enabled = enabled) { HomeSettings.idleSeconds = it }
+    OutlinedButton(onClick = onClockFace, enabled = enabled) {
+        Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+        Text("  Change how the clock looks")
+    }
+
+    SectionTitle("Weather")
 
     // Weather in the clock's top left (odysseus/home/weather/).
     val weatherOn = HomeSettings.weatherEnabled
@@ -191,8 +375,10 @@ private fun HomeScreenSettings() {
             fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    SectionTitle("Other speakers")
     OtherPlayersSettings()
-    com.msp1974.vacompanion.odysseus.home.clock.ClockStyleSettingsSection(enabled) // fonts, colours, elements (home/clock/)
+    SectionTitle("Today")
+    com.msp1974.vacompanion.odysseus.home.today.TodaySettingsSection()
 }
 
 /** Music on other speakers (odysseus/home/players/): on/off and which Home Assistant media player. */
@@ -241,10 +427,7 @@ private fun KioskSettingsSection() {
     KioskSettings.init(LocalContext.current)
     // KioskSettings is Compose state, so these recompose when it changes.
     val returnSeconds = KioskSettings.returnSeconds
-    Text(
-        "Kiosk", fontSize = 18.sp, color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 12.dp),
-    )
+    SectionTitle("Kiosk")
     ManagedSwitchRow(
         KioskSettings.autoReload, "Reload a dashboard that failed to load",
         "Tries again after 5 s, then waits longer each time, up to every 5 minutes. Soon after Wi-Fi comes back.",

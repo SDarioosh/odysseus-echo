@@ -151,7 +151,7 @@ adb shell dumpsys input | grep -A12 gpio-privacy-button | grep KeyLayoutFile
 # Undo: adb root; adb shell rm /data/system/devices/keylayout/gpio-privacy-button.kl; adb reboot
 ```
 
-What the button does is the setting Menu → Odysseus → Recording → **Privacy button**:
+What the button does is the setting Menu → Odysseus → Privacy → **Privacy button**:
 
 - **Record**: press = start or stop a recording, hold 1 s = voice note
   ([recording.md](recording.md#the-privacy-button)). **Don't use it on this device**: the press

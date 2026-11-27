@@ -87,7 +87,7 @@ adb uninstall com.msp1974.vacompanion.odysseus
 scripts/odysseus/setup_device.sh <release apk>   # installs and sets permissions again
 ```
 
-Then set the Echo up again with the phone QR code (Menu → Odysseus → Set up with phone,
+Then set the Echo up again with the phone QR code (Menu → Odysseus → Link → Set up with phone,
 [setup.md](setup.md)): it redoes the Odysseus link and the Home Assistant sign-in. In Home
 Assistant the device may need to be re-added or its old entry removed; pair it again in Music
 Assistant if Sendspin was paired. From then on, every update keeps all of this.

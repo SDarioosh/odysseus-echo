@@ -67,7 +67,7 @@ for a follow-up only when its answer really is a question.
 
 ## Settings
 
-Menu → Odysseus, under "Thinking sound". Stored on the device in their own SharedPreferences file
+Menu → Odysseus → Voice, under "Thinking sound". Stored on the device in their own SharedPreferences file
 (`odysseus_followup`), not sent to Home Assistant. The keys are those of the hub-managed settings
 (plan contract C6), so Odysseus can set them later:
 

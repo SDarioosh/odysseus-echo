@@ -39,7 +39,7 @@ When you stop speaking (pipeline stage `VOICE_STOPPED`, or the transcript if HA 
 ```
 POST <base>/satellite/turn   multipart/form-data, Authorization: Bearer <voice token>
   device_id    VACA's device id (APPConfig.uuid)
-  device_name  Menu → Odysseus → Device name (HA never sends the satellite its own name); blank: "VACA <id>"
+  device_name  Menu → Odysseus → Link → Device name (HA never sends the satellite its own name); blank: "VACA <id>"
   area         the HA area this device is in (the one used for ducking), may be empty
   wake_word    the wake word id, e.g. hey_athena
   started_at   epoch ms of the wake word (the follow-up's start for a follow-up)
@@ -82,7 +82,7 @@ Saying "Hey Athena" while the device is still thinking or answering stops that t
 
 When a wake word turn's transcript is only a cancel phrase ("never mind", "nevermind", "forget it", "cancel", "stop talking", "be quiet", "shut up", "nothing", "that's all", "no thanks"; "Athena", "oh", "please" and punctuation around it are ignored), the device ends the turn there and drops its answer the same way as a barge-in, so it stays quiet (`odysseus/Nevermind.kt`, one hook in `satellite/SatelliteAudioPipeline.kt`). Upstream checked for "never mind" only in a continued conversation, so after a barge-in Odysseus answered it out loud. In a continued conversation (a follow-up) only "never mind" ends it: "cancel" and "no" there answer Odysseus's question.
 
-## Settings (Menu → Odysseus)
+## Settings (Menu → Odysseus → Voice)
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -135,7 +135,7 @@ GET <base>/turns/latest?since=<epoch ms>     a turn without a context id: the ne
 ### Set up with your phone (QR code)
 
 The phone setup links the Echo to Odysseus as one of its steps: see [setup.md](setup.md).
-Menu → Odysseus → **Set up with phone (QR code)** runs it again on an Echo that is already set up.
+Menu → Odysseus → Link → **Set up with phone (QR code)** runs it again on an Echo that is already set up.
 
 ### Or type them
 
